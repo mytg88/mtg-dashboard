@@ -75,10 +75,10 @@ td{padding:10px 12px;border-bottom:1px solid #f5f5f5}
 <div class="content" id="content"><div class="loading">Loading data from MTG app...</div></div>
 
 <script>
-const SHEET_KEY = '2PACX-1vTEpeJT4CqQtUvzHnh8i69n2lcoX1RtlxBFU2YH3tZcuGDLSh45ZFbY-yeMFH1q6b-gyotcRVEuhMsQ';
+const SHEET_ID = '11UHcc9bXXhE92bvXOTp8fmhpjELQbI9ETBaiFxhTqZw';
 const JOBS_GID = '1576165006';
 const CUSTOMERS_GID = '1593119775';
-function gvizUrl(gid) { return 'https://docs.google.com/spreadsheets/d/e/'+SHEET_KEY+'/gviz/tq?tqx=out:csv&gid='+gid; }
+function gvizUrl(gid) { return 'https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:csv&gid='+gid; }
 
 let jobs=[], customers=[], allCustomers=[], churnedList=[], monthlyData=[], serviceData=[], missingPriceData=[];
 let activeTab="Overview", custSegFilter="All", custTerFilter="All", custSearch="";
