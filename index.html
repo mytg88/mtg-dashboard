@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Tidy Garden — Business Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'DM Sans',sans-serif;background:#F5F7F5;color:#333}
+.header{background:#1B5E20;padding:28px 32px 20px;color:#fff}
+.header h1{font-size:24px;font-weight:700;letter-spacing:-0.5px}
+.header p{font-size:14px;opacity:0.7;margin-top:2px}
+.header .refresh{float:right;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-family:inherit;margin-top:-20px}
+.header .refresh:hover{background:rgba(255,255,255,0.25)}
+.tabs{display:flex;gap:0;background:#fff;border-bottom:1px solid #e0e0e0;padding:0 24px;overflow-x:auto}
+.tab{padding:14px 20px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;color:#888;border-bottom:3px solid transparent;transition:all .15s;white-space:nowrap}
+.tab.active{font-weight:700;color:#1B5E20;border-bottom-color:#1B5E20}
+.tab:hover{color:#1B5E20}
+.content{padding:24px 32px;max-width:1200px}
+.loading{text-align:center;padding:60px;color:#888;font-size:15px}
+.grid{display:grid;gap:16px;margin-bottom:32px}
+.grid-4{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.grid-2{grid-template-columns:1fr 1fr}
+@media(max-width:768px){.grid-2{grid-template-columns:1fr}}
+.card{background:#fff;border-radius:12px;padding:20px 24px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.card-b{border-left:4px solid #1B5E20}
+.sl{font-size:13px;color:#888;font-weight:500;text-transform:uppercase;letter-spacing:.5px}
+.sv{font-size:28px;font-weight:700;color:#1B5E20;margin-top:4px}
+.ss{font-size:12px;color:#aaa;margin-top:2px}
+.badge{padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600;display:inline-block}
+.b-active{background:#E8F5E9;color:#2E7D32}.b-churned{background:#FFEBEE;color:#C62828}
+.b-mike{background:#E8F5E9;color:#1B5E20}.b-adam{background:#E3F2FD;color:#1565C0}
+.b-oneoff{background:#FFF9C4;color:#F57F17}.b-repeat{background:#BBDEFB;color:#1565C0}
+.b-recurring{background:#C8E6C9;color:#2E7D32}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:8px 12px;color:#888;font-weight:600;border-bottom:2px solid #E8F5E9;position:sticky;top:0;background:#fff;z-index:1}
+th.r,td.r{text-align:right}th.c,td.c{text-align:center}
+td{padding:10px 12px;border-bottom:1px solid #f5f5f5}
+.bar-row{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.bar-l{font-size:11px;color:#888;width:50px;text-align:right;font-family:monospace}
+.bar-c{flex:1;display:flex;align-items:center;gap:8px}
+.bar{background:linear-gradient(90deg,#2E7D32,#4CAF50);border-radius:3px;height:20px;min-width:2px}
+.bar-v{font-size:11px;color:#444;font-weight:600;white-space:nowrap}
+.bar-s{font-size:10px;color:#aaa}
+.pb{background:#f0f0f0;border-radius:4px;height:8px;margin-top:6px}
+.pf{border-radius:4px;height:8px}
+.ib{margin-top:16px;padding:16px;border-radius:8px;font-size:13px;color:#555}
+.ig{background:#F5F7F5}.ia{background:#FFF8E1}.io{background:#FFF3E0}
+.svc-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f5f5f5}
+.svc-n{font-size:12px;color:#444;flex:1}.svc-s{font-size:12px;width:80px;text-align:right}
+.svc-g{font-weight:600;color:#1B5E20}
+.sb{margin-bottom:12px}.sb-h{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px}
+.sb-n{font-weight:500}.sb-s{color:#888}
+.sb-t{background:#f0f0f0;border-radius:4px;height:10px}.sb-f{border-radius:4px;height:10px}
+.search{width:100%;padding:10px 16px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;margin-bottom:16px;outline:none}
+.search:focus{border-color:#1B5E20}
+.filter-row{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.filter-btn{padding:6px 14px;border:1px solid #ddd;border-radius:20px;background:#fff;cursor:pointer;font-size:12px;font-family:inherit;transition:all .15s}
+.filter-btn.active{background:#1B5E20;color:#fff;border-color:#1B5E20}
+.filter-btn:hover{border-color:#1B5E20}
+.table-wrap{max-height:600px;overflow-y:auto;border-radius:8px;border:1px solid #eee}
+.era-bar{display:flex;gap:8px;margin-bottom:16px}
+.era-stat{font-size:12px;padding:4px 12px;border-radius:4px;background:#E8F5E9;color:#1B5E20}
+.era-stat.historic{background:#FFF3E0;color:#E65100}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>My Tidy Garden</h1>
+  <p>Business Intelligence Dashboard — Live Data</p>
+  <button class="refresh" onclick="loadData()">Refresh Data</button>
+</div>
+<div class="tabs" id="tabs"></div>
+<div class="content" id="content"><div class="loading">Loading data from MTG app...</div></div>
+
+<script>
+const SHEET_KEY = '2PACX-1vTEpeJT4CqQtUvzHnh8i69n2lcoX1RtlxBFU2YH3tZcuGDLSh45ZFbY-yeMFH1q6b-gyotcRVEuhMsQ';
+const JOBS_GID = '1576165006';
+const CUSTOMERS_GID = '1593119775';
+function gvizUrl(gid) { return 'https://docs.google.com/spreadsheets/d/e/'+SHEET_KEY+'/gviz/tq?tqx=out:csv&gid='+gid; }
+
+let jobs=[], customers=[], allCustomers=[], churnedList=[], monthlyData=[], serviceData=[], missingPriceData=[];
+let activeTab="Overview", custSegFilter="All", custTerFilter="All", custSearch="";
+
+function parseCSV(text) {
+  const lines = text.split('\n');
+  if (lines.length < 2) return [];
+  const headers = parseCSVLine(lines[0]);
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    const vals = parseCSVLine(lines[i]);
+    const obj = {};
+    headers.forEach((h, idx) => obj[h.trim()] = (vals[idx] || '').trim());
+    rows.push(obj);
+  }
+  return rows;
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { inQuotes = !inQuotes; }
+    else if (ch === ',' && !inQuotes) { result.push(current); current = ''; }
+    else { current += ch; }
+  }
+  result.push(current);
+  return result;
+}
+
+function parseAmount(s) {
+  if (!s) return 0;
+  return parseFloat(s.replace(/[£,]/g, '')) || 0;
+}
+
+function parseDate(s) {
+  if (!s) return null;
+  const parts = s.split('/');
+  if (parts.length === 3) return new Date(parts[2], parts[1]-1, parts[0]);
+  return new Date(s);
+}
+
+function daysBetween(d1, d2) {
+  return Math.floor((d2 - d1) / (1000*60*60*24));
+}
+
+async function loadData() {
+  document.getElementById('content').innerHTML = '<div class="loading">Loading data from MTG app...</div>';
+  try {
+    const [jobsRes, custRes] = await Promise.all([
+      fetch(gvizUrl(JOBS_GID)),
+      fetch(gvizUrl(CUSTOMERS_GID))
+    ]);
+    const jobsText = await jobsRes.text();
+    const custText = await custRes.text();
+    jobs = parseCSV(jobsText);
+    customers = parseCSV(custText);
+    processData();
+    renderTabs();
+    renderContent();
+  } catch(e) {
+    document.getElementById('content').innerHTML = '<div class="loading">Error loading data. Check that sheets are published to web.</div>';
+    console.error(e);
+  }
+}
+
+function processData() {
+  const now = new Date();
+  const cutoff90 = new Date(now); cutoff90.setDate(cutoff90.getDate() - 90);
+  
+  // Process jobs
+  jobs.forEach(j => {
+    j._amount = parseAmount(j['Amount (£)']);
+    j._date = parseDate(j['Date Completed']);
+    // Combine service types
+    let svc = j['Service Type'] || 'Unknown';
+    if (svc === 'Regular Garden Maintenance Visits' || svc === 'Regular Strim, Mow, & Blow' || svc === 'Strim, Mow, & Blow') svc = 'Regular Garden Maintenance';
+    j._service = svc;
+    j._era = j._date && j._date >= new Date(2026, 3, 6) ? 'Live' : 'Historic';
+    j._franchisee = j['Franchisee'] || '';
+  });
+
+  // Customer stats
+  const custMap = {};
+  jobs.forEach(j => {
+    const name = j['Customer Name'];
+    if (!name) return;
+    if (!custMap[name]) custMap[name] = { name, jobs: [], totalRev: 0, franchisee: j._franchisee, hasRecurring: false, services: new Set() };
+    custMap[name].jobs.push(j);
+    custMap[name].totalRev += j._amount;
+    if (j['Recurring Frequency'] && j['Recurring Frequency'].trim()) custMap[name].hasRecurring = true;
+    custMap[name].services.add(j._service);
+    custMap[name].franchisee = j._franchisee || custMap[name].franchisee;
+  });
+
+  allCustomers = Object.values(custMap).map(c => {
+    const dates = c.jobs.map(j => j._date).filter(Boolean).sort((a,b) => a-b);
+    const firstJob = dates[0];
+    const lastJob = dates[dates.length - 1];
+    const pricedJobs = c.jobs.filter(j => j._amount > 0);
+    const avg = pricedJobs.length > 0 ? pricedJobs.reduce((s,j) => s + j._amount, 0) / pricedJobs.length : 0;
+    
+    let segment;
+    if (c.jobs.length === 1) segment = 'One-Off';
+    else if (c.hasRecurring && lastJob < cutoff90) segment = 'Churned';
+    else if (c.hasRecurring) segment = 'Recurring';
+    else if (c.jobs.length >= 5 && lastJob < cutoff90) segment = 'Churned';
+    else if (c.jobs.length >= 2) segment = 'Repeat';
+    else segment = 'Other';
+
+    return {
+      n: c.name, j: c.jobs.length, r: Math.round(c.totalRev * 100) / 100,
+      a: Math.round(avg * 100) / 100, f: c.franchisee, s: segment,
+      first: firstJob, last: lastJob,
+      daysSince: lastJob ? daysBetween(lastJob, now) : 999,
+      svc: Array.from(c.services).slice(0, 3).join(', ')
+    };
+  }).sort((a, b) => b.r - a.r);
+
+  churnedList = allCustomers.filter(c => c.s === 'Churned').sort((a, b) => b.r - a.r);
+
+  // Monthly
+  const monthMap = {};
+  jobs.forEach(j => {
+    if (!j._date) return;
+    const key = j._date.getFullYear() + '-' + String(j._date.getMonth()+1).padStart(2,'0');
+    if (!monthMap[key]) monthMap[key] = { m: key, j: 0, r: 0, custs: new Set() };
+    monthMap[key].j++;
+    monthMap[key].r += j._amount;
+    if (j['Customer Name']) monthMap[key].custs.add(j['Customer Name']);
+  });
+  monthlyData = Object.values(monthMap).sort((a,b) => a.m.localeCompare(b.m)).map(m => ({
+    m: m.m, j: m.j, r: Math.round(m.r), c: m.custs.size
+  }));
+
+  // Services
+  const svcMap = {};
+  jobs.forEach(j => {
+    const s = j._service;
+    if (!svcMap[s]) svcMap[s] = { n: s, j: 0, r: 0, priced: 0, pricedSum: 0 };
+    svcMap[s].j++;
+    svcMap[s].r += j._amount;
+    if (j._amount > 0) { svcMap[s].priced++; svcMap[s].pricedSum += j._amount; }
+  });
+  serviceData = Object.values(svcMap).sort((a,b) => b.j - a.j).map(s => ({
+    n: s.n, j: s.j, r: Math.round(s.r), a: s.priced > 0 ? Math.round(s.pricedSum / s.priced) : 0
+  }));
+
+  // Missing prices
+  const zeroMap = {};
+  jobs.forEach(j => {
+    if (j._amount > 0) return;
+    const name = j['Customer Name'];
+    if (!name) return;
+    if (!zeroMap[name]) zeroMap[name] = { n: name, z: 0, svc: j._service };
+    zeroMap[name].z++;
+  });
+  missingPriceData = Object.values(zeroMap).sort((a,b) => b.z - a.z);
+  // Add avg when priced
+  missingPriceData.forEach(mp => {
+    const c = allCustomers.find(c => c.n === mp.n);
+    mp.a = c ? c.a : 0;
+    mp.est = mp.a > 0 ? mp.z * mp.a : 0;
+  });
+}
+
+function badge(t) {
+  const m = {ACTIVE:'active',Churned:'churned',Mike:'mike',Adam:'adam','One-Off':'oneoff',Repeat:'repeat',Recurring:'recurring'};
+  return '<span class="badge b-'+(m[t]||'')+'">'+t+'</span>';
+}
+function fmt(n) { return '\u00a3'+Math.round(n).toLocaleString(); }
+function fmtDate(d) { if (!d) return ''; return d.getDate()+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
+function shortMonth(ym) { const [y,m] = ym.split('-'); const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return mn[parseInt(m)-1]+' '+y.slice(2); }
+
+const tabList = ["Overview","Revenue","Customers","Churned","Missing Prices","Services"];
+
+function renderTabs() {
+  document.getElementById('tabs').innerHTML = tabList.map(t =>
+    '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+t+'</button>'
+  ).join('');
+}
+function setTab(t) { activeTab=t; custSegFilter="All"; custTerFilter="All"; custSearch=""; renderTabs(); renderContent(); }
+
+function renderContent() {
+  const el = document.getElementById('content');
+  const totalJobs = jobs.length;
+  const totalRev = Math.round(jobs.reduce((s,j) => s+j._amount, 0));
+  const totalCusts = allCustomers.length;
+  const recurring = allCustomers.filter(c=>c.s==='Recurring').length;
+  const repeat = allCustomers.filter(c=>c.s==='Repeat').length;
+  const oneoff = allCustomers.filter(c=>c.s==='One-Off').length;
+  const churned = churnedList.length;
+  const mikeJobs = jobs.filter(j=>j._franchisee==='Mike');
+  const adamJobs = jobs.filter(j=>j._franchisee==='Adam');
+  const mikeRev = Math.round(mikeJobs.reduce((s,j)=>s+j._amount,0));
+  const adamRev = Math.round(adamJobs.reduce((s,j)=>s+j._amount,0));
+  const mikeCusts = new Set(mikeJobs.map(j=>j['Customer Name'])).size;
+  const adamCusts = new Set(adamJobs.map(j=>j['Customer Name'])).size;
+  const mikeAvg = mikeJobs.length > 0 ? Math.round(mikeRev/mikeJobs.length) : 0;
+  const adamAvg = adamJobs.length > 0 ? Math.round(adamRev/adamJobs.length) : 0;
+  const historicJobs = jobs.filter(j=>j._era==='Historic').length;
+  const liveJobs = jobs.filter(j=>j._era==='Live').length;
+
+  if (activeTab==='Overview') {
+    el.innerHTML = `
+    <div class="era-bar"><span class="era-stat historic">Historic: ${historicJobs} jobs</span><span class="era-stat">Live (Apr 6+): ${liveJobs} jobs</span></div>
+    <div class="grid grid-4">
+      <div class="card card-b"><div class="sl">Total Jobs</div><div class="sv">${totalJobs.toLocaleString()}</div><div class="ss">completed</div></div>
+      <div class="card card-b"><div class="sl">Total Revenue</div><div class="sv">${fmt(totalRev)}</div><div class="ss">recorded</div></div>
+      <div class="card card-b"><div class="sl">Customers</div><div class="sv">${totalCusts}</div><div class="ss">all time</div></div>
+      <div class="card card-b" style="border-color:#2E7D32"><div class="sl">Recurring</div><div class="sv" style="color:#2E7D32">${recurring}</div><div class="ss">active with schedule</div></div>
+      <div class="card card-b" style="border-color:#1565C0"><div class="sl">Repeat</div><div class="sv" style="color:#1565C0">${repeat}</div><div class="ss">2+ jobs, no schedule</div></div>
+      <div class="card card-b" style="border-color:#F57F17"><div class="sl">One-Off</div><div class="sv" style="color:#F57F17">${oneoff}</div><div class="ss">1 job only</div></div>
+      <div class="card card-b" style="border-color:#C62828"><div class="sl">Churned</div><div class="sv" style="color:#C62828">${churned}</div><div class="ss">90+ days, was regular</div></div>
+    </div>
+    <div class="grid grid-2">
+      <div class="card"><div style="font-size:15px;font-weight:700;color:#1B5E20;margin-bottom:16px">Mike vs Adam</div>
+        <div style="margin-bottom:16px"><div style="display:flex;justify-content:space-between;margin-bottom:6px">${badge('Mike')}<span style="font-size:13px;color:#666">${mikeCusts} customers</span></div>
+        <div style="display:flex;gap:16px;font-size:13px"><span><b>${mikeJobs.length}</b> jobs</span><span><b>${fmt(mikeRev)}</b></span><span>Avg <b>${fmt(mikeAvg)}</b>/job</span></div>
+        <div class="pb"><div class="pf" style="background:#4CAF50;width:${totalRev>0?Math.round(mikeRev/totalRev*100):0}%"></div></div></div>
+        <div><div style="display:flex;justify-content:space-between;margin-bottom:6px">${badge('Adam')}<span style="font-size:13px;color:#666">${adamCusts} customers</span></div>
+        <div style="display:flex;gap:16px;font-size:13px"><span><b>${adamJobs.length}</b> jobs</span><span><b>${fmt(adamRev)}</b></span><span>Avg <b>${fmt(adamAvg)}</b>/job</span></div>
+        <div class="pb"><div class="pf" style="background:#2196F3;width:${totalRev>0?Math.round(adamRev/totalRev*100):0}%"></div></div></div>
+      </div>
+      <div class="card"><div style="font-size:15px;font-weight:700;color:#1B5E20;margin-bottom:16px">Service Mix</div>
+        ${serviceData.slice(0,8).map(s=>'<div class="svc-row"><span class="svc-n">'+s.n+'</span><span class="svc-s svc-g">'+s.j+'</span><span class="svc-s">'+fmt(s.r)+'</span></div>').join('')}
+      </div>
+    </div>`;
+  }
+
+  else if (activeTab==='Revenue') {
+    const maxR = Math.max(...monthlyData.map(m=>m.r));
+    el.innerHTML = `<div class="card"><div style="font-size:15px;font-weight:700;color:#1B5E20;margin-bottom:20px">Monthly Revenue & Job Volume</div>
+      ${monthlyData.map(m=>'<div class="bar-row"><span class="bar-l">'+shortMonth(m.m)+'</span><div class="bar-c"><div class="bar" style="width:'+(maxR>0?Math.round(m.r/maxR*100):0)+'%"></div><span class="bar-v">'+fmt(m.r)+'</span><span class="bar-s">'+m.j+' jobs \u2022 '+m.c+' customers</span></div></div>').join('')}
+      <div class="ib ig"><b>Seasonal pattern:</b> Peak May-Oct. Winter dip Dec-Feb. Spring bounce in March. Average job value trending upward over time.</div>
+    </div>`;
+  }
+
+  else if (activeTab==='Customers') {
+    const segs = ["All","Recurring","Repeat","One-Off","Churned"];
+    const ters = ["All","Mike","Adam"];
+    let filtered = allCustomers;
+    if (custSegFilter !== 'All') filtered = filtered.filter(c => c.s === custSegFilter);
+    if (custTerFilter !== 'All') filtered = filtered.filter(c => c.f === custTerFilter);
+    if (custSearch) filtered = filtered.filter(c => c.n.toLowerCase().includes(custSearch.toLowerCase()));
+
+    el.innerHTML = `<input class="search" placeholder="Search customers..." value="${custSearch}" oninput="custSearch=this.value;renderContent()">
+      <div class="filter-row">
+        ${segs.map(s=>'<button class="filter-btn '+(custSegFilter===s?'active':'')+'" onclick="custSegFilter=\''+s+'\';renderContent()">'+s+' ('+( s==='All'?allCustomers.length:allCustomers.filter(c=>c.s===s).length)+')</button>').join('')}
+        <span style="width:8px"></span>
+        ${ters.map(t=>'<button class="filter-btn '+(custTerFilter===t?'active':'')+'" onclick="custTerFilter=\''+t+'\';renderContent()">'+t+' ('+(t==='All'?allCustomers.length:allCustomers.filter(c=>c.f===t).length)+')</button>').join('')}
+      </div>
+      <div class="card"><div style="font-size:13px;color:#888;margin-bottom:12px">Showing ${filtered.length} customers</div>
+      <div class="table-wrap"><table><thead><tr><th>Customer</th><th>Segment</th><th class="r">Jobs</th><th class="r">Revenue</th><th class="r">Avg</th><th class="c">Territory</th><th>First Job</th><th>Last Job</th></tr></thead>
+      <tbody>${filtered.map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td>'+badge(c.s)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:#1B5E20">'+fmt(c.r)+'</td><td class="r">'+fmt(c.a)+'</td><td class="c">'+badge(c.f)+'</td><td style="color:#888;font-size:12px">'+fmtDate(c.first)+'</td><td style="color:#888;font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div></div>`;
+  }
+
+  else if (activeTab==='Churned') {
+    const total = churnedList.reduce((s,c) => s+c.r, 0);
+    const adamChurned = churnedList.filter(c=>c.f==='Adam').length;
+    const mikeChurned = churnedList.filter(c=>c.f==='Mike').length;
+    el.innerHTML = `<div class="card"><div style="font-size:15px;font-weight:700;color:#C62828;margin-bottom:4px">All ${churnedList.length} Churned Customers</div>
+      <div style="font-size:13px;color:#888;margin-bottom:16px">Was recurring or 5+ jobs, no visit in 90+ days.</div>
+      <div class="table-wrap"><table><thead><tr style="border-bottom:2px solid #FFEBEE"><th>Customer</th><th class="r">Jobs</th><th class="r">Lifetime Revenue</th><th class="r">Last Visit</th><th class="r">Days Since</th><th class="c">Territory</th><th>Services</th></tr></thead>
+      <tbody>${churnedList.map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:#C62828">'+fmt(c.r)+'</td><td class="r" style="color:#888">'+fmtDate(c.last)+'</td><td class="r">'+c.daysSince+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:#888">'+c.svc+'</td></tr>').join('')}</tbody></table></div>
+      <div class="ib ia"><b>Total lifetime value:</b> ${fmt(total)}. ${adamChurned} on Adam's territory, ${mikeChurned} on Mike's. A re-engagement campaign targeting the top 10 could recover recurring revenue.</div>
+    </div>`;
+  }
+
+  else if (activeTab==='Missing Prices') {
+    el.innerHTML = `<div class="card"><div style="font-size:15px;font-weight:700;color:#E65100;margin-bottom:4px">Jobs Missing Prices (\u00a30)</div>
+      <div style="font-size:13px;color:#888;margin-bottom:16px">${missingPriceData.reduce((s,c)=>s+c.z,0)} jobs with \u00a30. Run Fix Missing Prices from the MTG app menu to auto-fix where possible.</div>
+      <div class="table-wrap"><table><thead><tr style="border-bottom:2px solid #FFF3E0"><th>Customer</th><th class="r">\u00a30 Jobs</th><th class="r">Avg When Priced</th><th class="r">Est. Missing</th><th>Service</th></tr></thead>
+      <tbody>${missingPriceData.map(c=>{const e=c.est;return'<tr><td style="font-weight:500">'+c.n+'</td><td class="r" style="font-weight:600;color:#E65100">'+c.z+'</td><td class="r">'+(c.a>0?fmt(c.a):'Never priced')+'</td><td class="r" style="font-weight:600;color:'+(e>0?'#2E7D32':'#ccc')+'">'+(e>0?'~'+fmt(e):'\u2014')+'</td><td style="font-size:12px;color:#888">'+(c.svc||'\u2014')+'</td></tr>'}).join('')}</tbody></table></div>
+      <div class="ib io"><b>Action:</b> Update recurring booking prices in the MTG app for customers showing "Never priced". These are active regulars with no pricing set.</div>
+    </div>`;
+  }
+
+  else if (activeTab==='Services') {
+    const mx = serviceData.length > 0 ? serviceData[0].j : 1;
+    el.innerHTML = `<div class="card"><div style="font-size:15px;font-weight:700;color:#1B5E20;margin-bottom:16px">Service Type Performance</div>
+      ${serviceData.map(s=>'<div class="sb"><div class="sb-h"><span class="sb-n">'+s.n+'</span><span class="sb-s">'+s.j+' jobs \u2022 '+fmt(s.r)+' \u2022 Avg '+fmt(s.a)+'/job</span></div><div class="sb-t"><div class="sb-f" style="background:'+(s.a>100?'#FF9800':s.a>50?'#4CAF50':'#81C784')+';width:'+(Math.round(s.j/mx*100))+'%"></div></div></div>').join('')}
+      <div class="ib ig"><b>Key insight:</b> One-off services (tidy-ups, hedge cutting, clearances) are high-margin. Regular maintenance is your bread and butter by volume but tidy-ups generate significant revenue from fewer jobs.</div>
+    </div>`;
+  }
+}
+
+loadData();
+</script>
+</body>
+</html>
