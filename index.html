@@ -60,17 +60,56 @@ td{padding:10px 12px;border-bottom:1px solid #f5f5f5}
 .filter-btn.active{background:#1B5E20;color:#fff;border-color:#1B5E20}
 .filter-btn:hover{border-color:#1B5E20}
 .table-wrap{max-height:600px;overflow-y:auto;border-radius:8px;border:1px solid #eee}
-.era-bar{display:flex;gap:8px;margin-bottom:16px}
-.era-stat{font-size:12px;padding:4px 12px;border-radius:4px;background:#E8F5E9;color:#1B5E20}
+
+/* ---- Date filter bar ---- */
+.df-bar{background:#fff;border-bottom:1px solid #e0e0e0;padding:14px 32px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.df-label{font-size:11px;font-weight:700;color:#1B5E20;text-transform:uppercase;letter-spacing:.5px;margin-right:4px}
+.df-btn{padding:6px 14px;border:1px solid #C8E6C9;background:#fff;color:#1B5E20;border-radius:20px;font-size:12px;font-family:inherit;cursor:pointer;transition:all .15s}
+.df-btn:hover{background:#E8F5E9}
+.df-btn.active{background:#1B5E20;color:#fff;border-color:#1B5E20;font-weight:600}
+.df-custom{display:none;align-items:center;gap:6px;margin-left:4px}
+.df-custom.show{display:flex}
+.df-date{padding:5px 8px;border:1px solid #C8E6C9;border-radius:4px;font-size:12px;font-family:inherit}
+.df-summary{margin-left:auto;font-size:11px;color:#666}
+.df-summary b{color:#1B5E20}
+
+/* ---- Era tiles (clickable) ---- */
+.era-bar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.era-stat{font-size:12px;padding:6px 14px;border-radius:20px;background:#E8F5E9;color:#1B5E20;cursor:pointer;border:1px solid transparent;transition:all .15s;user-select:none}
 .era-stat.historic{background:#FFF3E0;color:#E65100}
+.era-stat:hover{filter:brightness(0.97)}
+.era-stat.active{border-color:currentColor;font-weight:700;box-shadow:0 0 0 2px rgba(27,94,32,0.12)}
+.era-stat.historic.active{box-shadow:0 0 0 2px rgba(230,81,0,0.12)}
 </style>
 </head>
 <body>
+
 <div class="header">
   <h1>My Tidy Garden</h1>
   <p>Business Intelligence Dashboard — Live Data</p>
   <button class="refresh" onclick="loadData()">Refresh Data</button>
 </div>
+
+<!-- ============ DATE FILTER BAR ============ -->
+<div class="df-bar" id="dfBar">
+  <span class="df-label">Period:</span>
+  <button class="df-btn" data-range="this-month">This month</button>
+  <button class="df-btn" data-range="last-month">Last month</button>
+  <button class="df-btn" data-range="ytd">YTD</button>
+  <button class="df-btn active" data-range="tax-year">Tax year</button>
+  <button class="df-btn" data-range="last-tax-year">Last tax year</button>
+  <button class="df-btn" data-range="last-12mo">Last 12 mo</button>
+  <button class="df-btn" data-range="all">All time</button>
+  <button class="df-btn" data-range="custom">Custom</button>
+  <div class="df-custom" id="dfCustom">
+    <input type="date" id="dfFrom" class="df-date">
+    <span style="font-size:11px;color:#666">to</span>
+    <input type="date" id="dfTo" class="df-date">
+    <button class="df-btn" id="dfApply" style="background:#1B5E20;color:#fff;border-color:#1B5E20">Apply</button>
+  </div>
+  <div class="df-summary" id="dfSummary"></div>
+</div>
+
 <div class="tabs" id="tabs"></div>
 <div class="content" id="content"><div class="loading">Loading data from MTG app...</div></div>
 
@@ -80,9 +119,20 @@ const JOBS_GID = '1576165006';
 const CUSTOMERS_GID = '1593119775';
 function gvizUrl(gid) { return 'https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:csv&gid='+gid; }
 
-let jobs=[], customers=[], allCustomers=[], churnedList=[], monthlyData=[], serviceData=[], missingPriceData=[];
-let activeTab="Overview", custSegFilter="All", custTerFilter="All", custSearch="";
+// ----- raw data (loaded once) -----
+let rawJobs=[], customers=[];
 
+// ----- derived (recomputed when filter changes) -----
+let jobs=[], allCustomers=[], churnedList=[], monthlyData=[], serviceData=[], missingPriceData=[];
+
+// ----- view state -----
+let activeTab="Overview", custSegFilter="All", custTerFilter="All", custSearch="";
+let dfRange="tax-year", dfFrom=null, dfTo=null;
+let eraFilter="All"; // "All" | "Historic" | "Live"
+
+// =============================================================
+// CSV parsing
+// =============================================================
 function parseCSV(text) {
   const lines = text.split('\n');
   if (lines.length < 2) return [];
@@ -97,11 +147,8 @@ function parseCSV(text) {
   }
   return rows;
 }
-
 function parseCSVLine(line) {
-  const result = [];
-  let current = '';
-  let inQuotes = false;
+  const result = []; let current = ''; let inQuotes = false;
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
     if (ch === '"') { inQuotes = !inQuotes; }
@@ -111,23 +158,19 @@ function parseCSVLine(line) {
   result.push(current);
   return result;
 }
-
-function parseAmount(s) {
-  if (!s) return 0;
-  return parseFloat(s.replace(/[£,]/g, '')) || 0;
-}
-
+function parseAmount(s) { if (!s) return 0; return parseFloat(s.replace(/[£,]/g, '')) || 0; }
 function parseDate(s) {
   if (!s) return null;
   const parts = s.split('/');
   if (parts.length === 3) return new Date(parts[2], parts[1]-1, parts[0]);
-  return new Date(s);
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
 }
+function daysBetween(d1, d2) { return Math.floor((d2 - d1) / (1000*60*60*24)); }
 
-function daysBetween(d1, d2) {
-  return Math.floor((d2 - d1) / (1000*60*60*24));
-}
-
+// =============================================================
+// Data fetch + base enrichment (runs once per refresh)
+// =============================================================
 async function loadData() {
   document.getElementById('content').innerHTML = '<div class="loading">Loading data from MTG app...</div>';
   try {
@@ -137,34 +180,81 @@ async function loadData() {
     ]);
     const jobsText = await jobsRes.text();
     const custText = await custRes.text();
-    jobs = parseCSV(jobsText);
+    rawJobs = parseCSV(jobsText);
     customers = parseCSV(custText);
-    processData();
+
+    // Enrich once
+    rawJobs.forEach(j => {
+      j._amount = parseAmount(j['Amount (£)']);
+      j._date = parseDate(j['Date Completed']);
+      let svc = j['Service Type'] || 'Unknown';
+      if (svc === 'Regular Garden Maintenance Visits' || svc === 'Regular Strim, Mow, & Blow' || svc === 'Strim, Mow, & Blow') svc = 'Regular Garden Maintenance';
+      j._service = svc;
+      j._era = j._date && j._date >= new Date(2026, 3, 6) ? 'Live' : 'Historic';
+      j._franchisee = j['Franchisee'] || '';
+    });
+
+    applyFilters();
     renderTabs();
     renderContent();
+    dfRender();
   } catch(e) {
     document.getElementById('content').innerHTML = '<div class="loading">Error loading data. Check that sheets are published to web.</div>';
     console.error(e);
   }
 }
 
+// =============================================================
+// Date filter logic
+// =============================================================
+function ukTaxYearBounds(ref) {
+  const d = ref || new Date();
+  const y = d.getFullYear();
+  const startThis = new Date(y, 3, 6); // Apr 6
+  if (d < startThis) return { from: new Date(y-1, 3, 6), to: new Date(y, 3, 5, 23, 59, 59) };
+  return { from: startThis, to: new Date(y+1, 3, 5, 23, 59, 59) };
+}
+function prevUkTaxYear() {
+  const cur = ukTaxYearBounds();
+  return { from: new Date(cur.from.getFullYear()-1, 3, 6), to: new Date(cur.from.getFullYear(), 3, 5, 23, 59, 59) };
+}
+function dfBounds() {
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  switch (dfRange) {
+    case 'this-month':    return { from: new Date(y, m, 1),     to: new Date(y, m+1, 0, 23, 59, 59) };
+    case 'last-month':    return { from: new Date(y, m-1, 1),   to: new Date(y, m, 0, 23, 59, 59) };
+    case 'ytd':           return { from: new Date(y, 0, 1),     to: now };
+    case 'tax-year':      return ukTaxYearBounds();
+    case 'last-tax-year': return prevUkTaxYear();
+    case 'last-12mo':     return { from: new Date(y-1, m, now.getDate()), to: now };
+    case 'all':           return { from: null, to: null };
+    case 'custom':        return { from: dfFrom, to: dfTo };
+  }
+  return { from: null, to: null };
+}
+
+// =============================================================
+// Apply filters → rebuild derived datasets
+// =============================================================
+function applyFilters() {
+  const b = dfBounds();
+  jobs = rawJobs.filter(j => {
+    if (eraFilter !== 'All' && j._era !== eraFilter) return false;
+    if (b.from && b.to) {
+      if (!j._date) return false;
+      if (j._date < b.from || j._date > b.to) return false;
+    }
+    return true;
+  });
+  processData();
+}
+
 function processData() {
   const now = new Date();
   const cutoff90 = new Date(now); cutoff90.setDate(cutoff90.getDate() - 90);
-  
-  // Process jobs
-  jobs.forEach(j => {
-    j._amount = parseAmount(j['Amount (£)']);
-    j._date = parseDate(j['Date Completed']);
-    // Combine service types
-    let svc = j['Service Type'] || 'Unknown';
-    if (svc === 'Regular Garden Maintenance Visits' || svc === 'Regular Strim, Mow, & Blow' || svc === 'Strim, Mow, & Blow') svc = 'Regular Garden Maintenance';
-    j._service = svc;
-    j._era = j._date && j._date >= new Date(2026, 3, 6) ? 'Live' : 'Historic';
-    j._franchisee = j['Franchisee'] || '';
-  });
 
-  // Customer stats
+  // Customer aggregates over the filtered job set
   const custMap = {};
   jobs.forEach(j => {
     const name = j['Customer Name'];
@@ -183,7 +273,7 @@ function processData() {
     const lastJob = dates[dates.length - 1];
     const pricedJobs = c.jobs.filter(j => j._amount > 0);
     const avg = pricedJobs.length > 0 ? pricedJobs.reduce((s,j) => s + j._amount, 0) / pricedJobs.length : 0;
-    
+
     let segment;
     if (c.jobs.length === 1) segment = 'One-Off';
     else if (c.hasRecurring && lastJob < cutoff90) segment = 'Churned';
@@ -240,7 +330,6 @@ function processData() {
     zeroMap[name].z++;
   });
   missingPriceData = Object.values(zeroMap).sort((a,b) => b.z - a.z);
-  // Add avg when priced
   missingPriceData.forEach(mp => {
     const c = allCustomers.find(c => c.n === mp.n);
     mp.a = c ? c.a : 0;
@@ -248,12 +337,16 @@ function processData() {
   });
 }
 
+// =============================================================
+// Helpers
+// =============================================================
 function badge(t) {
   const m = {ACTIVE:'active',Churned:'churned',Mike:'mike',Adam:'adam','One-Off':'oneoff',Repeat:'repeat',Recurring:'recurring'};
   return '<span class="badge b-'+(m[t]||'')+'">'+t+'</span>';
 }
 function fmt(n) { return '\u00a3'+Math.round(n).toLocaleString(); }
 function fmtDate(d) { if (!d) return ''; return d.getDate()+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
+function fmtDateLong(d) { if (!d) return '—'; return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); }
 function shortMonth(ym) { const [y,m] = ym.split('-'); const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return mn[parseInt(m)-1]+' '+y.slice(2); }
 
 const tabList = ["Overview","Revenue","Customers","Churned","Missing Prices","Services"];
@@ -265,6 +358,61 @@ function renderTabs() {
 }
 function setTab(t) { activeTab=t; custSegFilter="All"; custTerFilter="All"; custSearch=""; renderTabs(); renderContent(); }
 
+function setEra(e) {
+  eraFilter = (eraFilter === e) ? 'All' : e; // toggle off if same tile clicked twice
+  applyFilters();
+  renderContent();
+  dfRender();
+}
+
+// =============================================================
+// Date filter rendering & wiring
+// =============================================================
+function dfRender() {
+  document.querySelectorAll('#dfBar .df-btn[data-range]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.range === dfRange);
+  });
+  document.getElementById('dfCustom').classList.toggle('show', dfRange === 'custom');
+
+  const b = dfBounds();
+  const summary = document.getElementById('dfSummary');
+  let txt;
+  if (!b.from || !b.to) {
+    txt = 'Showing <b>all jobs</b>';
+  } else {
+    txt = fmtDateLong(b.from) + ' → ' + fmtDateLong(b.to) + ' &nbsp;•&nbsp; <b>' + jobs.length + '</b> jobs';
+  }
+  if (eraFilter !== 'All') txt += ' &nbsp;•&nbsp; era: <b>'+eraFilter+'</b>';
+  summary.innerHTML = txt;
+}
+
+document.querySelectorAll('#dfBar .df-btn[data-range]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    dfRange = btn.dataset.range;
+    if (dfRange === 'custom' && !dfFrom) {
+      const ty = ukTaxYearBounds();
+      document.getElementById('dfFrom').valueAsDate = ty.from;
+      document.getElementById('dfTo').valueAsDate = new Date();
+    }
+    applyFilters();
+    renderContent();
+    dfRender();
+  });
+});
+
+document.getElementById('dfApply').addEventListener('click', () => {
+  const fromEl = document.getElementById('dfFrom');
+  const toEl = document.getElementById('dfTo');
+  if (fromEl.value) dfFrom = new Date(fromEl.value);
+  if (toEl.value) dfTo = new Date(toEl.value + 'T23:59:59');
+  applyFilters();
+  renderContent();
+  dfRender();
+});
+
+// =============================================================
+// Tab rendering
+// =============================================================
 function renderContent() {
   const el = document.getElementById('content');
   const totalJobs = jobs.length;
@@ -287,11 +435,15 @@ function renderContent() {
 
   if (activeTab==='Overview') {
     el.innerHTML = `
-    <div class="era-bar"><span class="era-stat historic">Historic: ${historicJobs} jobs</span><span class="era-stat">Live (Apr 6+): ${liveJobs} jobs</span></div>
+    <div class="era-bar">
+      <span class="era-stat historic ${eraFilter==='Historic'?'active':''}" onclick="setEra('Historic')" title="Click to filter">Historic: ${historicJobs} jobs</span>
+      <span class="era-stat ${eraFilter==='Live'?'active':''}" onclick="setEra('Live')" title="Click to filter">Live (Apr 6+): ${liveJobs} jobs</span>
+      ${eraFilter!=='All' ? '<span class="era-stat" onclick="setEra(eraFilter)" style="background:#eee;color:#666">✕ Clear era filter</span>' : ''}
+    </div>
     <div class="grid grid-4">
       <div class="card card-b"><div class="sl">Total Jobs</div><div class="sv">${totalJobs.toLocaleString()}</div><div class="ss">completed</div></div>
       <div class="card card-b"><div class="sl">Total Revenue</div><div class="sv">${fmt(totalRev)}</div><div class="ss">recorded</div></div>
-      <div class="card card-b"><div class="sl">Customers</div><div class="sv">${totalCusts}</div><div class="ss">all time</div></div>
+      <div class="card card-b"><div class="sl">Customers</div><div class="sv">${totalCusts}</div><div class="ss">in period</div></div>
       <div class="card card-b" style="border-color:#2E7D32"><div class="sl">Recurring</div><div class="sv" style="color:#2E7D32">${recurring}</div><div class="ss">active with schedule</div></div>
       <div class="card card-b" style="border-color:#1565C0"><div class="sl">Repeat</div><div class="sv" style="color:#1565C0">${repeat}</div><div class="ss">2+ jobs, no schedule</div></div>
       <div class="card card-b" style="border-color:#F57F17"><div class="sl">One-Off</div><div class="sv" style="color:#F57F17">${oneoff}</div><div class="ss">1 job only</div></div>
@@ -313,9 +465,10 @@ function renderContent() {
   }
 
   else if (activeTab==='Revenue') {
-    const maxR = Math.max(...monthlyData.map(m=>m.r));
+    const maxR = monthlyData.length > 0 ? Math.max(...monthlyData.map(m=>m.r)) : 1;
     el.innerHTML = `<div class="card"><div style="font-size:15px;font-weight:700;color:#1B5E20;margin-bottom:20px">Monthly Revenue & Job Volume</div>
-      ${monthlyData.map(m=>'<div class="bar-row"><span class="bar-l">'+shortMonth(m.m)+'</span><div class="bar-c"><div class="bar" style="width:'+(maxR>0?Math.round(m.r/maxR*100):0)+'%"></div><span class="bar-v">'+fmt(m.r)+'</span><span class="bar-s">'+m.j+' jobs \u2022 '+m.c+' customers</span></div></div>').join('')}
+      ${monthlyData.length === 0 ? '<div style="color:#888;text-align:center;padding:40px">No jobs in this period.</div>' :
+        monthlyData.map(m=>'<div class="bar-row"><span class="bar-l">'+shortMonth(m.m)+'</span><div class="bar-c"><div class="bar" style="width:'+(maxR>0?Math.round(m.r/maxR*100):0)+'%"></div><span class="bar-v">'+fmt(m.r)+'</span><span class="bar-s">'+m.j+' jobs \u2022 '+m.c+' customers</span></div></div>').join('')}
       <div class="ib ig"><b>Seasonal pattern:</b> Peak May-Oct. Winter dip Dec-Feb. Spring bounce in March. Average job value trending upward over time.</div>
     </div>`;
   }
@@ -345,25 +498,30 @@ function renderContent() {
     const mikeChurned = churnedList.filter(c=>c.f==='Mike').length;
     el.innerHTML = `<div class="card"><div style="font-size:15px;font-weight:700;color:#C62828;margin-bottom:4px">All ${churnedList.length} Churned Customers</div>
       <div style="font-size:13px;color:#888;margin-bottom:16px">Was recurring or 5+ jobs, no visit in 90+ days.</div>
-      <div class="table-wrap"><table><thead><tr style="border-bottom:2px solid #FFEBEE"><th>Customer</th><th class="r">Jobs</th><th class="r">Lifetime Revenue</th><th class="r">Last Visit</th><th class="r">Days Since</th><th class="c">Territory</th><th>Services</th></tr></thead>
-      <tbody>${churnedList.map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:#C62828">'+fmt(c.r)+'</td><td class="r" style="color:#888">'+fmtDate(c.last)+'</td><td class="r">'+c.daysSince+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:#888">'+c.svc+'</td></tr>').join('')}</tbody></table></div>
-      <div class="ib ia"><b>Total lifetime value:</b> ${fmt(total)}. ${adamChurned} on Adam's territory, ${mikeChurned} on Mike's. A re-engagement campaign targeting the top 10 could recover recurring revenue.</div>
+      ${churnedList.length === 0 ? '<div style="color:#888;text-align:center;padding:40px">No churned customers in this period.</div>' :
+      '<div class="table-wrap"><table><thead><tr style="border-bottom:2px solid #FFEBEE"><th>Customer</th><th class="r">Jobs</th><th class="r">Lifetime Revenue</th><th class="r">Last Visit</th><th class="r">Days Since</th><th class="c">Territory</th><th>Services</th></tr></thead>'+
+      '<tbody>'+churnedList.map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:#C62828">'+fmt(c.r)+'</td><td class="r" style="color:#888">'+fmtDate(c.last)+'</td><td class="r">'+c.daysSince+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:#888">'+c.svc+'</td></tr>').join('')+'</tbody></table></div>'+
+      '<div class="ib ia"><b>Total lifetime value:</b> '+fmt(total)+'. '+adamChurned+' on Adam\'s territory, '+mikeChurned+' on Mike\'s. A re-engagement campaign targeting the top 10 could recover recurring revenue.</div>'
+      }
     </div>`;
   }
 
   else if (activeTab==='Missing Prices') {
     el.innerHTML = `<div class="card"><div style="font-size:15px;font-weight:700;color:#E65100;margin-bottom:4px">Jobs Missing Prices (\u00a30)</div>
       <div style="font-size:13px;color:#888;margin-bottom:16px">${missingPriceData.reduce((s,c)=>s+c.z,0)} jobs with \u00a30. Run Fix Missing Prices from the MTG app menu to auto-fix where possible.</div>
-      <div class="table-wrap"><table><thead><tr style="border-bottom:2px solid #FFF3E0"><th>Customer</th><th class="r">\u00a30 Jobs</th><th class="r">Avg When Priced</th><th class="r">Est. Missing</th><th>Service</th></tr></thead>
-      <tbody>${missingPriceData.map(c=>{const e=c.est;return'<tr><td style="font-weight:500">'+c.n+'</td><td class="r" style="font-weight:600;color:#E65100">'+c.z+'</td><td class="r">'+(c.a>0?fmt(c.a):'Never priced')+'</td><td class="r" style="font-weight:600;color:'+(e>0?'#2E7D32':'#ccc')+'">'+(e>0?'~'+fmt(e):'\u2014')+'</td><td style="font-size:12px;color:#888">'+(c.svc||'\u2014')+'</td></tr>'}).join('')}</tbody></table></div>
-      <div class="ib io"><b>Action:</b> Update recurring booking prices in the MTG app for customers showing "Never priced". These are active regulars with no pricing set.</div>
+      ${missingPriceData.length === 0 ? '<div style="color:#888;text-align:center;padding:40px">No missing prices in this period.</div>' :
+      '<div class="table-wrap"><table><thead><tr style="border-bottom:2px solid #FFF3E0"><th>Customer</th><th class="r">\u00a30 Jobs</th><th class="r">Avg When Priced</th><th class="r">Est. Missing</th><th>Service</th></tr></thead>'+
+      '<tbody>'+missingPriceData.map(c=>{const e=c.est;return'<tr><td style="font-weight:500">'+c.n+'</td><td class="r" style="font-weight:600;color:#E65100">'+c.z+'</td><td class="r">'+(c.a>0?fmt(c.a):'Never priced')+'</td><td class="r" style="font-weight:600;color:'+(e>0?'#2E7D32':'#ccc')+'">'+(e>0?'~'+fmt(e):'\u2014')+'</td><td style="font-size:12px;color:#888">'+(c.svc||'\u2014')+'</td></tr>'}).join('')+'</tbody></table></div>'+
+      '<div class="ib io"><b>Action:</b> Update recurring booking prices in the MTG app for customers showing "Never priced". These are active regulars with no pricing set.</div>'
+      }
     </div>`;
   }
 
   else if (activeTab==='Services') {
     const mx = serviceData.length > 0 ? serviceData[0].j : 1;
     el.innerHTML = `<div class="card"><div style="font-size:15px;font-weight:700;color:#1B5E20;margin-bottom:16px">Service Type Performance</div>
-      ${serviceData.map(s=>'<div class="sb"><div class="sb-h"><span class="sb-n">'+s.n+'</span><span class="sb-s">'+s.j+' jobs \u2022 '+fmt(s.r)+' \u2022 Avg '+fmt(s.a)+'/job</span></div><div class="sb-t"><div class="sb-f" style="background:'+(s.a>100?'#FF9800':s.a>50?'#4CAF50':'#81C784')+';width:'+(Math.round(s.j/mx*100))+'%"></div></div></div>').join('')}
+      ${serviceData.length === 0 ? '<div style="color:#888;text-align:center;padding:40px">No services in this period.</div>' :
+        serviceData.map(s=>'<div class="sb"><div class="sb-h"><span class="sb-n">'+s.n+'</span><span class="sb-s">'+s.j+' jobs \u2022 '+fmt(s.r)+' \u2022 Avg '+fmt(s.a)+'/job</span></div><div class="sb-t"><div class="sb-f" style="background:'+(s.a>100?'#FF9800':s.a>50?'#4CAF50':'#81C784')+';width:'+(Math.round(s.j/mx*100))+'%"></div></div></div>').join('')}
       <div class="ib ig"><b>Key insight:</b> One-off services (tidy-ups, hedge cutting, clearances) are high-margin. Regular maintenance is your bread and butter by volume but tidy-ups generate significant revenue from fewer jobs.</div>
     </div>`;
   }
