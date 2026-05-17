@@ -73,13 +73,7 @@ td{padding:10px 12px;border-bottom:1px solid #f5f5f5}
 .df-summary{margin-left:auto;font-size:11px;color:#666}
 .df-summary b{color:#1B5E20}
 
-/* ---- Era tiles (clickable) ---- */
-.era-bar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
-.era-stat{font-size:12px;padding:6px 14px;border-radius:20px;background:#E8F5E9;color:#1B5E20;cursor:pointer;border:1px solid transparent;transition:all .15s;user-select:none}
-.era-stat.historic{background:#FFF3E0;color:#E65100}
-.era-stat:hover{filter:brightness(0.97)}
-.era-stat.active{border-color:currentColor;font-weight:700;box-shadow:0 0 0 2px rgba(27,94,32,0.12)}
-.era-stat.historic.active{box-shadow:0 0 0 2px rgba(230,81,0,0.12)}
+
 </style>
 </head>
 <body>
@@ -128,7 +122,6 @@ let jobs=[], allCustomers=[], churnedList=[], monthlyData=[], serviceData=[], mi
 // ----- view state -----
 let activeTab="Overview", custSegFilter="All", custTerFilter="All", custSearch="";
 let dfRange="tax-year", dfFrom=null, dfTo=null;
-let eraFilter="All"; // "All" | "Historic" | "Live"
 
 // =============================================================
 // CSV parsing
@@ -190,7 +183,6 @@ async function loadData() {
       let svc = j['Service Type'] || 'Unknown';
       if (svc === 'Regular Garden Maintenance Visits' || svc === 'Regular Strim, Mow, & Blow' || svc === 'Strim, Mow, & Blow') svc = 'Regular Garden Maintenance';
       j._service = svc;
-      j._era = j._date && j._date >= new Date(2026, 3, 6) ? 'Live' : 'Historic';
       j._franchisee = j['Franchisee'] || '';
     });
 
@@ -240,7 +232,6 @@ function dfBounds() {
 function applyFilters() {
   const b = dfBounds();
   jobs = rawJobs.filter(j => {
-    if (eraFilter !== 'All' && j._era !== eraFilter) return false;
     if (b.from && b.to) {
       if (!j._date) return false;
       if (j._date < b.from || j._date > b.to) return false;
@@ -358,13 +349,6 @@ function renderTabs() {
 }
 function setTab(t) { activeTab=t; custSegFilter="All"; custTerFilter="All"; custSearch=""; renderTabs(); renderContent(); }
 
-function setEra(e) {
-  eraFilter = (eraFilter === e) ? 'All' : e; // toggle off if same tile clicked twice
-  applyFilters();
-  renderContent();
-  dfRender();
-}
-
 // =============================================================
 // Date filter rendering & wiring
 // =============================================================
@@ -376,14 +360,11 @@ function dfRender() {
 
   const b = dfBounds();
   const summary = document.getElementById('dfSummary');
-  let txt;
   if (!b.from || !b.to) {
-    txt = 'Showing <b>all jobs</b>';
+    summary.innerHTML = 'Showing <b>all jobs</b> &nbsp;•&nbsp; <b>' + jobs.length + '</b> total';
   } else {
-    txt = fmtDateLong(b.from) + ' → ' + fmtDateLong(b.to) + ' &nbsp;•&nbsp; <b>' + jobs.length + '</b> jobs';
+    summary.innerHTML = fmtDateLong(b.from) + ' → ' + fmtDateLong(b.to) + ' &nbsp;•&nbsp; <b>' + jobs.length + '</b> jobs';
   }
-  if (eraFilter !== 'All') txt += ' &nbsp;•&nbsp; era: <b>'+eraFilter+'</b>';
-  summary.innerHTML = txt;
 }
 
 document.querySelectorAll('#dfBar .df-btn[data-range]').forEach(btn => {
@@ -430,16 +411,9 @@ function renderContent() {
   const adamCusts = new Set(adamJobs.map(j=>j['Customer Name'])).size;
   const mikeAvg = mikeJobs.length > 0 ? Math.round(mikeRev/mikeJobs.length) : 0;
   const adamAvg = adamJobs.length > 0 ? Math.round(adamRev/adamJobs.length) : 0;
-  const historicJobs = jobs.filter(j=>j._era==='Historic').length;
-  const liveJobs = jobs.filter(j=>j._era==='Live').length;
 
   if (activeTab==='Overview') {
     el.innerHTML = `
-    <div class="era-bar">
-      <span class="era-stat historic ${eraFilter==='Historic'?'active':''}" onclick="setEra('Historic')" title="Click to filter">Historic: ${historicJobs} jobs</span>
-      <span class="era-stat ${eraFilter==='Live'?'active':''}" onclick="setEra('Live')" title="Click to filter">Live (Apr 6+): ${liveJobs} jobs</span>
-      ${eraFilter!=='All' ? '<span class="era-stat" onclick="setEra(eraFilter)" style="background:#eee;color:#666">✕ Clear era filter</span>' : ''}
-    </div>
     <div class="grid grid-4">
       <div class="card card-b"><div class="sl">Total Jobs</div><div class="sv">${totalJobs.toLocaleString()}</div><div class="ss">completed</div></div>
       <div class="card card-b"><div class="sl">Total Revenue</div><div class="sv">${fmt(totalRev)}</div><div class="ss">recorded</div></div>
