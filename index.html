@@ -33,6 +33,9 @@ body{font-family:'DM Sans',sans-serif;background:#F5F7F5;color:#333}
 .b-mike{background:#E8F5E9;color:#1B5E20}.b-adam{background:#E3F2FD;color:#1565C0}
 .b-oneoff{background:#FFF9C4;color:#F57F17}.b-repeat{background:#BBDEFB;color:#1565C0}
 .b-recurring{background:#C8E6C9;color:#2E7D32}
+.b-new{background:#FFF3E0;color:#E65100}.b-contacted{background:#E3F2FD;color:#1565C0}
+.b-quoted{background:#F3E5F5;color:#6A1B9A}.b-booked{background:#E8F5E9;color:#2E7D32}
+.b-lost{background:#FFEBEE;color:#C62828}.b-spam{background:#ECEFF1;color:#607D8B}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{text-align:left;padding:8px 12px;color:#888;font-weight:600;border-bottom:2px solid #E8F5E9;position:sticky;top:0;background:#fff;z-index:1}
 th.r,td.r{text-align:right}th.c,td.c{text-align:center}
@@ -112,12 +115,14 @@ const SHEET_ID = '11UHcc9bXXhE92bvXOTp8fmhpjELQbI9ETBaiFxhTqZw';
 const JOBS_GID = '1576165006';
 const CUSTOMERS_GID = '1593119775';
 function gvizUrl(gid) { return 'https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:csv&gid='+gid; }
+function gvizUrlByName(name) { return 'https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:csv&sheet='+encodeURIComponent(name); }
 
 // ----- raw data (loaded once) -----
-let rawJobs=[], customers=[];
+let rawJobs=[], customers=[], rawLeads=[], rawRecurring=[];
 
 // ----- derived (recomputed when filter changes) -----
 let jobs=[], allCustomers=[], churnedList=[], monthlyData=[], serviceData=[], missingPriceData=[];
+let leadStats=null, recurringStats=null;
 
 // ----- view state -----
 let activeTab="Overview", custSegFilter="All", custTerFilter="All", custSearch="";
@@ -176,7 +181,7 @@ async function loadData() {
     rawJobs = parseCSV(jobsText);
     customers = parseCSV(custText);
 
-    // Enrich once
+    // Enrich jobs once
     rawJobs.forEach(j => {
       j._amount = parseAmount(j['Amount (£)']);
       j._date = parseDate(j['Date Completed']);
@@ -184,6 +189,34 @@ async function loadData() {
       if (svc === 'Regular Garden Maintenance Visits' || svc === 'Regular Strim, Mow, & Blow' || svc === 'Strim, Mow, & Blow') svc = 'Regular Garden Maintenance';
       j._service = svc;
       j._franchisee = j['Franchisee'] || '';
+    });
+
+    // Leads + Recurring tabs (non-fatal: dashboard still loads if these are missing)
+    try {
+      const [leadsRes, recRes] = await Promise.all([
+        fetch(gvizUrlByName('Leads')),
+        fetch(gvizUrlByName('Recurring Bookings'))
+      ]);
+      const leadsText = await leadsRes.text();
+      const recText = await recRes.text();
+      rawLeads = leadsText.trim().startsWith('<') ? [] : parseCSV(leadsText);
+      rawRecurring = recText.trim().startsWith('<') ? [] : parseCSV(recText);
+    } catch(e2) { rawLeads = []; rawRecurring = []; console.warn('Leads/Recurring load failed', e2); }
+
+    rawLeads.forEach(l => {
+      l._date = parseDate((l['Date Received'] || '').split(' ')[0]);
+      l._quote = parseAmount(l['Quoted Price (£)']);
+      l._status = (l['Status'] || '').trim().toUpperCase();
+      l._franchisee = (l['Franchisee'] || '').trim();
+      l._source = (l['Source'] || '').trim() || 'Unknown';
+      l._medium = (l['Medium'] || '').trim() || 'Unknown';
+    });
+    rawRecurring.forEach(r => {
+      r._created = parseDate((r['Date Created'] || '').split(' ')[0]);
+      r._canceled = parseDate((r['Date Canceled'] || '').split(' ')[0]);
+      r._value = parseAmount(r['Value (£)']);
+      r._status = (r['Status'] || '').trim().toUpperCase();
+      r._franchisee = (r['Franchisee'] || '').trim();
     });
 
     applyFilters();
@@ -239,6 +272,8 @@ function applyFilters() {
     return true;
   });
   processData();
+  processLeads(b);
+  processRecurring(b);
 }
 
 function processData() {
@@ -329,10 +364,72 @@ function processData() {
 }
 
 // =============================================================
+// Leads aggregation (respects the period filter on Date Received)
+// =============================================================
+function processLeads(b) {
+  let ls = rawLeads;
+  if (b.from && b.to) ls = ls.filter(l => l._date && l._date >= b.from && l._date <= b.to);
+
+  const byStatus = {NEW:0,CONTACTED:0,QUOTED:0,BOOKED:0,LOST:0,SPAM:0};
+  const bySource = {}, byMedium = {}, byFr = {Mike:0,Adam:0,Other:0};
+  let quotedValue = 0;
+
+  ls.forEach(l => {
+    if (byStatus[l._status] === undefined) byStatus[l._status] = 0;
+    byStatus[l._status]++;
+    bySource[l._source] = (bySource[l._source] || 0) + 1;
+    byMedium[l._medium] = (byMedium[l._medium] || 0) + 1;
+    if (l._franchisee === 'Mike') byFr.Mike++;
+    else if (l._franchisee === 'Adam') byFr.Adam++;
+    else byFr.Other++;
+    if (l._status === 'QUOTED' || l._status === 'BOOKED') quotedValue += l._quote;
+  });
+
+  const total = ls.length;
+  const spam = byStatus.SPAM || 0;
+  const qualified = total - spam;
+  const booked = byStatus.BOOKED || 0;
+
+  leadStats = {
+    total, byStatus, bySource, byMedium, byFr, quotedValue,
+    conversion: qualified > 0 ? Math.round(booked / qualified * 100) : 0,
+    staleNew: byStatus.NEW || 0,
+    list: ls.slice().sort((a,bb) => (bb._date ? bb._date : 0) - (a._date ? a._date : 0))
+  };
+}
+
+// =============================================================
+// Recurring aggregation (active = current state; movement = in period)
+// =============================================================
+function processRecurring(b) {
+  const active = rawRecurring.filter(r => r._status === 'ACTIVE');
+  let created = rawRecurring;
+  let cancelled = rawRecurring.filter(r => r._canceled);
+  if (b.from && b.to) {
+    created = rawRecurring.filter(r => r._created && r._created >= b.from && r._created <= b.to);
+    cancelled = rawRecurring.filter(r => r._canceled && r._canceled >= b.from && r._canceled <= b.to);
+  }
+  recurringStats = {
+    activeCount: active.length,
+    activeValue: active.reduce((s,r) => s + r._value, 0),
+    activeMike: active.filter(r => r._franchisee === 'Mike').length,
+    activeAdam: active.filter(r => r._franchisee === 'Adam').length,
+    newInPeriod: created.length,
+    cancelledInPeriod: cancelled.length,
+    netInPeriod: created.length - cancelled.length,
+    list: rawRecurring.slice().sort((a,bb) => {
+      if ((a._status === 'ACTIVE') !== (bb._status === 'ACTIVE')) return a._status === 'ACTIVE' ? -1 : 1;
+      return (bb._created ? bb._created : 0) - (a._created ? a._created : 0);
+    })
+  };
+}
+
+// =============================================================
 // Helpers
 // =============================================================
 function badge(t) {
-  const m = {ACTIVE:'active',Churned:'churned',Mike:'mike',Adam:'adam','One-Off':'oneoff',Repeat:'repeat',Recurring:'recurring'};
+  const m = {ACTIVE:'active',Churned:'churned',Mike:'mike',Adam:'adam','One-Off':'oneoff',Repeat:'repeat',Recurring:'recurring',
+    NEW:'new',CONTACTED:'contacted',QUOTED:'quoted',BOOKED:'booked',LOST:'lost',SPAM:'spam',CANCELED:'churned',CANCELLED:'churned'};
   return '<span class="badge b-'+(m[t]||'')+'">'+t+'</span>';
 }
 function fmt(n) { return '\u00a3'+Math.round(n).toLocaleString(); }
@@ -340,7 +437,7 @@ function fmtDate(d) { if (!d) return ''; return d.getDate()+'/'+String(d.getMont
 function fmtDateLong(d) { if (!d) return '—'; return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); }
 function shortMonth(ym) { const [y,m] = ym.split('-'); const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return mn[parseInt(m)-1]+' '+y.slice(2); }
 
-const tabList = ["Overview","Revenue","Customers","Churned","Missing Prices","Services"];
+const tabList = ["Overview","Leads","Revenue","Customers","Recurring","Churned","Missing Prices","Services"];
 
 function renderTabs() {
   document.getElementById('tabs').innerHTML = tabList.map(t =>
@@ -438,6 +535,45 @@ function renderContent() {
     </div>`;
   }
 
+  else if (activeTab==='Leads') {
+    if (!leadStats || leadStats.total === 0) {
+      el.innerHTML = `<div class="card"><div style="font-size:15px;font-weight:700;color:#1B5E20;margin-bottom:4px">Leads</div>
+        <div style="color:#888;text-align:center;padding:40px">No leads received in this period.${rawLeads.length===0?' No lead data found yet, this view fills as enquiries come in.':''}</div></div>`;
+    } else {
+      const s = leadStats;
+      const funnel = [['NEW',s.byStatus.NEW||0,'#E65100'],['CONTACTED',s.byStatus.CONTACTED||0,'#1565C0'],['QUOTED',s.byStatus.QUOTED||0,'#6A1B9A'],['BOOKED',s.byStatus.BOOKED||0,'#2E7D32']];
+      const maxF = Math.max(1, ...funnel.map(f=>f[1]));
+      const sources = Object.entries(s.bySource).sort((a,b)=>b[1]-a[1]);
+      const maxSrc = Math.max(1, ...sources.map(x=>x[1]));
+      el.innerHTML = `
+      <div class="grid grid-4">
+        <div class="card card-b"><div class="sl">Total Leads</div><div class="sv">${s.total}</div><div class="ss">in period</div></div>
+        <div class="card card-b" style="border-color:#2E7D32"><div class="sl">Conversion</div><div class="sv" style="color:#2E7D32">${s.conversion}%</div><div class="ss">booked of non-spam</div></div>
+        <div class="card card-b" style="border-color:#2E7D32"><div class="sl">Booked</div><div class="sv" style="color:#2E7D32">${s.byStatus.BOOKED||0}</div><div class="ss">won</div></div>
+        <div class="card card-b" style="border-color:#E65100"><div class="sl">Still New</div><div class="sv" style="color:#E65100">${s.staleNew}</div><div class="ss">need actioning</div></div>
+      </div>
+      <div class="grid grid-2">
+        <div class="card"><div style="font-size:15px;font-weight:700;color:#1B5E20;margin-bottom:16px">Lead funnel</div>
+          ${funnel.map(f=>'<div class="bar-row"><span class="bar-l">'+f[0].slice(0,4)+'</span><div class="bar-c"><div class="bar" style="background:'+f[2]+';width:'+Math.round(f[1]/maxF*100)+'%"></div><span class="bar-v">'+f[1]+'</span><span class="bar-s">'+(s.total>0?Math.round(f[1]/s.total*100):0)+'% of all</span></div></div>').join('')}
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid #f0f0f0;display:flex;gap:16px;align-items:center">${badge('LOST')}<span style="font-size:12px;color:#888">${s.byStatus.LOST||0} lost</span>${badge('SPAM')}<span style="font-size:12px;color:#888">${s.byStatus.SPAM||0} spam</span></div>
+        </div>
+        <div class="card"><div style="font-size:15px;font-weight:700;color:#1B5E20;margin-bottom:16px">By source</div>
+          ${sources.length===0?'<div style="color:#888;font-size:13px">No source data.</div>':sources.map(x=>'<div class="bar-row"><span class="bar-l" style="width:auto;min-width:60px;text-align:left">'+x[0].slice(0,14)+'</span><div class="bar-c"><div class="bar" style="width:'+Math.round(x[1]/maxSrc*100)+'%"></div><span class="bar-v">'+x[1]+'</span></div></div>').join('')}
+          <div style="margin-top:16px;padding-top:12px;border-top:1px solid #f0f0f0;display:flex;gap:24px;font-size:13px;align-items:center">
+            <span>${badge('Mike')} <b>${s.byFr.Mike}</b></span>
+            <span>${badge('Adam')} <b>${s.byFr.Adam}</b></span>
+            ${s.byFr.Other?'<span style="color:#888">'+s.byFr.Other+' unrouted</span>':''}
+          </div>
+        </div>
+      </div>
+      <div class="card"><div style="font-size:13px;color:#888;margin-bottom:12px">${s.list.length} leads in period</div>
+        <div class="table-wrap"><table><thead><tr><th>Received</th><th>Customer</th><th>Service</th><th class="r">Quote</th><th class="c">Territory</th><th class="c">Owner</th><th class="c">Status</th><th>Source</th></tr></thead>
+        <tbody>${s.list.map(l=>'<tr><td style="color:#888;font-size:12px">'+fmtDate(l._date)+'</td><td style="font-weight:500">'+(l['Customer Name']||'\u2014')+'</td><td style="font-size:12px">'+(l['Service Requested']||'\u2014')+'</td><td class="r">'+(l._quote>0?fmt(l._quote):'\u2014')+'</td><td class="c" style="font-size:12px;color:#888">'+(l['Territory']||'\u2014')+'</td><td class="c">'+(l._franchisee?badge(l._franchisee):'\u2014')+'</td><td class="c">'+(l._status?badge(l._status):'\u2014')+'</td><td style="font-size:12px;color:#888">'+l._source+'</td></tr>').join('')}</tbody></table></div>
+        <div class="ib ig"><b>Note:</b> "Still new" leads have had no status change yet. Your alert system emails the owner the moment one lands; this view is the backstop so nothing goes cold. Phone and email are deliberately left off this page, action leads from the alert or the app.</div>
+      </div>`;
+    }
+  }
+
   else if (activeTab==='Revenue') {
     const maxR = monthlyData.length > 0 ? Math.max(...monthlyData.map(m=>m.r)) : 1;
     el.innerHTML = `<div class="card"><div style="font-size:15px;font-weight:700;color:#1B5E20;margin-bottom:20px">Monthly Revenue & Job Volume</div>
@@ -464,6 +600,41 @@ function renderContent() {
       <div class="card"><div style="font-size:13px;color:#888;margin-bottom:12px">Showing ${filtered.length} customers</div>
       <div class="table-wrap"><table><thead><tr><th>Customer</th><th>Segment</th><th class="r">Jobs</th><th class="r">Revenue</th><th class="r">Avg</th><th class="c">Territory</th><th>First Job</th><th>Last Job</th></tr></thead>
       <tbody>${filtered.map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td>'+badge(c.s)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:#1B5E20">'+fmt(c.r)+'</td><td class="r">'+fmt(c.a)+'</td><td class="c">'+badge(c.f)+'</td><td style="color:#888;font-size:12px">'+fmtDate(c.first)+'</td><td style="color:#888;font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div></div>`;
+  }
+
+  else if (activeTab==='Recurring') {
+    if (!recurringStats || rawRecurring.length === 0) {
+      el.innerHTML = `<div class="card"><div style="font-size:15px;font-weight:700;color:#1B5E20;margin-bottom:4px">Recurring bookings</div>
+        <div style="color:#888;text-align:center;padding:40px">No recurring booking data found yet. This fills as recurring bookings are created or cancelled in the app.</div></div>`;
+    } else {
+      const r = recurringStats;
+      const netColor = r.netInPeriod>0?'#2E7D32':(r.netInPeriod<0?'#C62828':'#888');
+      const netSign = r.netInPeriod>0?'+':'';
+      el.innerHTML = `
+      <div class="grid grid-4">
+        <div class="card card-b" style="border-color:#2E7D32"><div class="sl">Active Recurring</div><div class="sv" style="color:#2E7D32">${r.activeCount}</div><div class="ss">live schedules</div></div>
+        <div class="card card-b"><div class="sl">Active Value</div><div class="sv">${fmt(r.activeValue)}</div><div class="ss">per visit, combined</div></div>
+        <div class="card card-b"><div class="sl">New In Period</div><div class="sv">${r.newInPeriod}</div><div class="ss">started</div></div>
+        <div class="card card-b" style="border-color:#C62828"><div class="sl">Cancelled In Period</div><div class="sv" style="color:#C62828">${r.cancelledInPeriod}</div><div class="ss">churned</div></div>
+      </div>
+      <div class="grid grid-2">
+        <div class="card"><div style="font-size:15px;font-weight:700;color:#1B5E20;margin-bottom:16px">Net movement</div>
+          <div style="font-size:34px;font-weight:700;color:${netColor}">${netSign}${r.netInPeriod}</div>
+          <div style="font-size:13px;color:#888;margin-top:4px">${r.newInPeriod} started \u2212 ${r.cancelledInPeriod} cancelled in the selected period</div>
+          <div style="margin-top:16px;padding-top:12px;border-top:1px solid #f0f0f0;display:flex;gap:24px;font-size:13px;align-items:center">
+            <span>${badge('Mike')} <b>${r.activeMike}</b> active</span>
+            <span>${badge('Adam')} <b>${r.activeAdam}</b> active</span>
+          </div>
+        </div>
+        <div class="card"><div style="font-size:15px;font-weight:700;color:#1B5E20;margin-bottom:8px">What this tells you</div>
+          <div class="ib ig" style="margin-top:0"><b>Active value</b> is the combined per-visit price of every live recurring schedule, a rough proxy for guaranteed repeat revenue per round. Watch <b>net movement</b>: consistently positive means the round is growing, negative means cancellations are outpacing new sign-ups.</div>
+        </div>
+      </div>
+      <div class="card"><div style="font-size:13px;color:#888;margin-bottom:12px">${r.list.length} recurring bookings, active first</div>
+        <div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th>Service</th><th>Frequency</th><th class="r">Value</th><th class="c">Status</th><th>Created</th><th>Cancelled</th></tr></thead>
+        <tbody>${r.list.map(x=>'<tr><td style="font-weight:500">'+(x['Customer']||'\u2014')+'</td><td class="c">'+(x._franchisee?badge(x._franchisee):'\u2014')+'</td><td style="font-size:12px">'+(x['Service']||'\u2014')+'</td><td style="font-size:12px;color:#888">'+(x['Frequency']||'\u2014')+'</td><td class="r">'+(x._value>0?fmt(x._value):'\u2014')+'</td><td class="c">'+badge(x._status==='ACTIVE'?'ACTIVE':'CANCELED')+'</td><td style="color:#888;font-size:12px">'+fmtDate(x._created)+'</td><td style="color:#888;font-size:12px">'+(x._canceled?fmtDate(x._canceled):'\u2014')+'</td></tr>').join('')}</tbody></table></div>
+      </div>`;
+    }
   }
 
   else if (activeTab==='Churned') {
