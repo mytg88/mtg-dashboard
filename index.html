@@ -369,8 +369,10 @@ function processData() {
     const firstJob = dates[0], lastJob = dates[dates.length - 1];
     const priced = c.jobs.filter(j => j._amount > 0);
     const avg = priced.length ? priced.reduce((s,j) => s + j._amount, 0) / priced.length : 0;
-    const visitJobs = c.jobs.filter(j => j._service === 'Regular Garden Maintenance' && j._amount > 0);
-    const visit = visitJobs.length ? visitJobs.reduce((s,j) => s + j._amount, 0) / visitJobs.length : avg;
+    const rgmJobs = c.jobs.filter(j => j._service === 'Regular Garden Maintenance');
+    const visit = rgmJobs.length
+      ? rgmJobs.reduce((s,j) => s + j._amount, 0) / rgmJobs.length
+      : (c.jobs.length ? c.totalRev / c.jobs.length : 0);
     let segment;
     if (c.jobs.length === 1) segment = 'One-Off';
     else if (c.hasRecurring && lastJob < cutoff90) segment = 'Churned';
@@ -753,7 +755,7 @@ function renderContent() {
       </div>
       <div class="card" style="margin-bottom:24px"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${recCusts.length} active recurring customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, from job history</div>
         <div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th>Frequency</th><th class="r">Avg/visit</th><th class="r">Jobs</th><th class="r">Lifetime</th><th>Last visit</th></tr></thead>
-        <tbody>${recCusts.map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.freq||'\u2014')+'</td><td class="r">'+(c.a>0?fmt(c.a):'\u2014')+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div>
+        <tbody>${recCusts.map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.freq||'\u2014')+'</td><td class="r">'+(c.visit>0?fmt(c.visit):'\u2014')+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div>
       </div>
       ${moves.length ? '<div class="card"><div class="h">Recent schedule changes (live app log)</div><div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th>Service</th><th>Frequency</th><th class="r">Value</th><th class="c">Status</th><th>Created</th><th>Cancelled</th></tr></thead><tbody>'+moves.map(x=>'<tr><td style="font-weight:500">'+(x._cust||'\u2014')+'</td><td class="c">'+(x._franchisee?badge(x._franchisee):'\u2014')+'</td><td style="font-size:12px">'+(x._svc||'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+(x._freq||'\u2014')+'</td><td class="r">'+(x._value>0?fmt(x._value):'\u2014')+'</td><td class="c">'+statusBadge(x._status)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(x._created)+'</td><td style="color:var(--muted);font-size:12px">'+(x._canceled?fmtDate(x._canceled):'\u2014')+'</td></tr>').join('')+'</tbody></table></div></div>' : ''}
     `;
