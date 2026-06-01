@@ -88,6 +88,10 @@ tr:hover td{background:#FAFBF9}
 .df-btn{padding:6px 14px;border:1px solid #CFE0CB;background:var(--card);color:var(--green);border-radius:20px;font-size:12px;font-family:inherit;cursor:pointer;transition:all .15s}
 .df-btn:hover{background:#E8F5E9}
 .df-btn.active{background:var(--green);color:#fff;border-color:var(--green);font-weight:600}
+.df-btn.vw{border-color:#CBD5D0;color:var(--ink)}
+.df-btn.vw:hover{background:#EEF1ED}
+.df-btn.vw.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.vw-group{display:inline-flex;align-items:center;gap:8px;margin-left:10px;padding-left:14px;border-left:1px solid var(--line)}
 .df-custom{display:none;align-items:center;gap:6px;margin-left:4px}
 .df-custom.show{display:flex}
 .df-date{padding:5px 8px;border:1px solid #CFE0CB;border-radius:5px;font-size:12px;font-family:inherit}
@@ -109,10 +113,10 @@ tr:hover td{background:#FAFBF9}
   <button class="df-btn" data-range="this-month">This month</button>
   <button class="df-btn" data-range="last-month">Last month</button>
   <button class="df-btn" data-range="ytd">YTD</button>
-  <button class="df-btn active" data-range="tax-year">Tax year</button>
+  <button class="df-btn" data-range="tax-year">Tax year</button>
   <button class="df-btn" data-range="last-tax-year">Last tax year</button>
   <button class="df-btn" data-range="last-12mo">Last 12 mo</button>
-  <button class="df-btn" data-range="all">All time</button>
+  <button class="df-btn active" data-range="all">All time</button>
   <button class="df-btn" data-range="custom">Custom</button>
   <div class="df-custom" id="dfCustom">
     <input type="date" id="dfFrom" class="df-date">
@@ -120,6 +124,12 @@ tr:hover td{background:#FAFBF9}
     <input type="date" id="dfTo" class="df-date">
     <button class="df-btn" id="dfApply" style="background:var(--green);color:#fff;border-color:var(--green)">Apply</button>
   </div>
+  <span class="vw-group">
+    <span class="df-label" style="margin-right:0">View</span>
+    <button class="df-btn vw active" data-view="All">Overall</button>
+    <button class="df-btn vw" data-view="Mike">Mike</button>
+    <button class="df-btn vw" data-view="Adam">Adam</button>
+  </span>
   <div class="df-summary" id="dfSummary"></div>
 </div>
 
@@ -131,15 +141,26 @@ const SHEET_ID = '11UHcc9bXXhE92bvXOTp8fmhpjELQbI9ETBaiFxhTqZw';
 const JOBS_GID = '1576165006';
 const CUSTOMERS_GID = '1593119775';
 function gvizUrl(gid) { return 'https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:csv&gid='+gid; }
-function gvizUrlByName(name) { return 'https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:csv&headers=1&sheet='+encodeURIComponent(name); }
+function gvizUrlByName(name) { return 'https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:csv&sheet='+encodeURIComponent(name); }
 
 let rawJobs=[], customers=[], rawLeads=[], rawRecurring=[];
-let jobs=[], prevJobs=[], allCustomers=[], churnedList=[], monthlyData=[], serviceData=[], missingPriceData=[];
+let jobsPeriod=[], jobs=[], prevJobs=[], allCustomers=[], churnedList=[], monthlyData=[], serviceData=[], missingPriceData=[];
 let leadStats=null, recurringStats=null, attention=null, prevTotals=null;
-let activeTab="Overview", custSegFilter="All", custTerFilter="All", custSearch="";
-let dfRange="tax-year", dfFrom=null, dfTo=null;
+let activeTab="Overview", custSegFilter="All", custSearch="";
+let dfRange="all", dfFrom=null, dfTo=null, franchiseeView="All";
 
 // ---------- CSV ----------
+function parseCSVLine(line) {
+  const result = []; let current = ''; let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') { inQuotes = !inQuotes; }
+    else if (ch === ',' && !inQuotes) { result.push(current); current = ''; }
+    else { current += ch; }
+  }
+  result.push(current);
+  return result;
+}
 function parseCSV(text) {
   const lines = text.split('\n');
   if (lines.length < 2) return [];
@@ -154,16 +175,28 @@ function parseCSV(text) {
   }
   return rows;
 }
-function parseCSVLine(line) {
-  const result = []; let current = ''; let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') { inQuotes = !inQuotes; }
-    else if (ch === ',' && !inQuotes) { result.push(current); current = ''; }
-    else { current += ch; }
+// Tolerant reader: scans the first rows for the line containing a known header keyword,
+// so a title/banner row above the real headers no longer breaks parsing.
+function parseCSVSmart(text, keywords) {
+  const lines = text.split('\n');
+  let hi = -1;
+  for (let i = 0; i < Math.min(lines.length, 12); i++) {
+    if (!lines[i].trim()) continue;
+    const low = lines[i].toLowerCase();
+    if (keywords.some(k => low.includes(k))) { hi = i; break; }
   }
-  result.push(current);
-  return result;
+  if (hi === -1) hi = 0;
+  const headers = parseCSVLine(lines[hi]).map(h => h.trim());
+  const rows = [];
+  for (let i = hi + 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    const vals = parseCSVLine(lines[i]);
+    const obj = {};
+    headers.forEach((h, idx) => obj[h] = (vals[idx] || '').trim());
+    if (Object.values(obj).every(v => !v)) continue;
+    rows.push(obj);
+  }
+  return rows;
 }
 function parseAmount(s) { if (!s) return 0; return parseFloat(String(s).replace(/[£,]/g, '')) || 0; }
 function parseDate(s) {
@@ -187,6 +220,7 @@ function col(row, candidates) {
   }
   return '';
 }
+function matchView(f) { return franchiseeView === 'All' || f === franchiseeView; }
 
 // ---------- fetch ----------
 async function loadData() {
@@ -208,8 +242,8 @@ async function loadData() {
     try {
       const [leadsRes, recRes] = await Promise.all([ fetch(gvizUrlByName('Leads')), fetch(gvizUrlByName('Recurring Bookings')) ]);
       const lt = await leadsRes.text(), rt = await recRes.text();
-      rawLeads = lt.trim().startsWith('<') ? [] : parseCSV(lt);
-      rawRecurring = rt.trim().startsWith('<') ? [] : parseCSV(rt);
+      rawLeads = lt.trim().startsWith('<') ? [] : parseCSVSmart(lt, ['customer','status','source','received','quoted','service','territory']);
+      rawRecurring = rt.trim().startsWith('<') ? [] : parseCSVSmart(rt, ['customer','status','frequency','service','created','value','booking']);
     } catch(e2) { rawLeads = []; rawRecurring = []; console.warn('Leads/Recurring load failed', e2); }
 
     rawLeads.forEach(l => {
@@ -218,7 +252,6 @@ async function loadData() {
       l._status = (col(l,['Status']) || '').trim().toUpperCase();
       l._franchisee = (col(l,['Franchisee','Owner']) || '').trim();
       l._source = (col(l,['Source']) || '').trim() || 'Unknown';
-      l._medium = (col(l,['Medium']) || '').trim() || 'Unknown';
       l._name = col(l,['Customer Name','Customer','Name']);
       l._svc = col(l,['Service Requested','Service']);
       l._territory = col(l,['Territory']);
@@ -234,7 +267,6 @@ async function loadData() {
       r._freq = col(r,['Frequency','Recurring Frequency']);
     });
 
-    processAttention();
     applyFilters();
     renderTabs();
     renderContent();
@@ -280,13 +312,16 @@ function prevBounds(b) {
 function applyFilters() {
   const b = dfBounds();
   const inB = (d) => !b.from || !b.to ? true : (d && d >= b.from && d <= b.to);
-  jobs = rawJobs.filter(j => inB(j._date));
+  jobsPeriod = rawJobs.filter(j => inB(j._date));
+  jobs = franchiseeView === 'All' ? jobsPeriod : jobsPeriod.filter(j => j._franchisee === franchiseeView);
   const pb = prevBounds(b);
-  prevJobs = (pb.from && pb.to) ? rawJobs.filter(j => j._date && j._date >= pb.from && j._date <= pb.to) : [];
+  let pj = (pb.from && pb.to) ? rawJobs.filter(j => j._date && j._date >= pb.from && j._date <= pb.to) : [];
+  prevJobs = franchiseeView === 'All' ? pj : pj.filter(j => j._franchisee === franchiseeView);
   processData();
   processPrev();
   processLeads(b);
   processRecurring(b);
+  processAttention();
 }
 
 function processData() {
@@ -295,10 +330,10 @@ function processData() {
   const custMap = {};
   jobs.forEach(j => {
     const name = j['Customer Name']; if (!name) return;
-    if (!custMap[name]) custMap[name] = { name, jobs: [], totalRev: 0, franchisee: j._franchisee, hasRecurring: false, services: new Set() };
+    if (!custMap[name]) custMap[name] = { name, jobs: [], totalRev: 0, franchisee: j._franchisee, hasRecurring: false, freq: '', services: new Set() };
     custMap[name].jobs.push(j);
     custMap[name].totalRev += j._amount;
-    if (j['Recurring Frequency'] && j['Recurring Frequency'].trim()) custMap[name].hasRecurring = true;
+    if (j['Recurring Frequency'] && j['Recurring Frequency'].trim()) { custMap[name].hasRecurring = true; custMap[name].freq = j['Recurring Frequency'].trim(); }
     custMap[name].services.add(j._service);
     custMap[name].franchisee = j._franchisee || custMap[name].franchisee;
   });
@@ -315,7 +350,7 @@ function processData() {
     else if (c.jobs.length >= 2) segment = 'Repeat';
     else segment = 'Other';
     return { n: c.name, j: c.jobs.length, r: Math.round(c.totalRev*100)/100, a: Math.round(avg*100)/100,
-      f: c.franchisee, s: segment, first: firstJob, last: lastJob,
+      f: c.franchisee, s: segment, freq: c.freq, first: firstJob, last: lastJob,
       daysSince: lastJob ? daysBetween(lastJob, now) : 999, svc: Array.from(c.services).slice(0,3).join(', ') };
   }).sort((a,b) => b.r - a.r);
   churnedList = allCustomers.filter(c => c.s === 'Churned').sort((a,b) => b.r - a.r);
@@ -357,20 +392,18 @@ function processPrev() {
 }
 
 function processLeads(b) {
-  let ls = rawLeads;
+  let ls = rawLeads.filter(l => matchView(l._franchisee));
   if (b.from && b.to) ls = ls.filter(l => l._date && l._date >= b.from && l._date <= b.to);
   const byStatus = {NEW:0,CONTACTED:0,QUOTED:0,BOOKED:0,LOST:0,SPAM:0};
   const bySource = {}, byFr = {Mike:0,Adam:0,Other:0};
-  let quotedValue = 0;
   ls.forEach(l => {
     if (byStatus[l._status] === undefined) byStatus[l._status] = 0;
     byStatus[l._status]++;
     bySource[l._source] = (bySource[l._source]||0)+1;
     if (l._franchisee === 'Mike') byFr.Mike++; else if (l._franchisee === 'Adam') byFr.Adam++; else byFr.Other++;
-    if (l._status === 'QUOTED' || l._status === 'BOOKED') quotedValue += l._quote;
   });
   const total = ls.length, spam = byStatus.SPAM||0, qualified = total - spam, booked = byStatus.BOOKED||0;
-  leadStats = { total, byStatus, bySource, byFr, quotedValue,
+  leadStats = { total, byStatus, bySource, byFr,
     conversion: qualified > 0 ? Math.round(booked/qualified*100) : 0,
     staleNew: byStatus.NEW||0,
     list: ls.slice().sort((a,b2) => (b2._date?b2._date:0) - (a._date?a._date:0)),
@@ -378,23 +411,17 @@ function processLeads(b) {
 }
 
 function processRecurring(b) {
-  const active = rawRecurring.filter(r => r._status === 'ACTIVE');
-  let created = rawRecurring, cancelled = rawRecurring.filter(r => r._canceled);
+  const base = rawRecurring.filter(r => matchView(r._franchisee));
+  let created = base, cancelled = base.filter(r => r._canceled);
   if (b.from && b.to) {
-    created = rawRecurring.filter(r => r._created && r._created >= b.from && r._created <= b.to);
-    cancelled = rawRecurring.filter(r => r._canceled && r._canceled >= b.from && r._canceled <= b.to);
+    created = base.filter(r => r._created && r._created >= b.from && r._created <= b.to);
+    cancelled = base.filter(r => r._canceled && r._canceled >= b.from && r._canceled <= b.to);
   }
   recurringStats = {
-    activeCount: active.length,
-    activeValue: active.reduce((s,r) => s + r._value, 0),
-    activeMike: active.filter(r => r._franchisee === 'Mike').length,
-    activeAdam: active.filter(r => r._franchisee === 'Adam').length,
     newInPeriod: created.length, cancelledInPeriod: cancelled.length,
     netInPeriod: created.length - cancelled.length,
-    list: rawRecurring.slice().sort((a,b2) => {
-      if ((a._status==='ACTIVE') !== (b2._status==='ACTIVE')) return a._status==='ACTIVE' ? -1 : 1;
-      return (b2._created?b2._created:0) - (a._created?a._created:0);
-    }),
+    list: base.slice().sort((a,b2) => (b2._created?b2._created:0) - (a._created?a._created:0)),
+    mapped: base.some(x => x._cust || x._status),
     headers: rawRecurring.length ? Object.keys(rawRecurring[0]).filter(k => !k.startsWith('_')) : []
   };
 }
@@ -403,10 +430,10 @@ function processAttention() {
   const now = new Date();
   const c90 = new Date(now); c90.setDate(c90.getDate()-90);
   const c30 = new Date(now); c30.setDate(c30.getDate()-30);
-  const staleLeads = rawLeads.filter(l => l._status === 'NEW').length;
-  const missingPrices = rawJobs.filter(j => j._amount <= 0 && j['Customer Name'] && !/assessment|free/i.test(j._service||'')).length;
+  const staleLeads = rawLeads.filter(l => l._status === 'NEW' && matchView(l._franchisee)).length;
+  const missingPrices = rawJobs.filter(j => j._amount <= 0 && j['Customer Name'] && !/assessment|free/i.test(j._service||'') && matchView(j._franchisee)).length;
   const cm = {};
-  rawJobs.forEach(j => {
+  rawJobs.filter(j => matchView(j._franchisee)).forEach(j => {
     const n = j['Customer Name']; if (!n) return;
     if (!cm[n]) cm[n] = { jobs:0, rec:false, last:null };
     cm[n].jobs++;
@@ -415,7 +442,7 @@ function processAttention() {
   });
   let churnRisk = 0;
   Object.values(cm).forEach(c => { if (c.last && c.last < c90 && (c.rec || c.jobs >= 5)) churnRisk++; });
-  const recentCancel = rawRecurring.filter(r => r._canceled && r._canceled >= c30).length;
+  const recentCancel = rawRecurring.filter(r => r._canceled && r._canceled >= c30 && matchView(r._franchisee)).length;
   attention = { staleLeads, missingPrices, churnRisk, recentCancel };
 }
 
@@ -487,14 +514,16 @@ const tabList = ["Overview","Leads","Revenue","Customers","Recurring","Churned",
 function renderTabs() {
   document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+t+'</button>').join('');
 }
-function setTab(t) { activeTab=t; custSegFilter="All"; custTerFilter="All"; custSearch=""; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
+function setTab(t) { activeTab=t; custSegFilter="All"; custSearch=""; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 
 function dfRender() {
   document.querySelectorAll('#dfBar .df-btn[data-range]').forEach(btn => btn.classList.toggle('active', btn.dataset.range === dfRange));
+  document.querySelectorAll('#dfBar .df-btn[data-view]').forEach(btn => btn.classList.toggle('active', btn.dataset.view === franchiseeView));
   document.getElementById('dfCustom').classList.toggle('show', dfRange === 'custom');
   const b = dfBounds(); const summary = document.getElementById('dfSummary');
-  if (!b.from || !b.to) summary.innerHTML = 'Showing <b>all jobs</b> &nbsp;•&nbsp; <b>'+jobs.length+'</b> total';
-  else summary.innerHTML = fmtDateLong(b.from)+' → '+fmtDateLong(b.to)+' &nbsp;•&nbsp; <b>'+jobs.length+'</b> jobs';
+  const who = franchiseeView === 'All' ? '' : ' \u00b7 '+franchiseeView;
+  if (!b.from || !b.to) summary.innerHTML = 'Showing <b>'+(franchiseeView==='All'?'all jobs':franchiseeView+'\u2019s jobs')+'</b> &nbsp;\u2022&nbsp; <b>'+jobs.length+'</b> total';
+  else summary.innerHTML = fmtDateLong(b.from)+' \u2192 '+fmtDateLong(b.to)+who+' &nbsp;\u2022&nbsp; <b>'+jobs.length+'</b> jobs';
 }
 document.querySelectorAll('#dfBar .df-btn[data-range]').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -502,6 +531,9 @@ document.querySelectorAll('#dfBar .df-btn[data-range]').forEach(btn => {
     if (dfRange === 'custom' && !dfFrom) { const ty = ukTaxYearBounds(); document.getElementById('dfFrom').valueAsDate = ty.from; document.getElementById('dfTo').valueAsDate = new Date(); }
     applyFilters(); renderContent(); dfRender();
   });
+});
+document.querySelectorAll('#dfBar .df-btn[data-view]').forEach(btn => {
+  btn.addEventListener('click', () => { franchiseeView = btn.dataset.view; applyFilters(); renderContent(); dfRender(); });
 });
 document.getElementById('dfApply').addEventListener('click', () => {
   const f = document.getElementById('dfFrom'), t = document.getElementById('dfTo');
@@ -516,10 +548,7 @@ function renderContent() {
   const totalJobs = jobs.length;
   const totalRev = Math.round(jobs.reduce((s,j)=>s+j._amount,0));
   const totalCusts = allCustomers.length;
-  const mikeJobs = jobs.filter(j=>j._franchisee==='Mike'), adamJobs = jobs.filter(j=>j._franchisee==='Adam');
-  const mikeRev = Math.round(mikeJobs.reduce((s,j)=>s+j._amount,0)), adamRev = Math.round(adamJobs.reduce((s,j)=>s+j._amount,0));
-  const mikeCusts = new Set(mikeJobs.map(j=>j['Customer Name'])).size, adamCusts = new Set(adamJobs.map(j=>j['Customer Name'])).size;
-  const mikeAvg = mikeJobs.length ? Math.round(mikeRev/mikeJobs.length) : 0, adamAvg = adamJobs.length ? Math.round(adamRev/adamJobs.length) : 0;
+  const recCusts = allCustomers.filter(c => c.s === 'Recurring').sort((a,b)=>b.r-a.r);
 
   if (activeTab==='Overview') {
     const a = attention || {staleLeads:0,missingPrices:0,churnRisk:0,recentCancel:0};
@@ -529,25 +558,31 @@ function renderContent() {
       { n:a.missingPrices, t:'Jobs missing a price', d:'£0, excludes assessments', tab:'Missing Prices', warn:a.missingPrices>0 },
       { n:a.recentCancel, t:'Cancelled this month', d:'recurring schedules lost', tab:'Recurring', warn:a.recentCancel>0 }
     ];
+    // Mike vs Adam always compares both, regardless of the View toggle
+    const mp = jobsPeriod.filter(j=>j._franchisee==='Mike'), ap = jobsPeriod.filter(j=>j._franchisee==='Adam');
+    const mpRev = Math.round(mp.reduce((s,j)=>s+j._amount,0)), apRev = Math.round(ap.reduce((s,j)=>s+j._amount,0));
+    const mpC = new Set(mp.map(j=>j['Customer Name'])).size, apC = new Set(ap.map(j=>j['Customer Name'])).size;
+    const mpAvg = mp.length?Math.round(mpRev/mp.length):0, apAvg = ap.length?Math.round(apRev/ap.length):0;
+    const pairTotal = mpRev + apRev;
     el.innerHTML = `
     <div class="attn">
       ${attnCards.map(c=>'<div class="attn-card '+(c.warn?'':'ok')+'" onclick="setTab(\''+c.tab+'\')"><div class="attn-n" style="color:'+(c.warn?'var(--accent)':'var(--green4)')+'">'+c.n+'</div><div><div class="attn-t">'+c.t+'</div><div class="attn-d">'+c.d+'</div></div></div>').join('')}
     </div>
     <div class="grid grid-4">
-      <div class="card accent-top"><div class="kpi-l">Revenue</div><div class="kpi-v">${fmt(totalRev)}${deltaChip(totalRev, prevTotals?prevTotals.rev:0)}</div><div class="kpi-s">recorded in period</div></div>
-      <div class="card accent-top"><div class="kpi-l">Completed Jobs</div><div class="kpi-v">${totalJobs.toLocaleString()}${deltaChip(totalJobs, prevTotals?prevTotals.jobs:0)}</div><div class="kpi-s">vs previous period</div></div>
+      <div class="card accent-top"><div class="kpi-l">Revenue</div><div class="kpi-v">${fmt(totalRev)}${deltaChip(totalRev, prevTotals?prevTotals.rev:0)}</div><div class="kpi-s">recorded</div></div>
+      <div class="card accent-top"><div class="kpi-l">Completed Jobs</div><div class="kpi-v">${totalJobs.toLocaleString()}${deltaChip(totalJobs, prevTotals?prevTotals.jobs:0)}</div><div class="kpi-s">completed</div></div>
       <div class="card accent-top"><div class="kpi-l">Active Customers</div><div class="kpi-v">${totalCusts}${deltaChip(totalCusts, prevTotals?prevTotals.custs:0)}</div><div class="kpi-s">with a job in period</div></div>
-      <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Active Recurring</div><div class="kpi-v">${recurringStats?recurringStats.activeCount:0}</div><div class="kpi-s">live schedules now</div></div>
+      <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Active Recurring</div><div class="kpi-v">${recCusts.length}</div><div class="kpi-s">customers on a schedule</div></div>
     </div>
     <div class="card" style="margin-bottom:28px"><div class="h">Revenue trend</div>${areaChartSVG(monthlyData,'#2E7D32')}</div>
     <div class="grid grid-2">
       <div class="card"><div class="h">Mike vs Adam</div>
-        <div style="margin-bottom:18px"><div style="display:flex;justify-content:space-between;margin-bottom:7px">${badge('Mike')}<span style="font-size:13px;color:var(--muted)">${mikeCusts} customers</span></div>
-        <div style="display:flex;gap:18px;font-size:13px"><span><b>${mikeJobs.length}</b> jobs</span><span><b>${fmt(mikeRev)}</b></span><span>avg <b>${fmt(mikeAvg)}</b></span></div>
-        <div class="pb"><div class="pf" style="background:var(--green4);width:${totalRev>0?Math.round(mikeRev/totalRev*100):0}%"></div></div></div>
-        <div><div style="display:flex;justify-content:space-between;margin-bottom:7px">${badge('Adam')}<span style="font-size:13px;color:var(--muted)">${adamCusts} customers</span></div>
-        <div style="display:flex;gap:18px;font-size:13px"><span><b>${adamJobs.length}</b> jobs</span><span><b>${fmt(adamRev)}</b></span><span>avg <b>${fmt(adamAvg)}</b></span></div>
-        <div class="pb"><div class="pf" style="background:var(--blue4);width:${totalRev>0?Math.round(adamRev/totalRev*100):0}%"></div></div></div>
+        <div style="margin-bottom:18px"><div style="display:flex;justify-content:space-between;margin-bottom:7px">${badge('Mike')}<span style="font-size:13px;color:var(--muted)">${mpC} customers</span></div>
+        <div style="display:flex;gap:18px;font-size:13px"><span><b>${mp.length}</b> jobs</span><span><b>${fmt(mpRev)}</b></span><span>avg <b>${fmt(mpAvg)}</b></span></div>
+        <div class="pb"><div class="pf" style="background:var(--green4);width:${pairTotal>0?Math.round(mpRev/pairTotal*100):0}%"></div></div></div>
+        <div><div style="display:flex;justify-content:space-between;margin-bottom:7px">${badge('Adam')}<span style="font-size:13px;color:var(--muted)">${apC} customers</span></div>
+        <div style="display:flex;gap:18px;font-size:13px"><span><b>${ap.length}</b> jobs</span><span><b>${fmt(apRev)}</b></span><span>avg <b>${fmt(apAvg)}</b></span></div>
+        <div class="pb"><div class="pf" style="background:var(--blue4);width:${pairTotal>0?Math.round(apRev/pairTotal*100):0}%"></div></div></div>
       </div>
       <div class="card"><div class="h">Service mix</div>
         ${serviceData.slice(0,8).map(s=>'<div class="svc-row"><span class="svc-n">'+s.n+'</span><span class="svc-s svc-g">'+s.j+'</span><span class="svc-s">'+fmt(s.r)+'</span></div>').join('')}
@@ -558,7 +593,7 @@ function renderContent() {
   else if (activeTab==='Leads') {
     if (!leadStats || leadStats.total === 0) {
       const detected = leadStats && leadStats.headers.length ? '<div class="ib ig">Columns found in the Leads tab: <b>'+leadStats.headers.join(', ')+'</b></div>' : '';
-      el.innerHTML = `<div class="card"><div class="h">Leads</div><div style="color:var(--muted);text-align:center;padding:40px">No leads received in this period.${rawLeads.length===0?' No lead data found yet.':''}</div>${detected}</div>`;
+      el.innerHTML = `<div class="card"><div class="h">Leads</div><div style="color:var(--muted);text-align:center;padding:40px">No leads in this period${franchiseeView!=='All'?' for '+franchiseeView:''}.${rawLeads.length===0?' No lead data found yet.':''}</div>${detected}</div>`;
     } else {
       const s = leadStats;
       const stages = [
@@ -590,7 +625,6 @@ function renderContent() {
       <div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${s.list.length} leads in period</div>
         <div class="table-wrap"><table><thead><tr><th>Received</th><th>Customer</th><th>Service</th><th class="r">Quote</th><th class="c">Territory</th><th class="c">Owner</th><th class="c">Status</th><th>Source</th></tr></thead>
         <tbody>${s.list.map(l=>'<tr><td style="color:var(--muted);font-size:12px">'+fmtDate(l._date)+'</td><td style="font-weight:500">'+(l._name||'\u2014')+'</td><td style="font-size:12px">'+(l._svc||'\u2014')+'</td><td class="r">'+(l._quote>0?fmt(l._quote):'\u2014')+'</td><td class="c" style="font-size:12px;color:var(--muted)">'+(l._territory||'\u2014')+'</td><td class="c">'+(l._franchisee?badge(l._franchisee):'\u2014')+'</td><td class="c">'+(l._status?badge(l._status):'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+l._source+'</td></tr>').join('')}</tbody></table></div>
-        <div class="ib ig"><b>Note:</b> "Still new" leads have had no status change yet, your alert system emails the owner the moment one lands, and this view is the backstop. Phone and email are deliberately kept off this page, action leads from the alert or the app.</div>
       </div>`;
     }
   }
@@ -606,55 +640,52 @@ function renderContent() {
   }
 
   else if (activeTab==='Customers') {
-    const segs = ["All","Recurring","Repeat","One-Off","Churned"], ters = ["All","Mike","Adam"];
+    const segs = ["All","Recurring","Repeat","One-Off","Churned"];
     let filtered = allCustomers;
     if (custSegFilter !== 'All') filtered = filtered.filter(c => c.s === custSegFilter);
-    if (custTerFilter !== 'All') filtered = filtered.filter(c => c.f === custTerFilter);
     if (custSearch) filtered = filtered.filter(c => c.n.toLowerCase().includes(custSearch.toLowerCase()));
     el.innerHTML = `<input class="search" placeholder="Search customers..." value="${custSearch}" oninput="custSearch=this.value;renderContent()">
       <div class="filter-row">
         ${segs.map(s=>'<button class="filter-btn '+(custSegFilter===s?'active':'')+'" onclick="custSegFilter=\''+s+'\';renderContent()">'+s+' ('+(s==='All'?allCustomers.length:allCustomers.filter(c=>c.s===s).length)+')</button>').join('')}
-        <span style="width:8px"></span>
-        ${ters.map(t=>'<button class="filter-btn '+(custTerFilter===t?'active':'')+'" onclick="custTerFilter=\''+t+'\';renderContent()">'+t+' ('+(t==='All'?allCustomers.length:allCustomers.filter(c=>c.f===t).length)+')</button>').join('')}
       </div>
-      <div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">Showing ${filtered.length} customers</div>
+      <div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">Showing ${filtered.length} customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView+' only':''}</div>
       <div class="table-wrap"><table><thead><tr><th>Customer</th><th>Segment</th><th class="r">Jobs</th><th class="r">Revenue</th><th class="r">Avg</th><th class="c">Territory</th><th>First</th><th>Last</th></tr></thead>
       <tbody>${filtered.map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td>'+badge(c.s)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td class="r">'+fmt(c.a)+'</td><td class="c">'+badge(c.f)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div></div>`;
   }
 
   else if (activeTab==='Recurring') {
-    if (!recurringStats || rawRecurring.length === 0) {
-      el.innerHTML = `<div class="card"><div class="h">Recurring bookings</div><div style="color:var(--muted);text-align:center;padding:40px">No recurring booking data found yet. This fills as recurring bookings are created or cancelled in the app.</div></div>`;
-    } else {
-      const r = recurringStats;
-      const mappedOk = r.list.some(x => x._cust || x._status);
-      const netColor = r.netInPeriod>0?'var(--green6)':(r.netInPeriod<0?'var(--red)':'var(--muted)');
-      const netSign = r.netInPeriod>0?'+':'';
-      const debug = (!mappedOk && r.headers.length) ? '<div class="ib io" style="margin-top:0;margin-bottom:24px">Rows loaded but columns didn\'t map. Columns found: <b>'+r.headers.join(', ')+'</b></div>' : '';
-      el.innerHTML = `${debug}
+    const recValue = recCusts.reduce((s,c)=>s+c.a,0);
+    const recMike = recCusts.filter(c=>c.f==='Mike').length, recAdam = recCusts.filter(c=>c.f==='Adam').length;
+    const w = recurringStats || {newInPeriod:0,cancelledInPeriod:0,netInPeriod:0,list:[],mapped:false};
+    const netColor = w.netInPeriod>0?'var(--green6)':(w.netInPeriod<0?'var(--red)':'var(--muted)');
+    const netSign = w.netInPeriod>0?'+':'';
+    const moves = w.list.filter(x=>x._cust || x._status);
+    el.innerHTML = `
       <div class="grid grid-4">
-        <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Active Recurring</div><div class="kpi-v">${r.activeCount}</div><div class="kpi-s">live schedules</div></div>
-        <div class="card accent-top"><div class="kpi-l">Active Value</div><div class="kpi-v">${fmt(r.activeValue)}</div><div class="kpi-s">per visit, combined</div></div>
-        <div class="card accent-top"><div class="kpi-l">New In Period</div><div class="kpi-v">${r.newInPeriod}</div><div class="kpi-s">started</div></div>
-        <div class="card accent-top" style="border-top-color:var(--red)"><div class="kpi-l">Cancelled In Period</div><div class="kpi-v" style="color:var(--red)">${r.cancelledInPeriod}</div><div class="kpi-s">churned</div></div>
+        <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Active Recurring</div><div class="kpi-v">${recCusts.length}</div><div class="kpi-s">customers on a schedule</div></div>
+        <div class="card accent-top"><div class="kpi-l">Per-visit Value</div><div class="kpi-v">${fmt(recValue)}</div><div class="kpi-s">combined, each round</div></div>
+        <div class="card accent-top"><div class="kpi-l">New (tracked)</div><div class="kpi-v">${w.newInPeriod}</div><div class="kpi-s">logged by app in period</div></div>
+        <div class="card accent-top" style="border-top-color:var(--red)"><div class="kpi-l">Cancelled (tracked)</div><div class="kpi-v" style="color:var(--red)">${w.cancelledInPeriod}</div><div class="kpi-s">logged by app in period</div></div>
       </div>
       <div class="grid grid-2">
-        <div class="card"><div class="h">Net movement</div>
-          <div class="serif" style="font-size:40px;font-weight:600;color:${netColor};line-height:1">${netSign}${r.netInPeriod}</div>
-          <div style="font-size:13px;color:var(--muted);margin-top:6px">${r.newInPeriod} started \u2212 ${r.cancelledInPeriod} cancelled in the selected period</div>
+        <div class="card"><div class="h">Net movement (app log)</div>
+          <div class="serif" style="font-size:40px;font-weight:600;color:${netColor};line-height:1">${netSign}${w.netInPeriod}</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:6px">${w.newInPeriod} started \u2212 ${w.cancelledInPeriod} cancelled in the selected period</div>
           <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);display:flex;gap:24px;font-size:13px;align-items:center">
-            <span>${badge('Mike')} <b>${r.activeMike}</b> active</span><span>${badge('Adam')} <b>${r.activeAdam}</b> active</span>
+            <span>${badge('Mike')} <b>${recMike}</b> active</span><span>${badge('Adam')} <b>${recAdam}</b> active</span>
           </div>
         </div>
-        <div class="card"><div class="h">What this tells you</div>
-          <div class="ib ig" style="margin-top:0"><b>Active value</b> is the combined per-visit price of every live recurring schedule, a rough proxy for guaranteed repeat revenue per round. Watch <b>net movement</b>: consistently positive means the round is growing, negative means cancellations are outpacing new sign-ups.</div>
+        <div class="card"><div class="h">Two numbers, two sources</div>
+          <div class="ib ig" style="margin-top:0"><b>Active recurring (${recCusts.length})</b> comes from your full job history, every customer currently on a repeat schedule. <b>New and cancelled (tracked)</b> come from the app's live log, which only records schedules created or cancelled since tracking went live, so it starts small and builds over time. Watch net movement as that log fills: consistently positive means the round is growing.</div>
         </div>
       </div>
-      <div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${r.list.length} recurring bookings, active first</div>
-        <div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th>Service</th><th>Frequency</th><th class="r">Value</th><th class="c">Status</th><th>Created</th><th>Cancelled</th></tr></thead>
-        <tbody>${r.list.map(x=>'<tr><td style="font-weight:500">'+(x._cust||'\u2014')+'</td><td class="c">'+(x._franchisee?badge(x._franchisee):'\u2014')+'</td><td style="font-size:12px">'+(x._svc||'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+(x._freq||'\u2014')+'</td><td class="r">'+(x._value>0?fmt(x._value):'\u2014')+'</td><td class="c">'+statusBadge(x._status)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(x._created)+'</td><td style="color:var(--muted);font-size:12px">'+(x._canceled?fmtDate(x._canceled):'\u2014')+'</td></tr>').join('')}</tbody></table></div>
-      </div>`;
-    }
+      <div class="card" style="margin-bottom:24px"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${recCusts.length} active recurring customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, from job history</div>
+        <div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th>Frequency</th><th class="r">Avg/visit</th><th class="r">Jobs</th><th class="r">Lifetime</th><th>Last visit</th></tr></thead>
+        <tbody>${recCusts.map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.freq||'\u2014')+'</td><td class="r">'+(c.a>0?fmt(c.a):'\u2014')+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div>
+      </div>
+      ${moves.length ? '<div class="card"><div class="h">Recent schedule changes (app log)</div><div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th>Service</th><th>Frequency</th><th class="r">Value</th><th class="c">Status</th><th>Created</th><th>Cancelled</th></tr></thead><tbody>'+moves.map(x=>'<tr><td style="font-weight:500">'+(x._cust||'\u2014')+'</td><td class="c">'+(x._franchisee?badge(x._franchisee):'\u2014')+'</td><td style="font-size:12px">'+(x._svc||'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+(x._freq||'\u2014')+'</td><td class="r">'+(x._value>0?fmt(x._value):'\u2014')+'</td><td class="c">'+statusBadge(x._status)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(x._created)+'</td><td style="color:var(--muted);font-size:12px">'+(x._canceled?fmtDate(x._canceled):'\u2014')+'</td></tr>').join('')+'</tbody></table></div></div>'
+      : (rawRecurring.length && !w.mapped ? '<div class="ib io">The app log loaded '+rawRecurring.length+' rows but the columns didn\'t map. Columns found: <b>'+(recurringStats?recurringStats.headers.join(', '):'')+'</b></div>' : '')}
+    `;
   }
 
   else if (activeTab==='Churned') {
