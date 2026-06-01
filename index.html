@@ -156,7 +156,7 @@ const API_TOKEN = 'dctugjWHTbmndoydhkw9!hYfgg!11';
 
 let rawJobs=[], customers=[], rawLeads=[], rawRecurring=[];
 let jobsPeriod=[], jobs=[], prevJobs=[], allCustomers=[], churnedList=[], monthlyData=[], serviceData=[], missingPriceData=[];
-let leadStats=null, recurringStats=null, attention=null, prevTotals=null;
+let leadStats=null, recurringStats=null, prevTotals=null;
 let activeTab="Overview", custSegFilter="All", custSearch="";
 let dfRange="all", dfFrom=null, dfTo=null, franchiseeView="All";
 
@@ -349,7 +349,6 @@ function applyFilters() {
   processPrev();
   processLeads(b);
   processRecurring(b);
-  processAttention();
 }
 
 function processData() {
@@ -405,6 +404,7 @@ function processData() {
   const zeroMap = {};
   jobs.forEach(j => {
     if (j._amount > 0) return;
+    if (/assessment|free/i.test(j._service || '')) return; // free assessment visits are legitimately £0
     const name = j['Customer Name']; if (!name) return;
     if (!zeroMap[name]) zeroMap[name] = { n: name, z: 0, svc: j._service };
     zeroMap[name].z++;
@@ -452,26 +452,6 @@ function processRecurring(b) {
     mapped: base.some(x => x._cust || x._status),
     headers: rawRecurring.length ? Object.keys(rawRecurring[0]).filter(k => !k.startsWith('_')) : []
   };
-}
-
-function processAttention() {
-  const now = new Date();
-  const c90 = new Date(now); c90.setDate(c90.getDate()-90);
-  const c30 = new Date(now); c30.setDate(c30.getDate()-30);
-  const staleLeads = rawLeads.filter(l => l._status === 'NEW' && matchView(l._franchisee)).length;
-  const missingPrices = rawJobs.filter(j => j._amount <= 0 && j['Customer Name'] && !/assessment|free/i.test(j._service||'') && matchView(j._franchisee)).length;
-  const cm = {};
-  rawJobs.filter(j => matchView(j._franchisee)).forEach(j => {
-    const n = j['Customer Name']; if (!n) return;
-    if (!cm[n]) cm[n] = { jobs:0, rec:false, last:null };
-    cm[n].jobs++;
-    if (j['Recurring Frequency'] && j['Recurring Frequency'].trim()) cm[n].rec = true;
-    if (j._date && (!cm[n].last || j._date > cm[n].last)) cm[n].last = j._date;
-  });
-  let churnRisk = 0;
-  Object.values(cm).forEach(c => { if (c.last && c.last < c90 && (c.rec || c.jobs >= 5)) churnRisk++; });
-  const recentCancel = rawRecurring.filter(r => r._canceled && r._canceled >= c30 && matchView(r._franchisee)).length;
-  attention = { staleLeads, missingPrices, churnRisk, recentCancel };
 }
 
 // ---------- helpers ----------
@@ -563,6 +543,7 @@ function renderTabs() {
 }
 function setTab(t) { activeTab=t; custSegFilter="All"; custSearch=""; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 function setView(v) { franchiseeView=v; applyFilters(); renderContent(); dfRender(); }
+function goSeg(seg) { activeTab='Customers'; custSegFilter=seg; custSearch=''; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 
 function dfRender() {
   document.querySelectorAll('#dfBar .df-btn[data-range]').forEach(btn => btn.classList.toggle('active', btn.dataset.range === dfRange));
@@ -596,12 +577,18 @@ function renderContent() {
   const recCusts = allCustomers.filter(c => c.s === 'Recurring').sort((a,b)=>b.r-a.r);
 
   if (activeTab==='Overview') {
-    const a = attention || {staleLeads:0,missingPrices:0,churnRisk:0,recentCancel:0};
+    // Attention cards read the SAME figures the tabs show, so they can never disagree, and they follow the selected period.
+    const segRepeat = allCustomers.filter(c=>c.s==='Repeat').length;
+    const segOneOff = allCustomers.filter(c=>c.s==='One-Off').length;
+    const aLeads = leadStats ? leadStats.staleNew : 0;
+    const aChurn = churnedList.length;
+    const aMissing = missingPriceData.reduce((s,c)=>s+c.z,0);
+    const aCancel = recurringStats ? recurringStats.cancelledInPeriod : 0;
     const attnCards = [
-      { n:a.staleLeads, t:'Leads to action', d:'still marked new', tab:'Leads', warn:a.staleLeads>0 },
-      { n:a.churnRisk, t:'Regulars at risk', d:'no visit in 90+ days', tab:'Churned', warn:a.churnRisk>0 },
-      { n:a.missingPrices, t:'Jobs missing a price', d:'£0, excludes assessments', tab:'Missing Prices', warn:a.missingPrices>0 },
-      { n:a.recentCancel, t:'Cancelled this month', d:'recurring schedules lost', tab:'Recurring', warn:a.recentCancel>0 }
+      { n:aLeads, t:'Leads to action', d:'still marked new', tab:'Leads', warn:aLeads>0 },
+      { n:aChurn, t:'Regulars at risk', d:'no visit in 90+ days', tab:'Churned', warn:aChurn>0 },
+      { n:aMissing, t:'Jobs missing a price', d:'£0, excludes assessments', tab:'Missing Prices', warn:aMissing>0 },
+      { n:aCancel, t:'Recurring cancelled', d:'logged by app in period', tab:'Recurring', warn:aCancel>0 }
     ];
     // Mike vs Adam always compares both, regardless of the View toggle
     const mp = jobsPeriod.filter(j=>j._franchisee==='Mike'), ap = jobsPeriod.filter(j=>j._franchisee==='Adam');
@@ -609,6 +596,12 @@ function renderContent() {
     const mpC = new Set(mp.map(j=>j['Customer Name'])).size, apC = new Set(ap.map(j=>j['Customer Name'])).size;
     const mpAvg = mp.length?Math.round(mpRev/mp.length):0, apAvg = ap.length?Math.round(apRev/ap.length):0;
     const pairTotal = mpRev + apRev;
+    const mix = [
+      { label:'Recurring', n:recCusts.length, seg:'Recurring', color:'var(--green6)' },
+      { label:'Repeat', n:segRepeat, seg:'Repeat', color:'var(--blue)' },
+      { label:'One-off', n:segOneOff, seg:'One-Off', color:'var(--accent)' },
+      { label:'Churned', n:aChurn, seg:'Churned', color:'var(--red)' }
+    ];
     el.innerHTML = `
     <div class="attn">
       ${attnCards.map(c=>'<div class="attn-card '+(c.warn?'':'ok')+'" onclick="setTab(\''+c.tab+'\')"><div class="attn-n" style="color:'+(c.warn?'var(--accent)':'var(--green4)')+'">'+c.n+'</div><div><div class="attn-t">'+c.t+'</div><div class="attn-d">'+c.d+'</div></div></div>').join('')}
@@ -620,6 +613,12 @@ function renderContent() {
       <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Active Recurring</div><div class="kpi-v">${recCusts.length}</div><div class="kpi-s">customers on a schedule</div></div>
     </div>
     <div class="card" style="margin-bottom:28px"><div class="h">Revenue trend</div>${areaChartSVG(monthlyData,'#2E7D32')}</div>
+    <div class="card" style="margin-bottom:28px"><div class="h">Customer mix</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap">
+        ${mix.map(m=>'<div onclick="goSeg(\''+m.seg+'\')" style="flex:1;min-width:130px;cursor:pointer;border:1px solid var(--line);border-radius:10px;padding:14px 16px;border-left:4px solid '+m.color+'"><div class="serif" style="font-size:26px;font-weight:600;color:var(--ink);line-height:1">'+m.n+'</div><div style="font-size:12px;color:var(--muted);margin-top:5px">'+m.label+'</div></div>').join('')}
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:12px">${totalCusts} active customers in this period. Tap a segment to open it in Customers.</div>
+    </div>
     <div class="grid grid-2">
       <div class="card"><div class="h">Mike vs Adam</div>
         <div style="margin-bottom:18px"><div style="display:flex;justify-content:space-between;margin-bottom:7px">${badge('Mike')}<span style="font-size:13px;color:var(--muted)">${mpC} customers</span></div>
@@ -751,7 +750,7 @@ function renderContent() {
 
   else if (activeTab==='Missing Prices') {
     el.innerHTML = `<div class="card"><div class="h" style="color:var(--amber)">Jobs missing a price (\u00a30)</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:16px">${missingPriceData.reduce((s,c)=>s+c.z,0)} jobs at \u00a30. Run Fix Missing Prices from the MTG app menu to auto-fix where possible.</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:16px">${missingPriceData.reduce((s,c)=>s+c.z,0)} jobs at \u00a30 (free assessment visits excluded). Run Fix Missing Prices from the MTG app menu to auto-fix where possible.</div>
       ${missingPriceData.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No missing prices in this period.</div>':
       '<div class="table-wrap"><table><thead><tr><th>Customer</th><th class="r">£0 Jobs</th><th class="r">Avg When Priced</th><th class="r">Est. Missing</th><th>Service</th></tr></thead>'+
       '<tbody>'+missingPriceData.map(c=>{const e=c.est;return'<tr><td style="font-weight:500">'+c.n+'</td><td class="r" style="font-weight:600;color:var(--amber)">'+c.z+'</td><td class="r">'+(c.a>0?fmt(c.a):'Never priced')+'</td><td class="r" style="font-weight:600;color:'+(e>0?'var(--green6)':'#ccc')+'">'+(e>0?'~'+fmt(e):'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+(c.svc||'\u2014')+'</td></tr>'}).join('')+'</tbody></table></div>'+
