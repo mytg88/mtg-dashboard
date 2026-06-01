@@ -369,6 +369,8 @@ function processData() {
     const firstJob = dates[0], lastJob = dates[dates.length - 1];
     const priced = c.jobs.filter(j => j._amount > 0);
     const avg = priced.length ? priced.reduce((s,j) => s + j._amount, 0) / priced.length : 0;
+    const visitJobs = c.jobs.filter(j => j._service === 'Regular Garden Maintenance' && j._amount > 0);
+    const visit = visitJobs.length ? visitJobs.reduce((s,j) => s + j._amount, 0) / visitJobs.length : avg;
     let segment;
     if (c.jobs.length === 1) segment = 'One-Off';
     else if (c.hasRecurring && lastJob < cutoff90) segment = 'Churned';
@@ -377,6 +379,7 @@ function processData() {
     else if (c.jobs.length >= 2) segment = 'Repeat';
     else segment = 'Other';
     return { n: c.name, j: c.jobs.length, r: Math.round(c.totalRev*100)/100, a: Math.round(avg*100)/100,
+      visit: Math.round(visit*100)/100,
       f: c.franchisee, s: segment, freq: c.freq, first: firstJob, last: lastJob,
       daysSince: lastJob ? daysBetween(lastJob, now) : 999, svc: Array.from(c.services).slice(0,3).join(', ') };
   }).sort((a,b) => b.r - a.r);
@@ -720,7 +723,9 @@ function renderContent() {
   }
 
   else if (activeTab==='Recurring') {
-    const recValue = recCusts.reduce((s,c)=>s+c.a,0);
+    const recRound = recCusts.reduce((s,c)=>s+(c.visit||c.a),0);
+    const recVisitAvg = recCusts.length ? Math.round(recRound/recCusts.length) : 0;
+    const recAvgLtv = recCusts.length ? Math.round(recCusts.reduce((s,c)=>s+c.r,0)/recCusts.length) : 0;
     const recMike = recCusts.filter(c=>c.f==='Mike').length, recAdam = recCusts.filter(c=>c.f==='Adam').length;
     const w = recurringStats || {gained:0,lost:0,net:0,list:[],mapped:false};
     const netColor = w.net>0?'var(--green6)':(w.net<0?'var(--red)':'var(--muted)');
@@ -729,7 +734,8 @@ function renderContent() {
     el.innerHTML = `
       <div class="grid grid-4">
         <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Active Recurring</div><div class="kpi-v">${recCusts.length}</div><div class="kpi-s">customers on a schedule</div></div>
-        <div class="card accent-top"><div class="kpi-l">Per-visit Value</div><div class="kpi-v">${fmt(recValue)}</div><div class="kpi-s">combined, each round</div></div>
+        <div class="card accent-top"><div class="kpi-l">Avg per Visit</div><div class="kpi-v">${fmt(recVisitAvg)}</div><div class="kpi-s">${fmt(recRound)} for one round of all</div></div>
+        <div class="card accent-top"><div class="kpi-l">Avg Customer LTV</div><div class="kpi-v">${fmt(recAvgLtv)}</div><div class="kpi-s">lifetime revenue per regular</div></div>
         <div class="card accent-top"><div class="kpi-l">Regulars Gained</div><div class="kpi-v">${w.gained}</div><div class="kpi-s">first visit in period</div></div>
         <div class="card accent-top" style="border-top-color:var(--red)"><div class="kpi-l">Regulars Lost</div><div class="kpi-v" style="color:var(--red)">${w.lost}</div><div class="kpi-s">churned in period</div></div>
       </div>
