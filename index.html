@@ -20,8 +20,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--paper);color:var(--ink);-
 .header:after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,var(--green4),var(--green),var(--accent))}
 .header h1{font-family:'Fraunces',serif;font-size:30px;font-weight:600;letter-spacing:-0.5px}
 .header p{font-size:13px;opacity:0.6;margin-top:3px;letter-spacing:.3px}
-.header .refresh{position:absolute;top:30px;right:36px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);color:#fff;padding:8px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit;transition:all .15s}
+.header-actions{position:absolute;top:26px;right:36px;display:flex;align-items:center;gap:10px}
+.header .refresh{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);color:#fff;padding:9px 16px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit;transition:all .15s}
 .header .refresh:hover{background:rgba(255,255,255,0.2)}
+.view-select{appearance:none;-webkit-appearance:none;background:rgba(255,255,255,0.1) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23ffffff' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;border:1px solid rgba(255,255,255,0.25);color:#fff;padding:9px 32px 9px 14px;border-radius:8px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .15s}
+.view-select:hover{background-color:rgba(255,255,255,0.2)}
+.view-select option{color:#16241C}
+.chart-tip{position:fixed;pointer-events:none;display:none;z-index:50;background:var(--ink);color:#fff;padding:8px 12px;border-radius:9px;font-size:12px;line-height:1.3;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+.chart-tip .tt-m{opacity:.65;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px}
+.chart-tip .tt-v{font-family:'Fraunces',serif;font-weight:600;font-size:16px;margin-top:1px}
+.chart-tip .tt-s{opacity:.65;font-size:11px;margin-top:3px}
 .tabs{display:flex;gap:0;background:var(--card);border-bottom:1px solid var(--line);padding:0 28px;overflow-x:auto}
 .tab{padding:15px 20px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;color:var(--muted);border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
 .tab.active{font-weight:700;color:var(--green);border-bottom-color:var(--green)}
@@ -105,7 +113,14 @@ tr:hover td{background:#FAFBF9}
 <div class="header">
   <h1>My Tidy Garden</h1>
   <p>Command Centre — live business data</p>
-  <button class="refresh" onclick="loadData()">Refresh</button>
+  <div class="header-actions">
+    <select id="viewSelect" class="view-select" onchange="setView(this.value)" aria-label="Franchisee view">
+      <option value="All">Overall view</option>
+      <option value="Mike">Mike only</option>
+      <option value="Adam">Adam only</option>
+    </select>
+    <button class="refresh" onclick="loadData()">Refresh</button>
+  </div>
 </div>
 
 <div class="df-bar" id="dfBar">
@@ -124,24 +139,20 @@ tr:hover td{background:#FAFBF9}
     <input type="date" id="dfTo" class="df-date">
     <button class="df-btn" id="dfApply" style="background:var(--green);color:#fff;border-color:var(--green)">Apply</button>
   </div>
-  <span class="vw-group">
-    <span class="df-label" style="margin-right:0">View</span>
-    <button class="df-btn vw active" data-view="All">Overall</button>
-    <button class="df-btn vw" data-view="Mike">Mike</button>
-    <button class="df-btn vw" data-view="Adam">Adam</button>
-  </span>
   <div class="df-summary" id="dfSummary"></div>
 </div>
 
 <div class="tabs" id="tabs"></div>
 <div class="content" id="content"><div class="loading">Loading data from MTG app...</div></div>
+<div class="chart-tip" id="chartTip"></div>
 
 <script>
-const SHEET_ID = '11UHcc9bXXhE92bvXOTp8fmhpjELQbI9ETBaiFxhTqZw';
-const JOBS_GID = '1576165006';
-const CUSTOMERS_GID = '1593119775';
-function gvizUrl(gid) { return 'https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:csv&gid='+gid; }
-function gvizUrlByName(name) { return 'https://docs.google.com/spreadsheets/d/'+SHEET_ID+'/gviz/tq?tqx=out:csv&sheet='+encodeURIComponent(name); }
+// ====== CONNECTION SETTINGS — paste your two values here ======
+// 1. Deploy the Apps Script (dashboard_api.gs) as a Web App and paste its /exec URL below.
+// 2. Pick a long random password and paste the SAME string here and in the Apps Script.
+const API_URL   = 'https://script.google.com/macros/s/AKfycbxN137wCPVA5IVaHseSxCK8-ffURw51bAaoCx8s0fvNxqM3Ci0Oh3gF-ZkzRmbl94SeEA/exec';
+const API_TOKEN = 'dctugjWHTbmndoydhkw9!hYfgg!11';
+// ==============================================================
 
 let rawJobs=[], customers=[], rawLeads=[], rawRecurring=[];
 let jobsPeriod=[], jobs=[], prevJobs=[], allCustomers=[], churnedList=[], monthlyData=[], serviceData=[], missingPriceData=[];
@@ -201,9 +212,16 @@ function parseCSVSmart(text, keywords) {
 function parseAmount(s) { if (!s) return 0; return parseFloat(String(s).replace(/[£,]/g, '')) || 0; }
 function parseDate(s) {
   if (!s) return null;
-  s = String(s).split(' ')[0];
-  const parts = s.split('/');
-  if (parts.length === 3) return new Date(parts[2], parts[1]-1, parts[0]);
+  if (s instanceof Date) return isNaN(s) ? null : s;
+  s = String(s).trim();
+  if (!s) return null;
+  // DD/MM/YYYY (optionally followed by a time / comma)
+  let m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) { const d = new Date(+m[3], +m[2]-1, +m[1]); return isNaN(d) ? null : d; }
+  // YYYY-MM-DD or full ISO (2026-05-20, 2026-05-20T14:30:00Z, etc.)
+  m = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) { const d = new Date(+m[1], +m[2]-1, +m[3]); return isNaN(d) ? null : d; }
+  // Last resort: let the browser try
   const d = new Date(s);
   return isNaN(d) ? null : d;
 }
@@ -222,59 +240,69 @@ function col(row, candidates) {
 }
 function matchView(f) { return franchiseeView === 'All' || f === franchiseeView; }
 
-// ---------- fetch ----------
-async function loadData() {
-  document.getElementById('content').innerHTML = '<div class="loading">Loading data from MTG app...</div>';
-  try {
-    const [jobsRes, custRes] = await Promise.all([ fetch(gvizUrl(JOBS_GID)), fetch(gvizUrl(CUSTOMERS_GID)) ]);
-    rawJobs = parseCSV(await jobsRes.text());
-    customers = parseCSV(await custRes.text());
+// ---------- fetch (JSONP from the private Apps Script endpoint) ----------
+function showMsg(html) { document.getElementById('content').innerHTML = '<div class="loading">'+html+'</div>'; }
 
-    rawJobs.forEach(j => {
-      j._amount = parseAmount(j['Amount (£)']);
-      j._date = parseDate(j['Date Completed']);
-      let svc = j['Service Type'] || 'Unknown';
-      if (svc === 'Regular Garden Maintenance Visits' || svc === 'Regular Strim, Mow, & Blow' || svc === 'Strim, Mow, & Blow') svc = 'Regular Garden Maintenance';
-      j._service = svc;
-      j._franchisee = j['Franchisee'] || '';
-    });
-
-    try {
-      const [leadsRes, recRes] = await Promise.all([ fetch(gvizUrlByName('Leads')), fetch(gvizUrlByName('Recurring Bookings')) ]);
-      const lt = await leadsRes.text(), rt = await recRes.text();
-      rawLeads = lt.trim().startsWith('<') ? [] : parseCSVSmart(lt, ['customer','status','source','received','quoted','service','territory']);
-      rawRecurring = rt.trim().startsWith('<') ? [] : parseCSVSmart(rt, ['customer','status','frequency','service','created','value','booking']);
-    } catch(e2) { rawLeads = []; rawRecurring = []; console.warn('Leads/Recurring load failed', e2); }
-
-    rawLeads.forEach(l => {
-      l._date = parseDate(col(l,['Date Received','Received','Date']));
-      l._quote = parseAmount(col(l,['Quoted Price','Quote','Price','Value']));
-      l._status = (col(l,['Status']) || '').trim().toUpperCase();
-      l._franchisee = (col(l,['Franchisee','Owner']) || '').trim();
-      l._source = (col(l,['Source']) || '').trim() || 'Unknown';
-      l._name = col(l,['Customer Name','Customer','Name']);
-      l._svc = col(l,['Service Requested','Service']);
-      l._territory = col(l,['Territory']);
-    });
-    rawRecurring.forEach(r => {
-      r._created = parseDate(col(r,['Date Created','Created','Date']));
-      r._canceled = parseDate(col(r,['Date Canceled','Date Cancelled','Cancelled','Canceled']));
-      r._value = parseAmount(col(r,['Value','Price','Amount']));
-      r._status = (col(r,['Status']) || '').trim().toUpperCase();
-      r._franchisee = (col(r,['Franchisee','Owner']) || '').trim();
-      r._cust = col(r,['Customer Name','Customer','Name']);
-      r._svc = col(r,['Service']);
-      r._freq = col(r,['Frequency','Recurring Frequency']);
-    });
-
-    applyFilters();
-    renderTabs();
-    renderContent();
-    dfRender();
-  } catch(e) {
-    document.getElementById('content').innerHTML = '<div class="loading">Error loading data. Check that sheets are published to web.</div>';
-    console.error(e);
+function loadData() {
+  if (API_URL.indexOf('PASTE_') === 0) {
+    showMsg('Almost there. Open this file and paste your Web App URL and token into the CONNECTION SETTINGS block near the top of the script, then redeploy.');
+    return;
   }
+  showMsg('Loading data from MTG app...');
+  const cb = 'mtg_cb_' + Date.now();
+  const s = document.createElement('script');
+  let done = false;
+  const cleanup = () => { try { delete window[cb]; } catch(_) { window[cb] = undefined; } if (s.parentNode) s.parentNode.removeChild(s); };
+  window[cb] = function(data) { done = true; cleanup(); handleData(data); };
+  s.onerror = function() { if (!done) { cleanup(); showMsg('Could not reach the MTG app. Check the Web App URL is correct and deployed with access set to "Anyone".'); } };
+  setTimeout(() => { if (!done) { cleanup(); showMsg('The MTG app did not respond. Check the Web App URL and token, then try Refresh.'); } }, 20000);
+  s.src = API_URL + (API_URL.indexOf('?') === -1 ? '?' : '&') + 'token=' + encodeURIComponent(API_TOKEN) + '&callback=' + cb;
+  document.head.appendChild(s);
+}
+
+function handleData(data) {
+  if (!data || data.error) {
+    showMsg('The MTG app refused the request' + (data && data.error ? ' (' + data.error + ')' : '') + '. Check the token matches in both the dashboard and the Apps Script.');
+    return;
+  }
+  rawJobs = data.jobs || [];
+  rawLeads = data.leads || [];
+  rawRecurring = data.recurring || [];
+  customers = [];
+
+  rawJobs.forEach(j => {
+    j._amount = parseAmount(j['Amount (£)']);
+    j._date = parseDate(j['Date Completed']);
+    let svc = j['Service Type'] || 'Unknown';
+    if (svc === 'Regular Garden Maintenance Visits' || svc === 'Regular Strim, Mow, & Blow' || svc === 'Strim, Mow, & Blow') svc = 'Regular Garden Maintenance';
+    j._service = svc;
+    j._franchisee = j['Franchisee'] || '';
+  });
+  rawLeads.forEach(l => {
+    l._date = parseDate(col(l,['Date Received','Received','Date']));
+    l._quote = parseAmount(col(l,['Quoted Price','Quote','Price','Value']));
+    l._status = (col(l,['Status']) || '').trim().toUpperCase();
+    l._franchisee = (col(l,['Franchisee','Owner']) || '').trim();
+    l._source = (col(l,['Source']) || '').trim() || 'Unknown';
+    l._name = col(l,['Customer Name','Customer','Name']);
+    l._svc = col(l,['Service Requested','Service']);
+    l._territory = col(l,['Territory']);
+  });
+  rawRecurring.forEach(r => {
+    r._created = parseDate(col(r,['Date Created','Created','Date']));
+    r._canceled = parseDate(col(r,['Date Canceled','Date Cancelled','Cancelled','Canceled']));
+    r._value = parseAmount(col(r,['Value','Price','Amount']));
+    r._status = (col(r,['Status']) || '').trim().toUpperCase();
+    r._franchisee = (col(r,['Franchisee','Owner']) || '').trim();
+    r._cust = col(r,['Customer Name','Customer','Name']);
+    r._svc = col(r,['Service']);
+    r._freq = col(r,['Frequency','Recurring Frequency']);
+  });
+
+  applyFilters();
+  renderTabs();
+  renderContent();
+  dfRender();
 }
 
 // ---------- date logic ----------
@@ -490,8 +518,27 @@ function areaChartSVG(data, color) {
     + '<path d="'+area+'" fill="'+color+'22"/>'
     + '<path d="'+line+'" fill="none" stroke="'+color+'" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>'
     + pts.map(p=>'<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="3" fill="#fff" stroke="'+color+'" stroke-width="2"/>').join('')
+    + pts.map((p,i)=>'<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="16" fill="transparent" style="cursor:pointer" onmouseenter="showTip(event,\''+shortMonth(data[i].m)+'\',\''+fmt(data[i].r)+'\',\''+(data[i].j!=null?data[i].j+' jobs':'')+'\')" onmousemove="moveTip(event)" onmouseleave="hideTip()"></circle>').join('')
     + xl + '</svg></div>';
 }
+function showTip(evt, label, value, sub) {
+  const t = document.getElementById('chartTip');
+  if (!t) return;
+  t.innerHTML = '<div class="tt-m">'+label+'</div><div class="tt-v">'+value+'</div>' + (sub ? '<div class="tt-s">'+sub+'</div>' : '');
+  t.style.display = 'block';
+  moveTip(evt);
+}
+function moveTip(evt) {
+  const t = document.getElementById('chartTip');
+  if (!t) return;
+  let x = evt.clientX + 16, y = evt.clientY - 14;
+  const w = t.offsetWidth || 120, h = t.offsetHeight || 44;
+  if (x + w > window.innerWidth - 8) x = evt.clientX - w - 16;
+  if (y < 8) y = 8;
+  if (y + h > window.innerHeight - 8) y = window.innerHeight - h - 8;
+  t.style.left = x + 'px'; t.style.top = y + 'px';
+}
+function hideTip() { const t = document.getElementById('chartTip'); if (t) t.style.display = 'none'; }
 function funnelSVG(stages, total) {
   const W=720, rowH=56, H=rowH*stages.length;
   const max = Math.max(...stages.map(s=>s.count), 1);
@@ -515,10 +562,11 @@ function renderTabs() {
   document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+t+'</button>').join('');
 }
 function setTab(t) { activeTab=t; custSegFilter="All"; custSearch=""; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
+function setView(v) { franchiseeView=v; applyFilters(); renderContent(); dfRender(); }
 
 function dfRender() {
   document.querySelectorAll('#dfBar .df-btn[data-range]').forEach(btn => btn.classList.toggle('active', btn.dataset.range === dfRange));
-  document.querySelectorAll('#dfBar .df-btn[data-view]').forEach(btn => btn.classList.toggle('active', btn.dataset.view === franchiseeView));
+  const vs = document.getElementById('viewSelect'); if (vs) vs.value = franchiseeView;
   document.getElementById('dfCustom').classList.toggle('show', dfRange === 'custom');
   const b = dfBounds(); const summary = document.getElementById('dfSummary');
   const who = franchiseeView === 'All' ? '' : ' \u00b7 '+franchiseeView;
@@ -531,9 +579,6 @@ document.querySelectorAll('#dfBar .df-btn[data-range]').forEach(btn => {
     if (dfRange === 'custom' && !dfFrom) { const ty = ukTaxYearBounds(); document.getElementById('dfFrom').valueAsDate = ty.from; document.getElementById('dfTo').valueAsDate = new Date(); }
     applyFilters(); renderContent(); dfRender();
   });
-});
-document.querySelectorAll('#dfBar .df-btn[data-view]').forEach(btn => {
-  btn.addEventListener('click', () => { franchiseeView = btn.dataset.view; applyFilters(); renderContent(); dfRender(); });
 });
 document.getElementById('dfApply').addEventListener('click', () => {
   const f = document.getElementById('dfFrom'), t = document.getElementById('dfTo');
@@ -660,7 +705,11 @@ function renderContent() {
     const netColor = w.netInPeriod>0?'var(--green6)':(w.netInPeriod<0?'var(--red)':'var(--muted)');
     const netSign = w.netInPeriod>0?'+':'';
     const moves = w.list.filter(x=>x._cust || x._status);
-    el.innerHTML = `
+    const createdParsed = rawRecurring.filter(r=>r._created).length;
+    const dateWarn = (rawRecurring.length > 0 && createdParsed === 0)
+      ? '<div class="ib io" style="margin-top:0;margin-bottom:24px">The app log has '+rawRecurring.length+' rows but none of their <b>Date Created</b> values could be read, so they only show under All time. Sample raw value: <b>'+String((rawRecurring[0]['Date Created']!==undefined?rawRecurring[0]['Date Created']:col(rawRecurring[0],['Date Created','Created','Date']))||'(empty)').slice(0,40)+'</b>. Send me that and I\u2019ll match the format.</div>'
+      : '';
+    el.innerHTML = dateWarn + `
       <div class="grid grid-4">
         <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Active Recurring</div><div class="kpi-v">${recCusts.length}</div><div class="kpi-s">customers on a schedule</div></div>
         <div class="card accent-top"><div class="kpi-l">Per-visit Value</div><div class="kpi-v">${fmt(recValue)}</div><div class="kpi-s">combined, each round</div></div>
