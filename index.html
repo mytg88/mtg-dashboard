@@ -439,15 +439,37 @@ function processLeads(b) {
 }
 
 function processRecurring(b) {
+  // Reconstruct regular gained/lost from the full job history (accurate over all time,
+  // not just since app tracking began). First visit = gained; 90+ days without a visit = lost.
+  const now = new Date();
+  const cutoff90 = new Date(now); cutoff90.setDate(cutoff90.getDate() - 90);
+  const hist = {};
+  rawJobs.filter(j => matchView(j._franchisee)).forEach(j => {
+    const n = j['Customer Name']; if (!n) return;
+    if (!hist[n]) hist[n] = { jobs: 0, rec: false, first: null, last: null };
+    hist[n].jobs++;
+    if (j['Recurring Frequency'] && j['Recurring Frequency'].trim()) hist[n].rec = true;
+    if (j._date) {
+      if (!hist[n].first || j._date < hist[n].first) hist[n].first = j._date;
+      if (!hist[n].last  || j._date > hist[n].last)  hist[n].last  = j._date;
+    }
+  });
+  const regulars = [], churned = [];
+  Object.values(hist).forEach(c => {
+    if (c.jobs === 1) return;
+    const isChurned = (c.rec || c.jobs >= 5) && c.last && c.last < cutoff90;
+    const isActiveRecurring = c.rec && c.last && c.last >= cutoff90;
+    if (isChurned) { regulars.push(c); churned.push(c); }
+    else if (isActiveRecurring) { regulars.push(c); }
+  });
+  const inB = (d) => (!b.from || !b.to) ? true : (d && d >= b.from && d <= b.to);
+  const gained = regulars.filter(c => c.first && inB(c.first)).length;
+  const lost = churned.filter(c => c.last && inB(c.last)).length;
+
+  // Live app log kept as supplementary precise recent activity.
   const base = rawRecurring.filter(r => matchView(r._franchisee));
-  let created = base, cancelled = base.filter(r => r._canceled);
-  if (b.from && b.to) {
-    created = base.filter(r => r._created && r._created >= b.from && r._created <= b.to);
-    cancelled = base.filter(r => r._canceled && r._canceled >= b.from && r._canceled <= b.to);
-  }
   recurringStats = {
-    newInPeriod: created.length, cancelledInPeriod: cancelled.length,
-    netInPeriod: created.length - cancelled.length,
+    gained, lost, net: gained - lost,
     list: base.slice().sort((a,b2) => (b2._created?b2._created:0) - (a._created?a._created:0)),
     mapped: base.some(x => x._cust || x._status),
     headers: rawRecurring.length ? Object.keys(rawRecurring[0]).filter(k => !k.startsWith('_')) : []
@@ -583,12 +605,12 @@ function renderContent() {
     const aLeads = leadStats ? leadStats.staleNew : 0;
     const aChurn = churnedList.length;
     const aMissing = missingPriceData.reduce((s,c)=>s+c.z,0);
-    const aCancel = recurringStats ? recurringStats.cancelledInPeriod : 0;
+    const aQuotes = leadStats ? (leadStats.byStatus.QUOTED || 0) : 0;
     const attnCards = [
       { n:aLeads, t:'Leads to action', d:'still marked new', tab:'Leads', warn:aLeads>0 },
+      { n:aQuotes, t:'Quotes to chase', d:'awaiting a decision', tab:'Leads', warn:aQuotes>0 },
       { n:aChurn, t:'Regulars at risk', d:'no visit in 90+ days', tab:'Churned', warn:aChurn>0 },
-      { n:aMissing, t:'Jobs missing a price', d:'£0, excludes assessments', tab:'Missing Prices', warn:aMissing>0 },
-      { n:aCancel, t:'Recurring cancelled', d:'logged by app in period', tab:'Recurring', warn:aCancel>0 }
+      { n:aMissing, t:'Jobs missing a price', d:'£0, excludes assessments', tab:'Missing Prices', warn:aMissing>0 }
     ];
     // Mike vs Adam always compares both, regardless of the View toggle
     const mp = jobsPeriod.filter(j=>j._franchisee==='Mike'), ap = jobsPeriod.filter(j=>j._franchisee==='Adam');
@@ -700,39 +722,34 @@ function renderContent() {
   else if (activeTab==='Recurring') {
     const recValue = recCusts.reduce((s,c)=>s+c.a,0);
     const recMike = recCusts.filter(c=>c.f==='Mike').length, recAdam = recCusts.filter(c=>c.f==='Adam').length;
-    const w = recurringStats || {newInPeriod:0,cancelledInPeriod:0,netInPeriod:0,list:[],mapped:false};
-    const netColor = w.netInPeriod>0?'var(--green6)':(w.netInPeriod<0?'var(--red)':'var(--muted)');
-    const netSign = w.netInPeriod>0?'+':'';
+    const w = recurringStats || {gained:0,lost:0,net:0,list:[],mapped:false};
+    const netColor = w.net>0?'var(--green6)':(w.net<0?'var(--red)':'var(--muted)');
+    const netSign = w.net>0?'+':'';
     const moves = w.list.filter(x=>x._cust || x._status);
-    const createdParsed = rawRecurring.filter(r=>r._created).length;
-    const dateWarn = (rawRecurring.length > 0 && createdParsed === 0)
-      ? '<div class="ib io" style="margin-top:0;margin-bottom:24px">The app log has '+rawRecurring.length+' rows but none of their <b>Date Created</b> values could be read, so they only show under All time. Sample raw value: <b>'+String((rawRecurring[0]['Date Created']!==undefined?rawRecurring[0]['Date Created']:col(rawRecurring[0],['Date Created','Created','Date']))||'(empty)').slice(0,40)+'</b>. Send me that and I\u2019ll match the format.</div>'
-      : '';
-    el.innerHTML = dateWarn + `
+    el.innerHTML = `
       <div class="grid grid-4">
         <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Active Recurring</div><div class="kpi-v">${recCusts.length}</div><div class="kpi-s">customers on a schedule</div></div>
         <div class="card accent-top"><div class="kpi-l">Per-visit Value</div><div class="kpi-v">${fmt(recValue)}</div><div class="kpi-s">combined, each round</div></div>
-        <div class="card accent-top"><div class="kpi-l">New (tracked)</div><div class="kpi-v">${w.newInPeriod}</div><div class="kpi-s">logged by app in period</div></div>
-        <div class="card accent-top" style="border-top-color:var(--red)"><div class="kpi-l">Cancelled (tracked)</div><div class="kpi-v" style="color:var(--red)">${w.cancelledInPeriod}</div><div class="kpi-s">logged by app in period</div></div>
+        <div class="card accent-top"><div class="kpi-l">Regulars Gained</div><div class="kpi-v">${w.gained}</div><div class="kpi-s">first visit in period</div></div>
+        <div class="card accent-top" style="border-top-color:var(--red)"><div class="kpi-l">Regulars Lost</div><div class="kpi-v" style="color:var(--red)">${w.lost}</div><div class="kpi-s">churned in period</div></div>
       </div>
       <div class="grid grid-2">
-        <div class="card"><div class="h">Net movement (app log)</div>
-          <div class="serif" style="font-size:40px;font-weight:600;color:${netColor};line-height:1">${netSign}${w.netInPeriod}</div>
-          <div style="font-size:13px;color:var(--muted);margin-top:6px">${w.newInPeriod} started \u2212 ${w.cancelledInPeriod} cancelled in the selected period</div>
+        <div class="card"><div class="h">Net movement</div>
+          <div class="serif" style="font-size:40px;font-weight:600;color:${netColor};line-height:1">${netSign}${w.net}</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:6px">${w.gained} gained \u2212 ${w.lost} lost in the selected period</div>
           <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);display:flex;gap:24px;font-size:13px;align-items:center">
             <span>${badge('Mike')} <b>${recMike}</b> active</span><span>${badge('Adam')} <b>${recAdam}</b> active</span>
           </div>
         </div>
-        <div class="card"><div class="h">Two numbers, two sources</div>
-          <div class="ib ig" style="margin-top:0"><b>Active recurring (${recCusts.length})</b> comes from your full job history, every customer currently on a repeat schedule. <b>New and cancelled (tracked)</b> come from the app's live log, which only records schedules created or cancelled since tracking went live, so it starts small and builds over time. Watch net movement as that log fills: consistently positive means the round is growing.</div>
+        <div class="card"><div class="h">How this is worked out</div>
+          <div class="ib ig" style="margin-top:0">All of these come from your full job history, so they\u2019re accurate right back to the start, not just since the app began tracking. A customer\u2019s <b>first visit</b> counts as gained; <b>90+ days</b> without a visit counts as lost (the same rule as the Churned tab). Over all time, gained minus lost equals your active book. The app\u2019s live log feeds the recent changes below as a precise running record going forward.</div>
         </div>
       </div>
       <div class="card" style="margin-bottom:24px"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${recCusts.length} active recurring customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, from job history</div>
         <div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th>Frequency</th><th class="r">Avg/visit</th><th class="r">Jobs</th><th class="r">Lifetime</th><th>Last visit</th></tr></thead>
         <tbody>${recCusts.map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.freq||'\u2014')+'</td><td class="r">'+(c.a>0?fmt(c.a):'\u2014')+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div>
       </div>
-      ${moves.length ? '<div class="card"><div class="h">Recent schedule changes (app log)</div><div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th>Service</th><th>Frequency</th><th class="r">Value</th><th class="c">Status</th><th>Created</th><th>Cancelled</th></tr></thead><tbody>'+moves.map(x=>'<tr><td style="font-weight:500">'+(x._cust||'\u2014')+'</td><td class="c">'+(x._franchisee?badge(x._franchisee):'\u2014')+'</td><td style="font-size:12px">'+(x._svc||'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+(x._freq||'\u2014')+'</td><td class="r">'+(x._value>0?fmt(x._value):'\u2014')+'</td><td class="c">'+statusBadge(x._status)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(x._created)+'</td><td style="color:var(--muted);font-size:12px">'+(x._canceled?fmtDate(x._canceled):'\u2014')+'</td></tr>').join('')+'</tbody></table></div></div>'
-      : (rawRecurring.length && !w.mapped ? '<div class="ib io">The app log loaded '+rawRecurring.length+' rows but the columns didn\'t map. Columns found: <b>'+(recurringStats?recurringStats.headers.join(', '):'')+'</b></div>' : '')}
+      ${moves.length ? '<div class="card"><div class="h">Recent schedule changes (live app log)</div><div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th>Service</th><th>Frequency</th><th class="r">Value</th><th class="c">Status</th><th>Created</th><th>Cancelled</th></tr></thead><tbody>'+moves.map(x=>'<tr><td style="font-weight:500">'+(x._cust||'\u2014')+'</td><td class="c">'+(x._franchisee?badge(x._franchisee):'\u2014')+'</td><td style="font-size:12px">'+(x._svc||'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+(x._freq||'\u2014')+'</td><td class="r">'+(x._value>0?fmt(x._value):'\u2014')+'</td><td class="c">'+statusBadge(x._status)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(x._created)+'</td><td style="color:var(--muted);font-size:12px">'+(x._canceled?fmtDate(x._canceled):'\u2014')+'</td></tr>').join('')+'</tbody></table></div></div>' : ''}
     `;
   }
 
