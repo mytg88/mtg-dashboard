@@ -106,20 +106,51 @@ tr:hover td{background:#FAFBF9}
 .df-summary{margin-left:auto;font-size:11px;color:var(--muted)}
 .df-summary b{color:var(--green)}
 .svg-wrap{width:100%}
+#loginOverlay{position:fixed;inset:0;background:var(--ink);display:flex;align-items:center;justify-content:center;z-index:1000;padding:24px}
+.login-card{background:var(--card);border-radius:16px;padding:34px 32px;width:100%;max-width:360px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.login-card h2{font-family:'Fraunces',serif;font-size:24px;font-weight:600;color:var(--ink);margin-bottom:4px}
+.login-card .sub{font-size:13px;color:var(--muted);margin-bottom:20px}
+.login-card label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:6px;margin-top:14px}
+.login-card input[type=text],.login-card input[type=password]{width:100%;padding:11px 14px;border:1px solid var(--line);border-radius:9px;font-size:14px;font-family:inherit;outline:none}
+.login-card input[type=text]:focus,.login-card input[type=password]:focus{border-color:var(--green)}
+.login-remember{display:flex;align-items:center;gap:8px;margin-top:16px;font-size:13px;color:var(--ink)}
+.login-remember input{width:auto;margin:0}
+.login-btn{width:100%;margin-top:20px;padding:12px;background:var(--green);color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer}
+.login-btn:hover{background:var(--green6)}
+.login-err{color:var(--red);font-size:13px;margin-top:14px;min-height:18px}
+.logout-btn{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);color:#fff;padding:9px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit}
+.logout-btn:hover{background:rgba(255,255,255,0.2)}
+#whoami{font-size:12px;color:rgba(255,255,255,0.65);font-weight:500}
 </style>
 </head>
 <body>
+<div id="loginOverlay">
+  <div class="login-card">
+    <h2>My Tidy Garden</h2>
+    <div class="sub">Command Centre. Please log in to continue.</div>
+    <label>Username</label>
+    <input id="loginUser" type="text" autocomplete="username" autocapitalize="none" spellcheck="false">
+    <label>Password</label>
+    <input id="loginPass" type="password" autocomplete="current-password">
+    <label class="login-remember"><input id="loginRemember" type="checkbox" checked> Keep me logged in on this device</label>
+    <button class="login-btn" id="loginBtn">Log in</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
 
 <div class="header">
   <h1>My Tidy Garden</h1>
   <p>Command Centre — live business data</p>
   <div class="header-actions">
+    <span id="whoami"></span>
     <select id="viewSelect" class="view-select" onchange="setView(this.value)" aria-label="Franchisee view">
       <option value="All">Overall view</option>
       <option value="Mike">Mike only</option>
       <option value="Adam">Adam only</option>
     </select>
     <button class="refresh" onclick="loadData()">Refresh</button>
+    <button class="logout-btn" id="logoutBtn" onclick="doLogout()" style="display:none">Log out</button>
   </div>
 </div>
 
@@ -151,7 +182,7 @@ tr:hover td{background:#FAFBF9}
 // 1. Deploy the Apps Script (dashboard_api.gs) as a Web App and paste its /exec URL below.
 // 2. Pick a long random password and paste the SAME string here and in the Apps Script.
 const API_URL   = 'https://script.google.com/macros/s/AKfycbxN137wCPVA5IVaHseSxCK8-ffURw51bAaoCx8s0fvNxqM3Ci0Oh3gF-ZkzRmbl94SeEA/exec';
-const API_TOKEN = 'dctugjWHTbmndoydhkw9!hYfgg!11';
+let auth = null; // {user, pass, role, name} once logged in. No password is stored in this file.
 // ==============================================================
 
 let rawJobs=[], customers=[], rawLeads=[], rawRecurring=[];
@@ -245,6 +276,7 @@ function matchView(f) { return franchiseeView === 'All' || f === franchiseeView;
 function showMsg(html) { document.getElementById('content').innerHTML = '<div class="loading">'+html+'</div>'; }
 
 function loadData() {
+  if (!auth) { showLogin(''); return; }
   if (API_URL.indexOf('PASTE_') === 0) {
     showMsg('Almost there. Open this file and paste your Web App URL and token into the CONNECTION SETTINGS block near the top of the script, then redeploy.');
     return;
@@ -257,13 +289,14 @@ function loadData() {
   window[cb] = function(data) { done = true; cleanup(); handleData(data); };
   s.onerror = function() { if (!done) { cleanup(); showMsg('Could not reach the MTG app. Check the Web App URL is correct and deployed with access set to "Anyone".'); } };
   setTimeout(() => { if (!done) { cleanup(); showMsg('The MTG app did not respond. Check the Web App URL and token, then try Refresh.'); } }, 20000);
-  s.src = API_URL + (API_URL.indexOf('?') === -1 ? '?' : '&') + 'token=' + encodeURIComponent(API_TOKEN) + '&callback=' + cb;
+  s.src = API_URL + (API_URL.indexOf('?') === -1 ? '?' : '&') + 'user=' + encodeURIComponent(auth.user) + '&pass=' + encodeURIComponent(auth.pass) + '&callback=' + cb;
   document.head.appendChild(s);
 }
 
 function handleData(data) {
   if (!data || data.error) {
-    showMsg('The MTG app refused the request' + (data && data.error ? ' (' + data.error + ')' : '') + '. Check the token matches in both the dashboard and the Apps Script.');
+    if (data && /unauthor/i.test(String(data.error))) { doLogout(); showLogin('Your session ended. Please log in again.'); return; }
+    showMsg('The MTG app refused the request' + (data && data.error ? ' (' + data.error + ')' : '') + '.');
     return;
   }
   rawJobs = data.jobs || [];
@@ -517,7 +550,8 @@ function apiCall(extra, onOk, onErr) {
   window[cb] = function(d) { done = true; cleanup(); onOk && onOk(d); };
   s.onerror = function() { if (!done) { cleanup(); onErr && onErr(); } };
   setTimeout(() => { if (!done) { cleanup(); onErr && onErr(); } }, 15000);
-  let url = API_URL + (API_URL.indexOf('?')===-1?'?':'&') + 'token=' + encodeURIComponent(API_TOKEN) + '&callback=' + cb;
+  if (!auth) return;
+  let url = API_URL + (API_URL.indexOf('?')===-1?'?':'&') + 'user=' + encodeURIComponent(auth.user) + '&pass=' + encodeURIComponent(auth.pass) + '&callback=' + cb;
   for (const k in extra) url += '&' + k + '=' + encodeURIComponent(extra[k]);
   s.src = url; document.head.appendChild(s);
 }
@@ -888,7 +922,84 @@ function renderContent() {
   }
 }
 
-loadData();
+function showLogin(msg) {
+  const ov = document.getElementById('loginOverlay');
+  if (ov) ov.style.display = 'flex';
+  const er = document.getElementById('loginErr'); if (er) er.textContent = msg || '';
+  const lb = document.getElementById('logoutBtn'); if (lb) lb.style.display = 'none';
+  const wi = document.getElementById('whoami'); if (wi) wi.textContent = '';
+  const lp = document.getElementById('loginPass'); if (lp) lp.value = '';
+  const lu = document.getElementById('loginUser'); if (lu) lu.focus();
+}
+function hideLogin() { const ov = document.getElementById('loginOverlay'); if (ov) ov.style.display = 'none'; }
+
+function doLogin() {
+  const u = (document.getElementById('loginUser').value || '').trim();
+  const p = document.getElementById('loginPass').value || '';
+  const remember = document.getElementById('loginRemember').checked;
+  const er = document.getElementById('loginErr');
+  if (!u || !p) { er.textContent = 'Enter your username and password.'; return; }
+  er.textContent = 'Checking...';
+  const cb = 'mtg_login_' + Date.now();
+  const s = document.createElement('script');
+  let done = false;
+  const cleanup = () => { try { delete window[cb]; } catch(_) { window[cb] = undefined; } if (s.parentNode) s.parentNode.removeChild(s); };
+  window[cb] = function(d) {
+    done = true; cleanup();
+    if (d && d.ok) {
+      auth = { user: u.toLowerCase(), pass: p, role: d.role || 'All', name: d.name || u };
+      try {
+        (remember ? localStorage : sessionStorage).setItem('mtg_auth', JSON.stringify(auth));
+        (remember ? sessionStorage : localStorage).removeItem('mtg_auth');
+      } catch(_) {}
+      er.textContent = '';
+      hideLogin();
+      applyRole();
+      loadData();
+    } else {
+      er.textContent = (d && d.error) ? d.error : 'Could not log in.';
+    }
+  };
+  s.onerror = function() { if (!done) { cleanup(); er.textContent = 'Could not reach the app. Try again.'; } };
+  setTimeout(() => { if (!done) { cleanup(); er.textContent = 'No response from the app. Try again.'; } }, 20000);
+  s.src = API_URL + (API_URL.indexOf('?') === -1 ? '?' : '&') + 'action=login&user=' + encodeURIComponent(u) + '&pass=' + encodeURIComponent(p) + '&callback=' + cb;
+  document.head.appendChild(s);
+}
+
+function doLogout() {
+  auth = null;
+  try { localStorage.removeItem('mtg_auth'); sessionStorage.removeItem('mtg_auth'); } catch(_) {}
+  showLogin('');
+}
+
+function applyRole() {
+  const lb = document.getElementById('logoutBtn'); if (lb) lb.style.display = auth ? 'inline-block' : 'none';
+  const wi = document.getElementById('whoami');
+  if (wi) wi.textContent = auth ? (auth.name + (auth.role !== 'All' ? ' \u00b7 ' + auth.role + ' only' : '')) : '';
+  const vs = document.getElementById('viewSelect');
+  if (auth && auth.role !== 'All') {
+    franchiseeView = auth.role;
+    if (vs) vs.style.display = 'none';
+    callsWho = auth.name;
+  } else {
+    if (vs) vs.style.display = '';
+    if (auth) callsWho = auth.name;
+  }
+}
+
+(function initAuth() {
+  const lb = document.getElementById('loginBtn');
+  if (lb) lb.addEventListener('click', doLogin);
+  const lp = document.getElementById('loginPass');
+  if (lp) lp.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  const lu = document.getElementById('loginUser');
+  if (lu) lu.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPass').focus(); });
+  let saved = null;
+  try { saved = localStorage.getItem('mtg_auth') || sessionStorage.getItem('mtg_auth'); } catch(_) {}
+  if (saved) { try { auth = JSON.parse(saved); } catch(_) { auth = null; } }
+  if (auth && auth.user && auth.pass) { hideLogin(); applyRole(); loadData(); }
+  else { showLogin(''); }
+})();
 </script>
 </body>
 </html>
