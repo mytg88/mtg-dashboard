@@ -157,6 +157,7 @@ const API_TOKEN = 'dctugjWHTbmndoydhkw9!hYfgg!11';
 let rawJobs=[], customers=[], rawLeads=[], rawRecurring=[];
 let jobsPeriod=[], jobs=[], prevJobs=[], allCustomers=[], churnedList=[], monthlyData=[], serviceData=[], missingPriceData=[];
 let leadStats=null, recurringStats=null, prevTotals=null;
+let rawCalls=[], callsStats=null, callsFilter='open', callsWho='';
 let activeTab="Overview", custSegFilter="All", custSearch="";
 let dfRange="all", dfFrom=null, dfTo=null, franchiseeView="All";
 
@@ -268,6 +269,7 @@ function handleData(data) {
   rawJobs = data.jobs || [];
   rawLeads = data.leads || [];
   rawRecurring = data.recurring || [];
+  rawCalls = data.calls || [];
   customers = [];
 
   rawJobs.forEach(j => {
@@ -297,6 +299,19 @@ function handleData(data) {
     r._cust = col(r,['Customer Name','Customer','Name']);
     r._svc = col(r,['Service']);
     r._freq = col(r,['Frequency','Recurring Frequency']);
+  });
+  rawCalls.forEach(c => {
+    c._date = parseDate(col(c,['Logged At','Logged','Date']));
+    c._type = (col(c,['Type'])||'').trim();
+    c._caller = col(c,['Caller']);
+    c._fr = (col(c,['Franchisee'])||'').trim();
+    c._status = (col(c,['Status'])||'').trim();
+    c._detail = col(c,['Status Detail']);
+    c._time = col(c,['Time of Call']);
+    c._dur = col(c,['Duration']);
+    c._trans = col(c,['Transcription']);
+    c._by = col(c,['Updated By']);
+    c._key = col(c,['Key']);
   });
 
   applyFilters();
@@ -349,6 +364,7 @@ function applyFilters() {
   processPrev();
   processLeads(b);
   processRecurring(b);
+  processCalls(b);
 }
 
 function processData() {
@@ -481,6 +497,42 @@ function processRecurring(b) {
   };
 }
 
+function processCalls(b) {
+  let cs = rawCalls.filter(c => matchView(c._fr));
+  if (b.from && b.to) cs = cs.filter(c => c._date && c._date >= b.from && c._date <= b.to);
+  const open = cs.filter(c => !c._status || c._status === 'New');
+  callsStats = {
+    total: cs.length,
+    missed: cs.filter(c => /missed/i.test(c._type)).length,
+    vm: cs.filter(c => /voicemail/i.test(c._type)).length,
+    open: open.length,
+    list: cs.slice().sort((a,b2) => (b2._date?b2._date:0) - (a._date?a._date:0))
+  };
+}
+function apiCall(extra, onOk, onErr) {
+  const cb = 'mtg_w_' + Date.now() + Math.floor(Math.random()*1000);
+  const s = document.createElement('script');
+  let done = false;
+  const cleanup = () => { try { delete window[cb]; } catch(_) { window[cb] = undefined; } if (s.parentNode) s.parentNode.removeChild(s); };
+  window[cb] = function(d) { done = true; cleanup(); onOk && onOk(d); };
+  s.onerror = function() { if (!done) { cleanup(); onErr && onErr(); } };
+  setTimeout(() => { if (!done) { cleanup(); onErr && onErr(); } }, 15000);
+  let url = API_URL + (API_URL.indexOf('?')===-1?'?':'&') + 'token=' + encodeURIComponent(API_TOKEN) + '&callback=' + cb;
+  for (const k in extra) url += '&' + k + '=' + encodeURIComponent(extra[k]);
+  s.src = url; document.head.appendChild(s);
+}
+function setCallsWho(v) { callsWho = v; try { localStorage.setItem('mtg_calls_who', v); } catch(_) {} }
+function updateCallStatus(key, status) {
+  if (!callsWho) { alert('Pick who you are first, using the dropdown at the top of the Calls tab.'); renderContent(); return; }
+  const rec = rawCalls.find(c => c._key === key);
+  if (rec) { rec['Status'] = status; rec._status = status; rec['Updated By'] = callsWho; rec._by = callsWho; }
+  applyFilters(); renderContent();
+  apiCall({ action:'updateCallStatus', key:key, status:status, by:callsWho },
+    function(d) { if (!d || d.error) alert('Could not save that change. Hit Refresh and check it saved.'); },
+    function() { alert('Could not reach the app to save. Hit Refresh and try again.'); });
+}
+
+
 // ---------- helpers ----------
 function badge(t) {
   const m = {ACTIVE:'active',Churned:'churned',Mike:'mike',Adam:'adam','One-Off':'oneoff',Repeat:'repeat',Recurring:'recurring',
@@ -564,7 +616,7 @@ function funnelSVG(stages, total) {
   return out;
 }
 
-const tabList = ["Overview","Leads","Revenue","Customers","Recurring","Churned","Missing Prices","Services"];
+const tabList = ["Overview","Leads","Calls","Revenue","Customers","Recurring","Churned","Missing Prices","Services"];
 function renderTabs() {
   document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+t+'</button>').join('');
 }
@@ -698,6 +750,49 @@ function renderContent() {
         <tbody>${s.list.map(l=>'<tr><td style="color:var(--muted);font-size:12px">'+fmtDate(l._date)+'</td><td style="font-weight:500">'+(l._name||'\u2014')+'</td><td style="font-size:12px">'+(l._svc||'\u2014')+'</td><td class="r">'+(l._quote>0?fmt(l._quote):'\u2014')+'</td><td class="c" style="font-size:12px;color:var(--muted)">'+(l._territory||'\u2014')+'</td><td class="c">'+(l._franchisee?badge(l._franchisee):'\u2014')+'</td><td class="c">'+(l._status?badge(l._status):'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+l._source+'</td></tr>').join('')}</tbody></table></div>
       </div>`;
     }
+  }
+
+  else if (activeTab==='Calls') {
+    if (!callsWho) { try { callsWho = localStorage.getItem('mtg_calls_who') || ''; } catch(_) {} }
+    const s = callsStats || {total:0,missed:0,vm:0,open:0,list:[]};
+    let list = s.list;
+    if (callsFilter === 'open') list = list.filter(c => !c._status || c._status === 'New');
+    const statuses = ['New','Called back','Booked','No answer','Not relevant'];
+    const whoOpts = ['','Mike','Adam','Jacob'];
+    el.innerHTML = `
+    <div class="grid grid-4">
+      <div class="card accent-top"><div class="kpi-l">Total Calls</div><div class="kpi-v">${s.total}</div><div class="kpi-s">in period</div></div>
+      <div class="card accent-top"><div class="kpi-l">Missed Calls</div><div class="kpi-v">${s.missed}</div><div class="kpi-s">no voicemail</div></div>
+      <div class="card accent-top"><div class="kpi-l">Voicemails</div><div class="kpi-v">${s.vm}</div><div class="kpi-s">message left</div></div>
+      <div class="card accent-top" style="border-top-color:var(--accent)"><div class="kpi-l">Still Open</div><div class="kpi-v" style="color:var(--amber)">${s.open}</div><div class="kpi-s">need a callback</div></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px">
+        <div class="h" style="margin:0">Call chase list</div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+          <span style="font-size:12px;color:var(--muted)">Updating as</span>
+          <select onchange="setCallsWho(this.value)" style="padding:6px 10px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:12px">
+            ${whoOpts.map(w => '<option value="'+w+'"'+(callsWho===w?' selected':'')+'>'+(w||'Pick who you are')+'</option>').join('')}
+          </select>
+        </div>
+      </div>
+      <div class="filter-row">
+        <button class="filter-btn ${callsFilter==='open'?'active':''}" onclick="callsFilter='open';renderContent()">Still open (${s.open})</button>
+        <button class="filter-btn ${callsFilter==='all'?'active':''}" onclick="callsFilter='all';renderContent()">All (${s.total})</button>
+      </div>
+      ${list.length===0 ? '<div style="color:var(--muted);text-align:center;padding:40px">No calls to show'+(franchiseeView!=='All'?' for '+franchiseeView:'')+'.</div>' :
+      '<div class="table-wrap"><table><thead><tr><th>When</th><th class="c">Type</th><th>Caller</th><th>Voicemail</th><th class="c">Owner</th><th>Status</th></tr></thead><tbody>'+
+      list.map(c => '<tr><td style="color:var(--muted);font-size:12px;white-space:nowrap">'+fmtDate(c._date)+(c._time?'<br><span style="font-size:11px">'+c._time+'</span>':'')+'</td>'+
+        '<td class="c" style="font-size:12px">'+(c._type||'\u2014')+'</td>'+
+        '<td style="font-weight:500;white-space:nowrap">'+(c._caller||'\u2014')+'</td>'+
+        '<td style="font-size:12px;color:#4a554c;max-width:340px">'+(c._trans ? '<span title="'+String(c._trans).replace(/"/g,'&quot;')+'">'+(c._trans.length>120?c._trans.slice(0,120)+'\u2026':c._trans)+'</span>' : (c._dur?'<span style="color:var(--muted)">'+c._dur+', no transcript</span>':'\u2014'))+'</td>'+
+        '<td class="c">'+(c._fr?badge(c._fr):'\u2014')+'</td>'+
+        '<td><select onchange="updateCallStatus(\''+String(c._key).replace(/'/g,"\\'")+'\',this.value)" style="padding:5px 8px;border:1px solid var(--line);border-radius:7px;font-family:inherit;font-size:12px">'+
+          statuses.map(st => '<option value="'+st+'"'+(((c._status||'New')===st)?' selected':'')+'>'+st+'</option>').join('')+
+        '</select>'+(c._detail&&/^Auto/.test(c._detail)?'<div style="font-size:10px;color:var(--green6);margin-top:3px">'+c._detail+'</div>':'')+'</td></tr>').join('')+
+      '</tbody></table></div>'}
+      <div class="ib ig" style="margin-top:16px"><b>How statuses set themselves:</b> a call closes to <b>Booked</b> automatically when that number becomes a booking, and to <b>Called back</b> when a callback to it appears in the Air Landline export. Anything still <b>New</b> is genuinely waiting. Change a status here and it saves for everyone.</div>
+    </div>`;
   }
 
   else if (activeTab==='Revenue') {
