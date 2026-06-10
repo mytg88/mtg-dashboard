@@ -403,36 +403,61 @@ function applyFilters() {
 function processData() {
   const now = new Date();
   const cutoff90 = new Date(now); cutoff90.setDate(cutoff90.getDate() - 90);
+  const norm = n => String(n || '').trim().toLowerCase();
+
+  // ALL-TIME, view-filtered history decides the SEGMENT (independent of the selected period).
+  const histJobs = franchiseeView === 'All' ? rawJobs : rawJobs.filter(j => j._franchisee === franchiseeView);
+
+  // Recurring customers from the live Recurring Bookings feed (active = not cancelled).
+  const recurringNames = new Set(
+    rawRecurring.filter(r => matchView(r._franchisee))
+      .filter(r => !r._canceled && r._status !== 'CANCELED' && r._status !== 'CANCELLED')
+      .map(r => norm(r._cust)).filter(Boolean)
+  );
+
+  // Build each customer's all-time picture: total jobs ever, recurrence, first/last visit.
+  const histMap = {};
+  histJobs.forEach(j => {
+    const name = j['Customer Name']; if (!name) return;
+    const k = norm(name);
+    if (!histMap[k]) histMap[k] = { hasRecurring: recurringNames.has(k), freq: '', count: 0, first: null, last: null };
+    const h = histMap[k];
+    h.count++;
+    if (j['Recurring Frequency'] && String(j['Recurring Frequency']).trim()) { h.hasRecurring = true; h.freq = String(j['Recurring Frequency']).trim(); }
+    if (j._date) { if (!h.first || j._date < h.first) h.first = j._date; if (!h.last || j._date > h.last) h.last = j._date; }
+  });
+
+  // Recurrence is decided FIRST, from all-time data — not from how many visits fall in the period.
+  function segmentFor(h) {
+    if (h.hasRecurring) return (h.last && h.last < cutoff90) ? 'Churned' : 'Recurring';
+    if (h.count >= 5 && h.last && h.last < cutoff90) return 'Churned';
+    if (h.count >= 2) return 'Repeat';
+    return 'One-Off';
+  }
+
+  // PERIOD, view-filtered jobs decide the DISPLAYED numbers (jobs, revenue, avg).
   const custMap = {};
   jobs.forEach(j => {
     const name = j['Customer Name']; if (!name) return;
-    if (!custMap[name]) custMap[name] = { name, jobs: [], totalRev: 0, franchisee: j._franchisee, hasRecurring: false, freq: '', services: new Set() };
+    if (!custMap[name]) custMap[name] = { name, jobs: [], totalRev: 0, franchisee: j._franchisee, services: new Set() };
     custMap[name].jobs.push(j);
     custMap[name].totalRev += j._amount;
-    if (j['Recurring Frequency'] && j['Recurring Frequency'].trim()) { custMap[name].hasRecurring = true; custMap[name].freq = j['Recurring Frequency'].trim(); }
     custMap[name].services.add(j._service);
     custMap[name].franchisee = j._franchisee || custMap[name].franchisee;
   });
+
   allCustomers = Object.values(custMap).map(c => {
-    const dates = c.jobs.map(j => j._date).filter(Boolean).sort((a,b) => a-b);
-    const firstJob = dates[0], lastJob = dates[dates.length - 1];
+    const h = histMap[norm(c.name)] || { hasRecurring:false, freq:'', count:c.jobs.length, first:null, last:null };
     const priced = c.jobs.filter(j => j._amount > 0);
     const avg = priced.length ? priced.reduce((s,j) => s + j._amount, 0) / priced.length : 0;
     const rgmJobs = c.jobs.filter(j => j._service === 'Regular Garden Maintenance');
     const visit = rgmJobs.length
       ? rgmJobs.reduce((s,j) => s + j._amount, 0) / rgmJobs.length
       : (c.jobs.length ? c.totalRev / c.jobs.length : 0);
-    let segment;
-    if (c.jobs.length === 1) segment = 'One-Off';
-    else if (c.hasRecurring && lastJob < cutoff90) segment = 'Churned';
-    else if (c.hasRecurring) segment = 'Recurring';
-    else if (c.jobs.length >= 5 && lastJob < cutoff90) segment = 'Churned';
-    else if (c.jobs.length >= 2) segment = 'Repeat';
-    else segment = 'Other';
     return { n: c.name, j: c.jobs.length, r: Math.round(c.totalRev*100)/100, a: Math.round(avg*100)/100,
       visit: Math.round(visit*100)/100,
-      f: c.franchisee, s: segment, freq: c.freq, first: firstJob, last: lastJob,
-      daysSince: lastJob ? daysBetween(lastJob, now) : 999, svc: Array.from(c.services).slice(0,3).join(', ') };
+      f: c.franchisee, s: segmentFor(h), freq: h.freq, first: h.first, last: h.last,
+      daysSince: h.last ? daysBetween(h.last, now) : 999, svc: Array.from(c.services).slice(0,3).join(', ') };
   }).sort((a,b) => b.r - a.r);
   churnedList = allCustomers.filter(c => c.s === 'Churned').sort((a,b) => b.r - a.r);
 
