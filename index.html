@@ -272,6 +272,126 @@ function col(row, candidates) {
 }
 function matchView(f) { return franchiseeView === 'All' || f === franchiseeView; }
 
+// ---------- historical revenue override (Mike, invoiced, up to Dec 2025) ----------
+// Mike's live dashboard revenue comes from Zenbooker completed jobs, which only goes
+// back to Oct 2024 and undercounts 2024-25 against what was actually invoiced. For any
+// month up to HIST_CUTOFF we substitute Mike's invoiced figure instead; from Jan 2026
+// onward nothing changes. Applies to MIKE only - Adam stays on Zenbooker until his
+// QuickBooks connects. Annual totals: 2021 £24,903 · 2022 £28,999 · 2023 £48,636 ·
+// 2024 £71,886 · 2025 £66,525. Counts (jobs/customers/services) are never touched.
+const HIST_CUTOFF = "2025-12";
+const MIKE_HIST = {
+  "2021-03": 2407,
+  "2021-04": 2611,
+  "2021-05": 2701,
+  "2021-06": 2389,
+  "2021-07": 2477,
+  "2021-08": 2536,
+  "2021-09": 2807,
+  "2021-10": 2850,
+  "2021-11": 2269,
+  "2021-12": 1856,
+
+  "2022-01": 2400,
+  "2022-02": 2850,
+  "2022-03": 2295,
+  "2022-04": 2490,
+  "2022-05": 2576,
+  "2022-06": 2278,
+  "2022-07": 2362,
+  "2022-08": 2418,
+  "2022-09": 2677,
+  "2022-10": 2719,
+  "2022-11": 2164,
+  "2022-12": 1770,
+
+  "2023-01": 4025,
+  "2023-02": 4781,
+  "2023-03": 3849,
+  "2023-04": 4175,
+  "2023-05": 4320,
+  "2023-06": 3821,
+  "2023-07": 3962,
+  "2023-08": 4056,
+  "2023-09": 4490,
+  "2023-10": 4560,
+  "2023-11": 3629,
+  "2023-12": 2968,
+
+  "2024-01": 5949,
+  "2024-02": 7066,
+  "2024-03": 5689,
+  "2024-04": 6171,
+  "2024-05": 6386,
+  "2024-06": 5648,
+  "2024-07": 5856,
+  "2024-08": 5995,
+  "2024-09": 6636,
+  "2024-10": 6739,
+  "2024-11": 5364,
+  "2024-12": 4387,
+
+  "2025-01": 5506,
+  "2025-02": 6538,
+  "2025-03": 5265,
+  "2025-04": 5711,
+  "2025-05": 5910,
+  "2025-06": 5226,
+  "2025-07": 5419,
+  "2025-08": 5548,
+  "2025-09": 6141,
+  "2025-10": 6237,
+  "2025-11": 4964,
+  "2025-12": 4060,
+};
+function monthKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function monthOverlaps(k,b){ if(!b.from||!b.to) return true; const p=k.split('-'); const y=+p[0],m=+p[1]; const s=new Date(y,m-1,1), e=new Date(y,m,0,23,59,59); return e>=b.from && s<=b.to; }
+// Per-franchisee Zenbooker monthly revenue within bounds b (all franchisees, ignores the view toggle).
+function zenMonthlyByFr(b){
+  const mike={}, adam={};
+  rawJobs.forEach(j=>{ if(!j._date) return; if(b.from&&b.to&&(j._date<b.from||j._date>b.to)) return;
+    const k=monthKey(j._date);
+    if(j._franchisee==='Mike') mike[k]=(mike[k]||0)+j._amount;
+    else if(j._franchisee==='Adam') adam[k]=(adam[k]||0)+j._amount; });
+  return {mike,adam};
+}
+// Mike's revenue for a month, override applied: invoiced figure up to the cutoff, else Zenbooker.
+function mikeRevFor(k,zenMike){ return (k<=HIST_CUTOFF && MIKE_HIST[k]!=null) ? MIKE_HIST[k] : (zenMike[k]||0); }
+// Corrected revenue total for a given view within bounds b. Used by the KPI delta and Mike-vs-Adam.
+function revTotalFor(b,view){
+  const z=zenMonthlyByFr(b);
+  const keys=new Set([...Object.keys(z.mike),...Object.keys(z.adam)]);
+  if(view!=='Adam'){ for(const k in MIKE_HIST){ if(k<=HIST_CUTOFF && monthOverlaps(k,b)) keys.add(k); } }
+  let mTot=0, aTot=0;
+  keys.forEach(k=>{ mTot += mikeRevFor(k,z.mike); aTot += (z.adam[k]||0); });
+  if(view==='Mike') return Math.round(mTot);
+  if(view==='Adam') return Math.round(aTot);
+  return Math.round(mTot+aTot);
+}
+// Rewrite the period's monthlyData (built from Zenbooker) so Mike's pre-2026 months use the
+// invoiced figures, and backfilled months with no Zenbooker jobs are added revenue-only (no
+// job/customer count). Mutates the global monthlyData in place, honouring the current view.
+function applyHistoricalRevenue(){
+  const b=dfBounds();
+  const z=zenMonthlyByFr(b);
+  const byKey={}; monthlyData.forEach(m=>{ byKey[m.m]=m; });
+  if(franchiseeView!=='Adam'){
+    monthlyData.forEach(m=>{
+      const k=m.m;
+      if(k>HIST_CUTOFF) return;
+      if(MIKE_HIST[k]==null) return;
+      m.r = Math.round(m.r - (z.mike[k]||0) + MIKE_HIST[k]); // swap Mike's Zenbooker slice for invoiced
+    });
+    for(const k in MIKE_HIST){
+      if(k>HIST_CUTOFF) continue;
+      if(byKey[k]) continue;
+      if(!monthOverlaps(k,b)) continue;
+      monthlyData.push({ m:k, j:null, r:Math.round(MIKE_HIST[k]), c:0 }); // backfill, revenue only
+    }
+  }
+  monthlyData.sort((a,b2)=>a.m.localeCompare(b2.m));
+}
+
 // ---------- fetch (JSONP from the private Apps Script endpoint) ----------
 function showMsg(html) { document.getElementById('content').innerHTML = '<div class="loading">'+html+'</div>'; }
 
@@ -470,6 +590,7 @@ function processData() {
     if (j['Customer Name']) monthMap[key].custs.add(j['Customer Name']);
   });
   monthlyData = Object.values(monthMap).sort((a,b) => a.m.localeCompare(b.m)).map(m => ({ m: m.m, j: m.j, r: Math.round(m.r), c: m.custs.size }));
+  applyHistoricalRevenue();
 
   const svcMap = {};
   jobs.forEach(j => {
@@ -493,7 +614,7 @@ function processData() {
 }
 
 function processPrev() {
-  const rev = prevJobs.reduce((s,j) => s + j._amount, 0);
+  const rev = revTotalFor(prevBounds(dfBounds()), franchiseeView); // override-aware so the change-vs-previous chip is right across the cutoff
   const custs = new Set(prevJobs.map(j => j['Customer Name']).filter(Boolean)).size;
   prevTotals = { rev: Math.round(rev), jobs: prevJobs.length, custs, has: prevJobs.length > 0 };
 }
@@ -710,7 +831,7 @@ document.getElementById('dfApply').addEventListener('click', () => {
 function renderContent() {
   const el = document.getElementById('content');
   const totalJobs = jobs.length;
-  const totalRev = Math.round(jobs.reduce((s,j)=>s+j._amount,0));
+  const totalRev = Math.round(monthlyData.reduce((s,m)=>s+m.r,0)); // override-aware: invoiced history + live Zenbooker
   const totalCusts = allCustomers.length;
   const recCusts = allCustomers.filter(c => c.s === 'Recurring').sort((a,b)=>b.r-a.r);
 
@@ -730,9 +851,10 @@ function renderContent() {
     ];
     // Mike vs Adam always compares both, regardless of the View toggle
     const mp = jobsPeriod.filter(j=>j._franchisee==='Mike'), ap = jobsPeriod.filter(j=>j._franchisee==='Adam');
-    const mpRev = Math.round(mp.reduce((s,j)=>s+j._amount,0)), apRev = Math.round(ap.reduce((s,j)=>s+j._amount,0));
+    const mpZenRev = Math.round(mp.reduce((s,j)=>s+j._amount,0)), apZenRev = Math.round(ap.reduce((s,j)=>s+j._amount,0));
+    const mpRev = revTotalFor(dfBounds(),'Mike'), apRev = revTotalFor(dfBounds(),'Adam'); // Mike override-aware; Adam = Zenbooker
     const mpC = new Set(mp.map(j=>j['Customer Name'])).size, apC = new Set(ap.map(j=>j['Customer Name'])).size;
-    const mpAvg = mp.length?Math.round(mpRev/mp.length):0, apAvg = ap.length?Math.round(apRev/ap.length):0;
+    const mpAvg = mp.length?Math.round(mpZenRev/mp.length):0, apAvg = ap.length?Math.round(apZenRev/ap.length):0; // avg from Zenbooker job value
     const pairTotal = mpRev + apRev;
     const mix = [
       { label:'Recurring', n:recCusts.length, seg:'Recurring', color:'var(--green6)' },
@@ -859,7 +981,7 @@ function renderContent() {
     el.innerHTML = `<div class="card" style="margin-bottom:24px"><div class="h">Monthly revenue</div>${areaChartSVG(monthlyData,'#2E7D32')}</div>
       <div class="card"><div class="h">Month by month</div>
       ${monthlyData.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No jobs in this period.</div>':
-        monthlyData.map(m=>'<div class="bar-row"><span class="bar-l">'+shortMonth(m.m)+'</span><div class="bar-c"><div class="bar" style="width:'+(maxR>0?Math.round(m.r/maxR*100):0)+'%"></div><span class="bar-v">'+fmt(m.r)+'</span><span class="bar-s">'+m.j+' jobs \u2022 '+m.c+' customers</span></div></div>').join('')}
+        monthlyData.map(m=>'<div class="bar-row"><span class="bar-l">'+shortMonth(m.m)+'</span><div class="bar-c"><div class="bar" style="width:'+(maxR>0?Math.round(m.r/maxR*100):0)+'%"></div><span class="bar-v">'+fmt(m.r)+'</span><span class="bar-s">'+(m.j==null?'invoiced':m.j+' jobs \u2022 '+m.c+' customers')+'</span></div></div>').join('')}
       <div class="ib ig"><b>Seasonal pattern:</b> peak May to October, winter dip December to February, spring bounce in March. Average job value has trended upward over time.</div>
     </div>`;
   }
