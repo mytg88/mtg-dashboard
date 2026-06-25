@@ -67,6 +67,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--paper);color:var(--ink);-
 .b-mike{background:#E8F5E9;color:#1B5E20}.b-adam{background:#E3F2FD;color:#1565C0}
 .b-oneoff{background:#FFF9C4;color:#F57F17}.b-repeat{background:#BBDEFB;color:#1565C0}
 .b-recurring{background:#C8E6C9;color:#2E7D32}
+.b-passed{background:#E8EAF6;color:#3949AB}
 .b-new{background:#FFF3E0;color:#E65100}.b-contacted{background:#E3F2FD;color:#1565C0}
 .b-quoted{background:#F3E5F5;color:#6A1B9A}.b-booked{background:#E8F5E9;color:#2E7D32}
 .b-lost{background:#FFEBEE;color:#C62828}.b-spam{background:#ECEFF1;color:#607D8B}.b-na{background:#EEF1ED;color:#7C8A7E}
@@ -291,17 +292,17 @@ const HIST_CUTOFF = "2025-12";
 // revenue: real work-completed shape, each calendar year scaled to verified paid total.
 // jobs/customers: pre-Oct-2024 only, bucketed by work-completed (visit) date.
 const MIKE_HIST = {
-  "2021-03":770, "2021-04":4635, "2021-05":1990, "2021-06":2690, "2021-07":2128, "2021-08":3381, "2021-09":2756, "2021-10":2509, "2021-11":1996, "2021-12":2047,
-  "2022-01":1112, "2022-02":813, "2022-03":3342, "2022-04":2888, "2022-05":3640, "2022-06":2240, "2022-07":2130, "2022-08":3143, "2022-09":2445, "2022-10":2137, "2022-11":3341, "2022-12":1767,
-  "2023-01":1483, "2023-02":1331, "2023-03":2850, "2023-04":4426, "2023-05":6781, "2023-06":4348, "2023-07":3012, "2023-08":4829, "2023-09":4218, "2023-10":4519, "2023-11":5592, "2023-12":5246,
-  "2024-01":4947, "2024-02":3587, "2024-03":5586, "2024-04":6739, "2024-05":8009, "2024-06":5664, "2024-07":6004, "2024-08":6435, "2024-09":4991, "2024-10":10214, "2024-11":4865, "2024-12":4845,
+  "2021-03":830, "2021-04":4695, "2021-05":2080, "2021-06":2950, "2021-07":2188, "2021-08":3441, "2021-09":2816, "2021-10":2569, "2021-11":2026, "2021-12":2047,
+  "2022-01":1112, "2022-02":843, "2022-03":3402, "2022-04":2948, "2022-05":3700, "2022-06":2300, "2022-07":2190, "2022-08":3203, "2022-09":2505, "2022-10":2197, "2022-11":3371, "2022-12":1767,
+  "2023-01":1483, "2023-02":1361, "2023-03":2910, "2023-04":4486, "2023-05":6841, "2023-06":4608, "2023-07":3072, "2023-08":4889, "2023-09":4278, "2023-10":4579, "2023-11":5622, "2023-12":5246,
+  "2024-01":4947, "2024-02":3617, "2024-03":5646, "2024-04":6799, "2024-05":8099, "2024-06":5754, "2024-07":6094, "2024-08":6495, "2024-09":5051, "2024-10":10214, "2024-11":4865, "2024-12":4845,
   "2025-01":3403, "2025-02":3839, "2025-03":7312, "2025-04":9902, "2025-05":6294, "2025-06":4270, "2025-07":4327, "2025-08":6531, "2025-09":6811, "2025-10":3715, "2025-11":4686, "2025-12":5435,
 };
 const MIKE_HIST_JOBS = {
-  "2021-03":4, "2021-04":21, "2021-05":12, "2021-06":20, "2021-07":21, "2021-08":37, "2021-09":31, "2021-10":31, "2021-11":30, "2021-12":21,
-  "2022-01":12, "2022-02":8, "2022-03":31, "2022-04":29, "2022-05":36, "2022-06":28, "2022-07":28, "2022-08":41, "2022-09":33, "2022-10":35, "2022-11":33, "2022-12":31,
-  "2023-01":19, "2023-02":12, "2023-03":23, "2023-04":34, "2023-05":52, "2023-06":43, "2023-07":33, "2023-08":38, "2023-09":44, "2023-10":46, "2023-11":61, "2023-12":44,
-  "2024-01":45, "2024-02":35, "2024-03":60, "2024-04":60, "2024-05":75, "2024-06":58, "2024-07":64, "2024-08":81, "2024-09":66,
+  "2021-03":6, "2021-04":23, "2021-05":15, "2021-06":23, "2021-07":23, "2021-08":39, "2021-09":33, "2021-10":33, "2021-11":31, "2021-12":21,
+  "2022-01":12, "2022-02":9, "2022-03":33, "2022-04":31, "2022-05":38, "2022-06":30, "2022-07":30, "2022-08":43, "2022-09":35, "2022-10":37, "2022-11":34, "2022-12":31,
+  "2023-01":19, "2023-02":13, "2023-03":25, "2023-04":36, "2023-05":54, "2023-06":46, "2023-07":35, "2023-08":40, "2023-09":46, "2023-10":48, "2023-11":62, "2023-12":44,
+  "2024-01":45, "2024-02":36, "2024-03":62, "2024-04":62, "2024-05":78, "2024-06":61, "2024-07":67, "2024-08":83, "2024-09":68,
 };
 const MIKE_HIST_CUST = {
   "2021-03":2, "2021-04":13, "2021-05":9, "2021-06":12, "2021-07":15, "2021-08":20, "2021-09":17, "2021-10":18, "2021-11":17, "2021-12":16,
@@ -313,6 +314,22 @@ const MIKE_LIFETIME_CUST = 181;
 const MIKE_HIST_CUSTOMERS = [{"n":"Cerise Coulson","s":"Churned","j":19,"r":2930,"f":"2022-08-30","l":"2023-05-11"},{"n":"Paul Burley","s":"Churned","j":14,"r":2285,"f":"2021-04-13","l":"2022-05-13"},{"n":"Debbie Millward","s":"Churned","j":9,"r":1900,"f":"2021-06-15","l":"2021-12-16"},{"n":"Susan o'connor","s":"Churned","j":19,"r":1430,"f":"2021-05-06","l":"2023-05-28"},{"n":"Sheila Walsh","s":"Repeat","j":4,"r":1350,"f":"2023-09-12","l":"2024-01-24"},{"n":"Carol","s":"Repeat","j":3,"r":1295,"f":"2023-06-23","l":"2023-10-01"},{"n":"Nicole Tobias","s":"Churned","j":27,"r":1220,"f":"2021-07-14","l":"2023-04-22"},{"n":"Matthew Parish","s":"Repeat","j":4,"r":1176,"f":"2021-06-22","l":"2022-06-05"},{"n":"Tabitha Newman","s":"One-Off","j":1,"r":1170,"f":"2023-05-05","l":"2023-05-05"},{"n":"Megan Bennett","s":"Repeat","j":3,"r":1006,"f":"2023-05-27","l":"2024-06-11"},{"n":"Catherine Carmichael","s":"Repeat","j":3,"r":1004,"f":"2021-09-14","l":"2022-01-18"},{"n":"Stuart","s":"Repeat","j":2,"r":925,"f":"2023-03-09","l":"2023-04-11"},{"n":"Samantha","s":"Repeat","j":2,"r":860,"f":"2021-04-18","l":"2021-04-18"},{"n":"Paul Holyhead","s":"Repeat","j":2,"r":820,"f":"2023-02-14","l":"2023-03-01"},{"n":"Mike Wheatley","s":"Churned","j":7,"r":800,"f":"2021-07-23","l":"2021-12-10"},{"n":"Carly Hodkinson","s":"One-Off","j":1,"r":720,"f":"2023-12-10","l":"2023-12-10"},{"n":"Andy Coveney","s":"Repeat","j":3,"r":700,"f":"2021-04-04","l":"2021-04-15"},{"n":"Rockstead","s":"Churned","j":18,"r":671,"f":"2021-08-05","l":"2023-12-05"},{"n":"Carmen Woodman","s":"Churned","j":11,"r":660,"f":"2021-03-05","l":"2022-05-18"},{"n":"Melanie","s":"One-Off","j":1,"r":600,"f":"2021-04-05","l":"2021-04-05"},{"n":"Jim & Sarah","s":"Churned","j":7,"r":585,"f":"2021-07-25","l":"2023-09-09"},{"n":"James Hann","s":"One-Off","j":1,"r":500,"f":"2023-03-27","l":"2023-03-27"},{"n":"Nick Stafford","s":"One-Off","j":1,"r":500,"f":"2023-04-18","l":"2023-04-18"},{"n":"Chris Brent","s":"One-Off","j":1,"r":480,"f":"2023-10-01","l":"2023-10-01"},{"n":"Don Nutt","s":"One-Off","j":1,"r":460,"f":"2023-12-04","l":"2023-12-04"},{"n":"Phil Mcghee","s":"Repeat","j":2,"r":450,"f":"2021-06-23","l":"2021-07-14"},{"n":"Danielle McArdle","s":"Repeat","j":2,"r":450,"f":"2023-04-23","l":"2024-06-24"},{"n":"Doreen Cable","s":"One-Off","j":1,"r":440,"f":"2021-04-28","l":"2021-04-28"},{"n":"Safe And Dry Limited","s":"One-Off","j":1,"r":425,"f":"2023-12-18","l":"2023-12-18"},{"n":"Brian Traves","s":"Repeat","j":2,"r":420,"f":"2021-04-18","l":"2021-04-18"},{"n":"Marian","s":"Repeat","j":2,"r":420,"f":"2024-05-22","l":"2024-09-09"},{"n":"Tine R. Nyland","s":"One-Off","j":1,"r":397,"f":"2021-12-01","l":"2021-12-01"},{"n":"Micaela Sternowski","s":"One-Off","j":1,"r":380,"f":"2023-12-23","l":"2023-12-23"},{"n":"Jon Cotton","s":"Repeat","j":2,"r":338,"f":"2021-07-06","l":"2021-08-08"},{"n":"Andrea (Pinocchios restaurant)","s":"Repeat","j":3,"r":330,"f":"2022-03-28","l":"2023-04-07"},{"n":"Rosie Noden","s":"One-Off","j":1,"r":320,"f":"2021-04-17","l":"2021-04-17"},{"n":"Anita","s":"One-Off","j":1,"r":300,"f":"2022-03-29","l":"2022-03-29"},{"n":"Susan & Diego","s":"Churned","j":5,"r":300,"f":"2022-04-15","l":"2022-06-28"},{"n":"Steve","s":"One-Off","j":1,"r":300,"f":"2022-09-28","l":"2022-09-28"},{"n":"Care Dynamics","s":"One-Off","j":1,"r":300,"f":"2023-07-06","l":"2023-07-06"},{"n":"Louise Allen","s":"One-Off","j":1,"r":298,"f":"2023-07-21","l":"2023-07-21"},{"n":"Kathleen Flynn","s":"Repeat","j":3,"r":285,"f":"2021-06-18","l":"2021-08-19"},{"n":"Kelly Aaron","s":"Churned","j":7,"r":285,"f":"2022-07-06","l":"2023-04-22"},{"n":"Angela","s":"Repeat","j":2,"r":280,"f":"2021-08-19","l":"2021-10-14"},{"n":"Sarah Singleton","s":"One-Off","j":1,"r":280,"f":"2022-05-04","l":"2022-05-04"},{"n":"Jamie Preston","s":"Churned","j":6,"r":280,"f":"2022-04-05","l":"2023-09-28"},{"n":"Sheila Davies","s":"Repeat","j":2,"r":270,"f":"2023-05-03","l":"2023-07-28"},{"n":"Alyse Betteridge","s":"One-Off","j":1,"r":245,"f":"2023-02-15","l":"2023-02-15"},{"n":"Ross","s":"One-Off","j":1,"r":230,"f":"2023-10-08","l":"2023-10-08"},{"n":"orla","s":"Repeat","j":2,"r":230,"f":"2023-04-05","l":"2023-10-16"},{"n":"Vicky O'Gorman","s":"One-Off","j":1,"r":225,"f":"2022-12-23","l":"2022-12-23"},{"n":"Lookspace Limited","s":"One-Off","j":1,"r":225,"f":"2023-11-16","l":"2023-11-16"},{"n":"John Maxwell","s":"One-Off","j":1,"r":225,"f":"2023-05-03","l":"2023-05-03"},{"n":"Sheila Hussein","s":"One-Off","j":1,"r":220,"f":"2021-05-05","l":"2021-05-05"},{"n":"John Hutchings","s":"One-Off","j":1,"r":220,"f":"2024-08-15","l":"2024-08-15"},{"n":"Nick Truss","s":"One-Off","j":1,"r":220,"f":"2024-09-09","l":"2024-09-09"},{"n":"Jason Ankers","s":"One-Off","j":1,"r":210,"f":"2024-08-15","l":"2024-08-15"},{"n":"Luke Anderson","s":"One-Off","j":1,"r":200,"f":"2021-04-12","l":"2021-04-12"},{"n":"Louise Pack","s":"One-Off","j":1,"r":200,"f":"2021-10-28","l":"2021-10-28"},{"n":"Trish & Jamie","s":"One-Off","j":1,"r":200,"f":"2023-08-16","l":"2023-08-16"},{"n":"Melanie (1)","s":"One-Off","j":1,"r":200,"f":"2023-11-16","l":"2023-11-16"},{"n":"Ufouma Adasen","s":"Churned","j":5,"r":190,"f":"2023-04-20","l":"2024-05-28"},{"n":"Hana Laws","s":"One-Off","j":1,"r":180,"f":"2022-11-27","l":"2022-11-27"},{"n":"Sam Jones","s":"One-Off","j":1,"r":180,"f":"2024-02-10","l":"2024-02-10"},{"n":"Bikki","s":"One-Off","j":1,"r":175,"f":"2023-11-20","l":"2023-11-20"},{"n":"Dean","s":"One-Off","j":1,"r":170,"f":"2021-08-07","l":"2021-08-07"},{"n":"Anna Jones","s":"One-Off","j":1,"r":165,"f":"2021-09-29","l":"2021-09-29"},{"n":"Gary Le-Vesconte","s":"One-Off","j":1,"r":160,"f":"2021-08-13","l":"2021-08-13"},{"n":"Christine Stiling","s":"One-Off","j":1,"r":160,"f":"2023-02-01","l":"2023-02-01"},{"n":"David Ives","s":"One-Off","j":1,"r":160,"f":"2024-02-07","l":"2024-02-07"},{"n":"James Dean","s":"One-Off","j":1,"r":150,"f":"2021-05-07","l":"2021-05-07"},{"n":"Paul Johnson-Barnett","s":"One-Off","j":1,"r":150,"f":"2023-05-28","l":"2023-05-28"},{"n":"Liz Murrow","s":"One-Off","j":1,"r":150,"f":"2023-09-18","l":"2023-09-18"},{"n":"Zena","s":"Repeat","j":2,"r":145,"f":"2023-06-18","l":"2023-09-11"},{"n":"Claire Wheeler","s":"One-Off","j":1,"r":145,"f":"2023-07-28","l":"2023-07-28"},{"n":"Marisa","s":"One-Off","j":1,"r":145,"f":"2023-08-02","l":"2023-08-02"},{"n":"Richard Duff","s":"One-Off","j":1,"r":145,"f":"2023-08-15","l":"2023-08-15"},{"n":"Britannia Parking","s":"One-Off","j":1,"r":145,"f":"2024-09-11","l":"2024-09-11"},{"n":"Lucy Hobson","s":"One-Off","j":1,"r":145,"f":"2023-05-27","l":"2023-05-27"},{"n":"Lisa Smith","s":"One-Off","j":1,"r":140,"f":"2021-11-03","l":"2021-11-03"},{"n":"Malika","s":"Repeat","j":3,"r":140,"f":"2022-12-01","l":"2022-12-28"},{"n":"Alexander","s":"Repeat","j":2,"r":135,"f":"2021-11-24","l":"2023-05-03"},{"n":"Claire Vine","s":"One-Off","j":1,"r":125,"f":"2023-03-31","l":"2023-03-31"},{"n":"Charlotte","s":"One-Off","j":1,"r":120,"f":"2023-08-03","l":"2023-08-03"},{"n":"Gemma Miller","s":"One-Off","j":1,"r":120,"f":"2023-08-31","l":"2023-08-31"},{"n":"Steve Blowers","s":"Repeat","j":2,"r":120,"f":"2023-04-18","l":"2023-09-14"},{"n":"Veronique & Frederick Douillet","s":"One-Off","j":1,"r":120,"f":"2024-02-27","l":"2024-02-27"},{"n":"Marc Levesconte","s":"Repeat","j":4,"r":110,"f":"2021-07-08","l":"2021-10-28"},{"n":"Richard","s":"One-Off","j":1,"r":100,"f":"2021-04-05","l":"2021-04-05"},{"n":"Tricia Tanner","s":"One-Off","j":1,"r":100,"f":"2022-02-23","l":"2022-02-23"},{"n":"Juno Infinity UK Ltd","s":"One-Off","j":1,"r":100,"f":"2022-07-27","l":"2022-07-27"},{"n":"Phillip & Frances","s":"One-Off","j":1,"r":100,"f":"2023-07-28","l":"2023-07-28"},{"n":"Paul Barker","s":"One-Off","j":1,"r":97,"f":"2024-03-26","l":"2024-03-26"},{"n":"John Graham","s":"Repeat","j":2,"r":90,"f":"2022-12-13","l":"2023-08-30"},{"n":"Keryn Bowen","s":"Repeat","j":2,"r":90,"f":"2023-05-08","l":"2023-07-05"},{"n":"Mark Fraser","s":"One-Off","j":1,"r":85,"f":"2024-09-11","l":"2024-09-11"},{"n":"Steve (1)","s":"One-Off","j":1,"r":80,"f":"2023-01-13","l":"2023-01-13"},{"n":"Julie Dudden","s":"One-Off","j":1,"r":80,"f":"2023-01-18","l":"2023-01-18"},{"n":"Charlie","s":"One-Off","j":1,"r":75,"f":"2023-07-06","l":"2023-07-06"},{"n":"Christine Spencer-Smith","s":"Repeat","j":2,"r":70,"f":"2023-06-18","l":"2023-06-20"},{"n":"Maria Morley","s":"One-Off","j":1,"r":70,"f":"2024-05-28","l":"2024-05-28"},{"n":"Michelle","s":"One-Off","j":1,"r":65,"f":"2021-04-09","l":"2021-04-09"},{"n":"Grounded Community","s":"One-Off","j":1,"r":65,"f":"2023-11-21","l":"2023-11-21"},{"n":"Juliette Grant","s":"One-Off","j":1,"r":60,"f":"2023-06-05","l":"2023-06-05"},{"n":"Sharon Wright","s":"One-Off","j":1,"r":50,"f":"2024-03-28","l":"2024-03-28"},{"n":"Peter / 5 alton rd","s":"One-Off","j":1,"r":50,"f":"2024-09-04","l":"2024-09-04"},{"n":"Greyfort Group","s":"One-Off","j":1,"r":45,"f":"2023-05-11","l":"2023-05-11"},{"n":"Jen Walke-Myles","s":"One-Off","j":1,"r":45,"f":"2023-07-04","l":"2023-07-04"},{"n":"Pavan Dhillon","s":"One-Off","j":1,"r":40,"f":"2023-06-05","l":"2023-06-05"},{"n":"Steven Lam","s":"One-Off","j":1,"r":30,"f":"2024-08-08","l":"2024-08-08"},{"n":"Mrs Pollard","s":"One-Off","j":1,"r":25,"f":"2023-04-04","l":"2023-04-04"}];
 // pre-Oct-2024 invoiced revenue/jobs for CONTINUING customers (still active in Zenbooker), added to live totals.
 const MIKE_CUST_PRIOR = {"Anne Bronson":{"pr":990,"pj":3,"f":"2024-02-01"},"Matt Devereux":{"pr":1080,"pj":3,"f":"2024-05-28"},"Leila De La Mare":{"pr":6095,"pj":71,"f":"2023-05-07"},"Peter Hansford":{"pr":4570,"pj":56,"f":"2023-09-08"},"David Godfery":{"pr":4548,"pj":49,"f":"2023-11-01"},"Kings Grange":{"pr":3292,"pj":25,"f":"2023-03-05"},"Long Close":{"pr":9472,"pj":112,"f":"2021-03-27"},"Rich":{"pr":4430,"pj":34,"f":"2023-06-15"},"JJ":{"pr":900,"pj":6,"f":"2024-07-11"},"Chester House":{"pr":4185,"pj":29,"f":"2022-01-25"},"Helen & Duncan Stone":{"pr":4820,"pj":60,"f":"2021-11-25"},"John Holden":{"pr":690,"pj":9,"f":"2024-06-10"},"Yasen":{"pr":4081,"pj":37,"f":"2023-01-21"},"Nigel Bennett":{"pr":4659,"pj":48,"f":"2021-07-20"},"Nick Sanders":{"pr":1560,"pj":8,"f":"2023-09-26"},"Kelly & Jon":{"pr":5107,"pj":64,"f":"2021-12-24"},"Linda Wheal":{"pr":3411,"pj":54,"f":"2021-07-27"},"Chris Hopton":{"pr":690,"pj":17,"f":"2024-02-07"},"Derek":{"pr":1685,"pj":41,"f":"2022-09-13"},"Angus Clarke-Jack":{"pr":855,"pj":12,"f":"2023-11-22"},"Zoe Reay":{"pr":2152,"pj":47,"f":"2021-08-11"},"Peter":{"pr":428,"pj":14,"f":"2022-03-08"},"James Roberts":{"pr":1168,"pj":10,"f":"2023-04-18"},"Anne Dixon":{"pr":165,"pj":2,"f":"2023-11-20"},"Sea Together Ltd":{"pr":810,"pj":5,"f":"2023-01-17"},"Natalie":{"pr":80,"pj":1,"f":"2021-08-28"},"Trevor Dyson":{"pr":325,"pj":5,"f":"2021-04-11"},"Don Driver":{"pr":150,"pj":1,"f":"2024-06-11"},"Liz Williams":{"pr":2708,"pj":53,"f":"2021-06-09"},"Nicki Hughes":{"pr":20,"pj":1,"f":"2021-05-06"},"Paul Attfield":{"pr":390,"pj":5,"f":"2023-06-14"},"Paul Duncombe":{"pr":250,"pj":2,"f":"2022-07-01"},"Tyna Gardener":{"pr":510,"pj":5,"f":"2022-04-24"},"Jo Walkley":{"pr":405,"pj":16,"f":"2023-09-14"},"Sherwood Lodge":{"pr":3816,"pj":30,"f":"2022-03-22"},"Richard J Larner":{"pr":55,"pj":1,"f":"2024-09-11"}};
+// historical service-mix breakdown (pre-Oct-2024, Mike), categorised from invoice descriptions
+const MIKE_HIST_SERVICES = {"Pressure Washing":{"j":14,"r":2570},"Regular Garden Maintenance":{"j":1449,"r":104876},"Garden Tidy-up Session":{"j":102,"r":22559},"Planting & Landscaping":{"j":70,"r":8331},"Garden Waste Disposal":{"j":119,"r":10892},"Grass Cutting & Lawn Edging":{"j":59,"r":4247},"Hedge Cutting Service":{"j":20,"r":3665}};
+const MIKE_CUST_FIX = {  // churned-list corrections: customers Mike passed to Adam, plus a rename and a duplicate
+  "Louise Chard":"adam","Louise chard":"adam","Sam":"adam","David Selwood":"adam",
+  "Nicki Hughes":"adam","Lyn":"adam","Lynn":"adam","Molly Manning":"adam",
+  "Don Driver":"adam","James Roberts":"adam","Mrs Valerie Brewer":"adam","Ron Haynes":"adam",
+  "Liz Williams":"adam","Jo Walkley":"adam","Trevor Dyson":"adam","Mrs Davage":"adam",
+  "James":"repeat",                       // renamed (now Juno Developments / Charles & Saffron), still occasional
+  "Kelly Aaron":"merge:Kelly & Jon"       // duplicate of Kelly & Jon
+};
+// Mike's former customers passed to Adam who have no other Mike row to relabel (invoiced history extends past Oct 2024).
+const MIKE_PASSED_EXTRA = [
+  {"n":"David Weir","j":29,"r":1850,"f":"2023-07-13","l":"2025-03-07"},
+  {"n":"Virginia French","j":48,"r":3422,"f":"2021-05-13","l":"2024-11-28"},
+  {"n":"Sam Allen","j":74,"r":2560,"f":"2021-04-01","l":"2024-09-15"}
+];
 function monthKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 function monthOverlaps(k,b){ if(!b.from||!b.to) return true; const p=k.split('-'); const y=+p[0],m=+p[1]; const s=new Date(y,m-1,1), e=new Date(y,m,0,23,59,59); return e>=b.from && s<=b.to; }
 // Per-franchisee Zenbooker monthly revenue within bounds b (all franchisees, ignores the view toggle).
@@ -575,7 +592,33 @@ function processData() {
       allCustomers.push({ n: hc.n, j: hc.j, r: hc.r, a: av, visit: av, f: 'Mike', s: hc.s,
         freq: '', first: cf, last: cl, daysSince: daysBetween(cl, now), svc: 'Garden maintenance', hist: true });
     });
+    MIKE_PASSED_EXTRA.forEach(hc => {
+      const cf = new Date(hc.f), cl = new Date(hc.l);
+      if (bnd.from && cl < bnd.from) return;
+      if (bnd.to && cf > bnd.to) return;
+      const av = hc.j ? Math.round(hc.r/hc.j) : 0;
+      allCustomers.push({ n: hc.n, j: hc.j, r: hc.r, a: av, visit: av, f: 'Mike', s: 'Passed to Adam',
+        freq: '', first: cf, last: cl, daysSince: daysBetween(cl, now), svc: 'Garden maintenance', hist: true });
+    });
     allCustomers.sort((x,y) => y.r - x.r);
+  }
+  // Churned-list corrections (Mike's view): transfers to Adam, a rename, and a duplicate merge.
+  if (franchiseeView !== 'Adam') {
+    const byNorm = {}; allCustomers.forEach(c => { byNorm[norm(c.n)] = c; });
+    const drop = new Set();
+    allCustomers.forEach(c => {
+      if (c.f !== 'Mike') return;
+      const fix = MIKE_CUST_FIX[c.n] || MIKE_CUST_FIX[norm(c.n)];
+      if (!fix) return;
+      if (fix === 'adam') c.s = 'Passed to Adam';
+      else if (fix === 'repeat') c.s = 'Repeat';
+      else if (fix.startsWith('merge:')) {
+        const tgt = byNorm[norm(fix.slice(6))];
+        if (tgt) { tgt.r = Math.round((tgt.r + c.r) * 100) / 100; tgt.j += c.j; tgt.a = tgt.j ? Math.round(tgt.r/tgt.j) : tgt.a; }
+        drop.add(c);
+      }
+    });
+    if (drop.size) allCustomers = allCustomers.filter(c => !drop.has(c));
   }
   churnedList = allCustomers.filter(c => c.s === 'Churned').sort((a,b) => b.r - a.r);
 
@@ -598,6 +641,16 @@ function processData() {
     if (j._amount > 0) { svcMap[s].priced++; svcMap[s].pricedSum += j._amount; }
   });
   serviceData = Object.values(svcMap).sort((a,b) => b.j - a.j).map(s => ({ n: s.n, j: s.j, r: Math.round(s.r), a: s.priced ? Math.round(s.pricedSum/s.priced) : 0 }));
+  // Fold Mike's pre-Oct-2024 invoiced revenue into the service mix (categorised from descriptions), so the mix reflects full history.
+  if (franchiseeView !== 'Adam' && monthlyData.some(m => m.m < '2024-10')) {
+    const sd = {}; serviceData.forEach(s => sd[s.n] = s);
+    Object.keys(MIKE_HIST_SERVICES).forEach(name => {
+      const h = MIKE_HIST_SERVICES[name];
+      if (sd[name]) { sd[name].j += h.j; sd[name].r += h.r; }
+      else sd[name] = { n: name, j: h.j, r: h.r, a: h.j ? Math.round(h.r/h.j) : 0 };
+    });
+    serviceData = Object.values(sd).sort((a,b) => b.r - a.r);
+  }
 
   const zeroMap = {};
   jobs.forEach(j => {
@@ -713,7 +766,7 @@ function updateCallStatus(key, status) {
 
 // ---------- helpers ----------
 function badge(t) {
-  const m = {ACTIVE:'active',Churned:'churned',Mike:'mike',Adam:'adam','One-Off':'oneoff',Repeat:'repeat',Recurring:'recurring',
+  const m = {ACTIVE:'active',Churned:'churned',Mike:'mike',Adam:'adam','One-Off':'oneoff',Repeat:'repeat',Recurring:'recurring','Passed to Adam':'passed',
     NEW:'new',CONTACTED:'contacted',QUOTED:'quoted',BOOKED:'booked',LOST:'lost',SPAM:'spam'};
   return '<span class="badge b-'+(m[t]||'na')+'">'+t+'</span>';
 }
@@ -853,18 +906,20 @@ function renderContent() {
     const mpZenRev = Math.round(mp.reduce((s,j)=>s+j._amount,0)), apZenRev = Math.round(ap.reduce((s,j)=>s+j._amount,0));
     const mpRev = revTotalFor(dfBounds(),'Mike'), apRev = revTotalFor(dfBounds(),'Adam'); // Mike override-aware; Adam = Zenbooker
     const mpC = new Set(mp.map(j=>j['Customer Name'])).size, apC = new Set(ap.map(j=>j['Customer Name'])).size;
-    const mpHistCust = MIKE_HIST_CUSTOMERS.filter(hc => { const b=dfBounds(); const cf=new Date(hc.f),cl=new Date(hc.l); return (!b.from||cl>=b.from)&&(!b.to||cf<=b.to); }).length;
+    const mpHistCust = MIKE_HIST_CUSTOMERS.concat(MIKE_PASSED_EXTRA).filter(hc => { const b=dfBounds(); const cf=new Date(hc.f),cl=new Date(hc.l); return (!b.from||cl>=b.from)&&(!b.to||cf<=b.to); }).length;
     const mpCAll = mpC + mpHistCust;
     const mpHistJobs = Object.keys(MIKE_HIST_JOBS).filter(k=>monthOverlaps(k,dfBounds())).reduce((s,k)=>s+(MIKE_HIST_JOBS[k]||0),0); // Mike invoiced jobs pre-Oct-2024, in period
     const mpJobsAll = mp.length + mpHistJobs; // Mike: Zenbooker (Oct 2024+) + invoiced (pre-Oct 2024)
     const mpAvg = mpJobsAll?Math.round(mpRev/mpJobsAll):0, apAvg = ap.length?Math.round(apZenRev/ap.length):0; // Mike avg over full history; Adam from Zenbooker
     const pairTotal = mpRev + apRev;
+    const segPassed = allCustomers.filter(c=>c.s==='Passed to Adam').length;
     const mix = [
       { label:'Recurring', n:recCusts.length, seg:'Recurring', color:'var(--green6)' },
       { label:'Repeat', n:segRepeat, seg:'Repeat', color:'var(--blue)' },
       { label:'One-off', n:segOneOff, seg:'One-Off', color:'var(--accent)' },
       { label:'Churned', n:aChurn, seg:'Churned', color:'var(--red)' }
     ];
+    if (segPassed) mix.push({ label:'Passed to Adam', n:segPassed, seg:'Passed to Adam', color:'#3949AB' });
     el.innerHTML = `
     <div class="attn">
       ${attnCards.map(c=>'<div class="attn-card '+(c.warn?'':'ok')+'" onclick="setTab(\''+c.tab+'\')"><div class="attn-n" style="color:'+(c.warn?'var(--accent)':'var(--green4)')+'">'+c.n+'</div><div><div class="attn-t">'+c.t+'</div><div class="attn-d">'+c.d+'</div></div></div>').join('')}
@@ -992,7 +1047,7 @@ function renderContent() {
   }
 
   else if (activeTab==='Customers') {
-    const segs = ["All","Recurring","Repeat","One-Off","Churned"];
+    const segs = ["All","Recurring","Repeat","One-Off","Churned","Passed to Adam"];
     let filtered = allCustomers;
     if (custSegFilter !== 'All') filtered = filtered.filter(c => c.s === custSegFilter);
     if (custSearch) filtered = filtered.filter(c => c.n.toLowerCase().includes(custSearch.toLowerCase()));
