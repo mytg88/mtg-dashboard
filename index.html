@@ -602,19 +602,20 @@ function processData() {
     });
     allCustomers.sort((x,y) => y.r - x.r);
   }
-  // Churned-list corrections (Mike's view): transfers to Adam, a rename, and a duplicate merge.
+  // Churned-list corrections (Mike + All views): transfers to Adam, a rename, and a duplicate merge.
+  // Match by name regardless of territory, because a customer Adam now serves is tagged to him by their latest job.
   if (franchiseeView !== 'Adam') {
-    const byNorm = {}; allCustomers.forEach(c => { byNorm[norm(c.n)] = c; });
+    const fixNorm = {}; Object.keys(MIKE_CUST_FIX).forEach(k => fixNorm[norm(k)] = MIKE_CUST_FIX[k]);
+    const byNorm = {}; allCustomers.forEach(c => { if (!byNorm[norm(c.n)]) byNorm[norm(c.n)] = c; });
     const drop = new Set();
     allCustomers.forEach(c => {
-      if (c.f !== 'Mike') return;
-      const fix = MIKE_CUST_FIX[c.n] || MIKE_CUST_FIX[norm(c.n)];
+      const fix = fixNorm[norm(c.n)];
       if (!fix) return;
       if (fix === 'adam') c.s = 'Passed to Adam';
       else if (fix === 'repeat') c.s = 'Repeat';
       else if (fix.startsWith('merge:')) {
         const tgt = byNorm[norm(fix.slice(6))];
-        if (tgt) { tgt.r = Math.round((tgt.r + c.r) * 100) / 100; tgt.j += c.j; tgt.a = tgt.j ? Math.round(tgt.r/tgt.j) : tgt.a; }
+        if (tgt && tgt !== c) { tgt.r = Math.round((tgt.r + c.r) * 100) / 100; tgt.j += c.j; tgt.a = tgt.j ? Math.round(tgt.r/tgt.j) : tgt.a; }
         drop.add(c);
       }
     });
