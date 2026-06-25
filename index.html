@@ -582,24 +582,33 @@ function processData() {
     }
   }
   // Fold in Mike's pre-Oct-2024 invoice customers (gone before Zenbooker began), segmented by the same rules.
+  // If the same person is already live (e.g. Adam serves them now), merge into that row rather than adding a duplicate.
   if (franchiseeView !== 'Adam') {
     const bnd = dfBounds();
-    MIKE_HIST_CUSTOMERS.forEach(hc => {
+    const byNorm = {}; allCustomers.forEach(c => { if (!byNorm[norm(c.n)]) byNorm[norm(c.n)] = c; });
+    const inPeriod = (cf, cl) => !((bnd.from && cl < bnd.from) || (bnd.to && cf > bnd.to));
+    const addOrMerge = (hc, passed) => {
       const cf = new Date(hc.f), cl = new Date(hc.l);
-      if (bnd.from && cl < bnd.from) return;   // gone before the period started
-      if (bnd.to && cf > bnd.to) return;       // first seen after the period ended
+      if (!inPeriod(cf, cl)) return;
+      const ex = byNorm[norm(hc.n)];
+      if (ex) {   // already present from the live feed: combine the relationship into one row
+        ex.r = Math.round((ex.r + hc.r) * 100) / 100;
+        ex.j += hc.j;
+        ex.a = ex.j ? Math.round(ex.r / ex.j) : ex.a;
+        ex.visit = ex.a;
+        if (!ex.first || cf < ex.first) ex.first = cf;
+        if (!ex.last || cl > ex.last) ex.last = cl;
+        if (passed) ex.s = 'Passed to Adam';
+        return;
+      }
       const av = hc.j ? Math.round(hc.r/hc.j) : 0;
-      allCustomers.push({ n: hc.n, j: hc.j, r: hc.r, a: av, visit: av, f: 'Mike', s: hc.s,
-        freq: '', first: cf, last: cl, daysSince: daysBetween(cl, now), svc: 'Garden maintenance', hist: true });
-    });
-    MIKE_PASSED_EXTRA.forEach(hc => {
-      const cf = new Date(hc.f), cl = new Date(hc.l);
-      if (bnd.from && cl < bnd.from) return;
-      if (bnd.to && cf > bnd.to) return;
-      const av = hc.j ? Math.round(hc.r/hc.j) : 0;
-      allCustomers.push({ n: hc.n, j: hc.j, r: hc.r, a: av, visit: av, f: 'Mike', s: 'Passed to Adam',
-        freq: '', first: cf, last: cl, daysSince: daysBetween(cl, now), svc: 'Garden maintenance', hist: true });
-    });
+      const row = { n: hc.n, j: hc.j, r: hc.r, a: av, visit: av, f: 'Mike', s: passed ? 'Passed to Adam' : hc.s,
+        freq: '', first: cf, last: cl, daysSince: daysBetween(cl, now), svc: 'Garden maintenance', hist: true };
+      allCustomers.push(row);
+      byNorm[norm(hc.n)] = row;
+    };
+    MIKE_HIST_CUSTOMERS.forEach(hc => addOrMerge(hc, false));
+    MIKE_PASSED_EXTRA.forEach(hc => addOrMerge(hc, true));
     allCustomers.sort((x,y) => y.r - x.r);
   }
   // Churned-list corrections (Mike + All views): transfers to Adam, a rename, and a duplicate merge.
