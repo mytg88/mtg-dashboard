@@ -931,15 +931,18 @@ function renderContent() {
     const mpZenRev = Math.round(mp.reduce((s,j)=>s+j._amount,0)), apZenRev = Math.round(ap.reduce((s,j)=>s+j._amount,0));
     const mpRev = revTotalFor(dfBounds(),'Mike'), apRev = revTotalFor(dfBounds(),'Adam'); // Mike override-aware; Adam = Zenbooker
     // Customer counts mirror the Customer mix exactly: alias the spellings, collapse merged duplicates, add Mike's historical/passed names.
-const _mergeSrc = Object.keys(MIKE_CUST_FIX).filter(k => String(MIKE_CUST_FIX[k]).startsWith('merge:')).map(k => norm(k));
-const _ALIAS = { 'Lyn':'Lynn', 'Sam':'Sam Allen' };   // same map as the data build, redeclared for this scope
-const _aliasNorm = n => norm(_ALIAS[n] || n);
-const _histB = dfBounds();
-const mikeSet = new Set(mp.map(j => _aliasNorm(j['Customer Name'])));
-_mergeSrc.forEach(s => mikeSet.delete(s));   // e.g. Kelly Aaron folds into Kelly & Jon, as in the mix
-MIKE_HIST_CUSTOMERS.concat(MIKE_PASSED_EXTRA).forEach(hc => { const cf=new Date(hc.f), cl=new Date(hc.l); if ((!_histB.from||cl>=_histB.from)&&(!_histB.to||cf<=_histB.to)) mikeSet.add(norm(hc.n)); });
-const mpCAll = mikeSet.size;
-const apC = new Set(ap.map(j => _aliasNorm(j['Customer Name']))).size;
+    // norm() and NAME_ALIAS live in processData's scope, so this block keeps its own local copies.
+    const _norm = n => String(n || '').trim().toLowerCase();
+    const _ALIAS = { 'Lyn':'Lynn', 'Sam':'Sam Allen' };
+    const _aliasNorm = n => _norm(_ALIAS[n] || n);
+    const _mergeSrc = Object.keys(MIKE_CUST_FIX).filter(k => String(MIKE_CUST_FIX[k]).startsWith('merge:')).map(k => _norm(k));
+    const _histB = dfBounds();
+    const mikeSet = new Set(mp.map(j => _aliasNorm(j['Customer Name'])));
+    _mergeSrc.forEach(s => mikeSet.delete(s));   // e.g. Kelly Aaron folds into Kelly & Jon, as in the mix
+    MIKE_HIST_CUSTOMERS.concat(MIKE_PASSED_EXTRA).forEach(hc => { const cf=new Date(hc.f), cl=new Date(hc.l); if ((!_histB.from||cl>=_histB.from)&&(!_histB.to||cf<=_histB.to)) mikeSet.add(_norm(hc.n)); });
+    const mpCAll = mikeSet.size;
+    const apC = new Set(ap.map(j => _aliasNorm(j['Customer Name']))).size;
+    const mpHistJobs = Object.keys(MIKE_HIST_JOBS).filter(k=>monthOverlaps(k,dfBounds())).reduce((s,k)=>s+(MIKE_HIST_JOBS[k]||0),0); // Mike invoiced jobs pre-Oct-2024, in period
     const mpJobsAll = mp.length + mpHistJobs; // Mike: Zenbooker (Oct 2024+) + invoiced (pre-Oct 2024)
     const mpAvg = mpJobsAll?Math.round(mpRev/mpJobsAll):0, apAvg = ap.length?Math.round(apZenRev/ap.length):0; // Mike avg over full history; Adam from Zenbooker
     const pairTotal = mpRev + apRev;
