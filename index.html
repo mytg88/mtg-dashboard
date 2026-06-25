@@ -280,70 +280,28 @@ function matchView(f) { return franchiseeView === 'All' || f === franchiseeView;
 // QuickBooks connects. Annual totals: 2021 £24,903 · 2022 £28,999 · 2023 £48,636 ·
 // 2024 £71,886 · 2025 £66,525. Counts (jobs/customers/services) are never touched.
 const HIST_CUTOFF = "2025-12";
+// invoiced history from Michael CSV (dupe IV0807/IV0919 removed). Revenue 2021-03..2025-12;
+// jobs/customers only pre-Oct-2024 (Zenbooker covers Oct-2024 onward).
 const MIKE_HIST = {
-  "2021-03": 2407,
-  "2021-04": 2611,
-  "2021-05": 2701,
-  "2021-06": 2389,
-  "2021-07": 2477,
-  "2021-08": 2536,
-  "2021-09": 2807,
-  "2021-10": 2850,
-  "2021-11": 2269,
-  "2021-12": 1856,
-
-  "2022-01": 2400,
-  "2022-02": 2850,
-  "2022-03": 2295,
-  "2022-04": 2490,
-  "2022-05": 2576,
-  "2022-06": 2278,
-  "2022-07": 2362,
-  "2022-08": 2418,
-  "2022-09": 2677,
-  "2022-10": 2719,
-  "2022-11": 2164,
-  "2022-12": 1770,
-
-  "2023-01": 4025,
-  "2023-02": 4781,
-  "2023-03": 3849,
-  "2023-04": 4175,
-  "2023-05": 4320,
-  "2023-06": 3821,
-  "2023-07": 3962,
-  "2023-08": 4056,
-  "2023-09": 4490,
-  "2023-10": 4560,
-  "2023-11": 3629,
-  "2023-12": 2968,
-
-  "2024-01": 5949,
-  "2024-02": 7066,
-  "2024-03": 5689,
-  "2024-04": 6171,
-  "2024-05": 6386,
-  "2024-06": 5648,
-  "2024-07": 5856,
-  "2024-08": 5995,
-  "2024-09": 6636,
-  "2024-10": 6739,
-  "2024-11": 5364,
-  "2024-12": 4387,
-
-  "2025-01": 5506,
-  "2025-02": 6538,
-  "2025-03": 5265,
-  "2025-04": 5711,
-  "2025-05": 5910,
-  "2025-06": 5226,
-  "2025-07": 5419,
-  "2025-08": 5548,
-  "2025-09": 6141,
-  "2025-10": 6237,
-  "2025-11": 4964,
-  "2025-12": 4060,
+  "2021-03":770, "2021-04":4635, "2021-05":1990, "2021-06":2690, "2021-07":1698, "2021-08":3181, "2021-09":3176, "2021-10":2689, "2021-11":1906, "2021-12":2167,
+  "2022-01":950, "2022-02":895, "2022-03":3270, "2022-04":1935, "2022-05":3154, "2022-06":2576, "2022-07":2210, "2022-08":3716, "2022-09":2336, "2022-10":2837, "2022-11":3020, "2022-12":2100,
+  "2023-01":1411, "2023-02":975, "2023-03":3178, "2023-04":4686, "2023-05":5893, "2023-06":5138, "2023-07":3292, "2023-08":3594, "2023-09":4446, "2023-10":5110, "2023-11":4491, "2023-12":6421,
+  "2024-01":7161, "2024-02":2150, "2024-03":5919, "2024-04":6602, "2024-05":5035, "2024-06":4540, "2024-07":6900, "2024-08":5724, "2024-09":835, "2024-10":12675, "2024-11":2915, "2024-12":11430,
+  "2025-01":2839, "2025-02":2955, "2025-03":8242, "2025-04":10334, "2025-05":4095, "2025-06":2860, "2025-07":4715, "2025-08":7172, "2025-09":7672, "2025-10":4518, "2025-11":3795, "2025-12":7327,
 };
+const MIKE_HIST_JOBS = {
+  "2021-03":4, "2021-04":21, "2021-05":12, "2021-06":20, "2021-07":18, "2021-08":28, "2021-09":39, "2021-10":34, "2021-11":28, "2021-12":24,
+  "2022-01":11, "2022-02":9, "2022-03":28, "2022-04":23, "2022-05":40, "2022-06":8, "2022-07":32, "2022-08":53, "2022-09":32, "2022-10":44, "2022-11":29, "2022-12":35,
+  "2023-01":17, "2023-02":5, "2023-03":27, "2023-04":33, "2023-05":37, "2023-06":47, "2023-07":31, "2023-08":24, "2023-09":35, "2023-10":57, "2023-11":44, "2023-12":59,
+  "2024-01":64, "2024-02":19, "2024-03":65, "2024-04":53, "2024-05":53, "2024-06":30, "2024-07":75, "2024-08":77, "2024-09":7,
+};
+const MIKE_HIST_CUST = {
+  "2021-03":2, "2021-04":13, "2021-05":9, "2021-06":12, "2021-07":13, "2021-08":17, "2021-09":19, "2021-10":19, "2021-11":17, "2021-12":16,
+  "2022-01":7, "2022-02":8, "2022-03":17, "2022-04":16, "2022-05":23, "2022-06":3, "2022-07":20, "2022-08":21, "2022-09":20, "2022-10":20, "2022-11":17, "2022-12":20,
+  "2023-01":12, "2023-02":4, "2023-03":16, "2023-04":25, "2023-05":23, "2023-06":27, "2023-07":18, "2023-08":16, "2023-09":19, "2023-10":24, "2023-11":23, "2023-12":27,
+  "2024-01":21, "2024-02":12, "2024-03":23, "2024-04":19, "2024-05":19, "2024-06":11, "2024-07":27, "2024-08":30, "2024-09":7,
+};
+const MIKE_LIFETIME_CUST = 181;
 function monthKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 function monthOverlaps(k,b){ if(!b.from||!b.to) return true; const p=k.split('-'); const y=+p[0],m=+p[1]; const s=new Date(y,m-1,1), e=new Date(y,m,0,23,59,59); return e>=b.from && s<=b.to; }
 // Per-franchisee Zenbooker monthly revenue within bounds b (all franchisees, ignores the view toggle).
@@ -386,7 +344,7 @@ function applyHistoricalRevenue(){
       if(k>HIST_CUTOFF) continue;
       if(byKey[k]) continue;
       if(!monthOverlaps(k,b)) continue;
-      monthlyData.push({ m:k, j:null, r:Math.round(MIKE_HIST[k]), c:0 }); // backfill, revenue only
+      monthlyData.push({ m:k, j:(MIKE_HIST_JOBS[k]??null), r:Math.round(MIKE_HIST[k]), c:(MIKE_HIST_CUST[k]||0), hist:true }); // backfill: invoiced revenue + invoiced jobs/customers (pre-Oct-2024)
     }
   }
   monthlyData.sort((a,b2)=>a.m.localeCompare(b2.m));
@@ -830,7 +788,8 @@ document.getElementById('dfApply').addEventListener('click', () => {
 // ---------- render ----------
 function renderContent() {
   const el = document.getElementById('content');
-  const totalJobs = jobs.length;
+  const histJobs = monthlyData.reduce((s,m)=>s+(m.hist&&m.j?m.j:0),0); // invoiced jobs pre-Oct-2024, in current period
+  const totalJobs = jobs.length + histJobs;
   const totalRev = Math.round(monthlyData.reduce((s,m)=>s+m.r,0)); // override-aware: invoiced history + live Zenbooker
   const totalCusts = allCustomers.length;
   const recCusts = allCustomers.filter(c => c.s === 'Recurring').sort((a,b)=>b.r-a.r);
@@ -854,7 +813,9 @@ function renderContent() {
     const mpZenRev = Math.round(mp.reduce((s,j)=>s+j._amount,0)), apZenRev = Math.round(ap.reduce((s,j)=>s+j._amount,0));
     const mpRev = revTotalFor(dfBounds(),'Mike'), apRev = revTotalFor(dfBounds(),'Adam'); // Mike override-aware; Adam = Zenbooker
     const mpC = new Set(mp.map(j=>j['Customer Name'])).size, apC = new Set(ap.map(j=>j['Customer Name'])).size;
-    const mpAvg = mp.length?Math.round(mpZenRev/mp.length):0, apAvg = ap.length?Math.round(apZenRev/ap.length):0; // avg from Zenbooker job value
+    const mpHistJobs = Object.keys(MIKE_HIST_JOBS).filter(k=>monthOverlaps(k,dfBounds())).reduce((s,k)=>s+(MIKE_HIST_JOBS[k]||0),0); // Mike invoiced jobs pre-Oct-2024, in period
+    const mpJobsAll = mp.length + mpHistJobs; // Mike: Zenbooker (Oct 2024+) + invoiced (pre-Oct 2024)
+    const mpAvg = mpJobsAll?Math.round(mpRev/mpJobsAll):0, apAvg = ap.length?Math.round(apZenRev/ap.length):0; // Mike avg over full history; Adam from Zenbooker
     const pairTotal = mpRev + apRev;
     const mix = [
       { label:'Recurring', n:recCusts.length, seg:'Recurring', color:'var(--green6)' },
@@ -872,21 +833,23 @@ function renderContent() {
       <div class="card accent-top"><div class="kpi-l">Active Customers</div><div class="kpi-v">${totalCusts}${deltaChip(totalCusts, prevTotals?prevTotals.custs:0)}</div><div class="kpi-s">with a job in period</div></div>
       <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Active Recurring</div><div class="kpi-v">${recCusts.length}</div><div class="kpi-s">customers on a schedule</div></div>
     </div>
+    ${monthlyData.some(m=>m.m < '2024-10') ? '<div style="font-size:11px;color:var(--muted);margin:-14px 0 22px;line-height:1.5">Revenue and completed jobs cover the full invoiced history back to 2021. Active customers is the live count from job records (October 2024 onward); the two windows differ.</div>' : ''}
     <div class="card" style="margin-bottom:28px"><div class="h">Revenue trend</div>${areaChartSVG(monthlyData,'#2E7D32')}</div>
     <div class="card" style="margin-bottom:28px"><div class="h">Customer mix</div>
       <div style="display:flex;gap:14px;flex-wrap:wrap">
         ${mix.map(m=>'<div onclick="goSeg(\''+m.seg+'\')" style="flex:1;min-width:130px;cursor:pointer;border:1px solid var(--line);border-radius:10px;padding:14px 16px;border-left:4px solid '+m.color+'"><div class="serif" style="font-size:26px;font-weight:600;color:var(--ink);line-height:1">'+m.n+'</div><div style="font-size:12px;color:var(--muted);margin-top:5px">'+m.label+'</div></div>').join('')}
       </div>
-      <div style="font-size:11px;color:var(--muted);margin-top:12px">${totalCusts} active customers in this period. Tap a segment to open it in Customers.</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:12px">${totalCusts} active customers in this period. Tap a segment to open it in Customers.${(franchiseeView!=='Adam' && monthlyData.some(m=>m.m < '2024-10'))?' Mike has invoiced '+MIKE_LIFETIME_CUST+' distinct customers since 2021.':''}</div>
     </div>
     <div class="grid grid-2">
       <div class="card"><div class="h">Mike vs Adam</div>
         <div style="margin-bottom:18px"><div style="display:flex;justify-content:space-between;margin-bottom:7px">${badge('Mike')}<span style="font-size:13px;color:var(--muted)">${mpC} customers</span></div>
-        <div style="display:flex;gap:18px;font-size:13px"><span><b>${mp.length}</b> jobs</span><span><b>${fmt(mpRev)}</b></span><span>avg <b>${fmt(mpAvg)}</b></span></div>
+        <div style="display:flex;gap:18px;font-size:13px"><span><b>${mpJobsAll.toLocaleString()}</b> jobs</span><span><b>${fmt(mpRev)}</b></span><span>avg <b>${fmt(mpAvg)}</b></span></div>
         <div class="pb"><div class="pf" style="background:var(--green4);width:${pairTotal>0?Math.round(mpRev/pairTotal*100):0}%"></div></div></div>
         <div><div style="display:flex;justify-content:space-between;margin-bottom:7px">${badge('Adam')}<span style="font-size:13px;color:var(--muted)">${apC} customers</span></div>
         <div style="display:flex;gap:18px;font-size:13px"><span><b>${ap.length}</b> jobs</span><span><b>${fmt(apRev)}</b></span><span>avg <b>${fmt(apAvg)}</b></span></div>
         <div class="pb"><div class="pf" style="background:var(--blue4);width:${pairTotal>0?Math.round(apRev/pairTotal*100):0}%"></div></div></div>
+        ${monthlyData.some(m=>m.m < '2024-10') ? '<div style="font-size:11px;color:var(--muted);margin-top:14px;line-height:1.5">Mike\'s revenue and jobs are full invoiced history back to 2021. Adam\'s are from job records (October 2024 onward), so the two cover different spans.</div>' : ''}
       </div>
       <div class="card"><div class="h">Service mix</div>
         ${serviceData.slice(0,8).map(s=>'<div class="svc-row"><span class="svc-n">'+s.n+'</span><span class="svc-s svc-g">'+s.j+'</span><span class="svc-s">'+fmt(s.r)+'</span></div>').join('')}
