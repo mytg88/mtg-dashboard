@@ -128,6 +128,31 @@ tr:hover td{background:#FAFBF9}
 .logout-btn{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.25);color:#fff;padding:9px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:500;font-family:inherit}
 .logout-btn:hover{background:rgba(255,255,255,0.2)}
 #whoami{font-size:12px;color:rgba(255,255,255,0.65);font-weight:500}
+th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+th.sortable:hover{color:var(--green)}
+.call-list{display:flex;flex-direction:column;gap:10px}
+.call-item{border:1px solid var(--line);border-radius:11px;padding:13px 15px;background:var(--card)}
+.call-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:7px}
+.call-when{font-size:12px;color:var(--muted)}
+.call-owner{margin-left:auto}
+.call-caller{font-weight:600;font-size:15px;letter-spacing:.2px;margin-bottom:7px}
+.call-vm{font-size:13px;color:#4a554c;line-height:1.5;margin-bottom:10px}
+.call-vm summary{cursor:pointer;color:#3c463d;list-style:none;outline:none}
+.call-vm summary::-webkit-details-marker{display:none}
+.call-vm summary:after{content:" \25be";color:var(--muted)}
+.call-vm[open] summary:after{content:" \25b4"}
+.call-vm-full{margin-top:8px;padding:10px 12px;background:var(--paper);border-radius:8px;color:#3c463d}
+.call-vm-none{font-size:12px;color:var(--muted);margin-bottom:10px}
+.call-status select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:13px;width:100%;max-width:240px;background:#fff}
+.b-missed{background:#FFEBEE;color:#C62828}.b-vm{background:#E3F2FD;color:#1565C0}
+@media(max-width:640px){
+  .header{padding:20px 18px 16px}
+  .header h1{font-size:23px}
+  .header p{font-size:12px}
+  .header-actions{position:static;margin-top:14px;justify-content:flex-end;flex-wrap:wrap}
+  .content{padding:20px 16px 50px}
+  .df-bar{padding:12px 16px}
+}
 </style>
 </head>
 <body>
@@ -197,6 +222,7 @@ let jobsPeriod=[], jobs=[], prevJobs=[], allCustomers=[], churnedList=[], monthl
 let leadStats=null, recurringStats=null, prevTotals=null;
 let rawCalls=[], callsStats=null, callsFilter='open', callsWho='';
 let activeTab="Overview", custSegFilter="All", custSearch="";
+let custSort={k:'r',d:'desc'}, recSort={k:'r',d:'desc'}, churnSort={k:'r',d:'desc'}, missSort={k:'z',d:'desc'};
 let dfRange="all", dfFrom=null, dfTo=null, franchiseeView="All";
 
 // ---------- CSV ----------
@@ -806,6 +832,19 @@ function fmt(n) { return '\u00a3'+Math.round(n).toLocaleString(); }
 function fmtDate(d) { if (!d) return ''; return d.getDate()+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
 function fmtDateLong(d) { if (!d) return '—'; return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); }
 function shortMonth(ym) { const [y,m] = ym.split('-'); const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return mn[parseInt(m)-1]+' '+y.slice(2); }
+function _sortState(which){ return which==='Customers'?custSort:which==='Recurring'?recSort:which==='Churned'?churnSort:missSort; }
+function sortRows(arr, k, d){
+  const D = d==='asc'?1:-1;
+  return arr.slice().sort((a,b)=>{
+    let x=a[k], y=b[k];
+    const xd=x instanceof Date, yd=y instanceof Date;
+    if(xd||yd){ x=xd?x.getTime():(x?1:0); y=yd?y.getTime():(y?1:0); return (x-y)*D; }
+    if(typeof x==='string'||typeof y==='string'){ x=String(x==null?'':x).toLowerCase(); y=String(y==null?'':y).toLowerCase(); return x<y?-D:(x>y?D:0); }
+    return ((x||0)-(y||0))*D;
+  });
+}
+function setSort(which,k){ const st=_sortState(which); if(st.k===k){ st.d=st.d==='asc'?'desc':'asc'; } else { st.k=k; st.d='desc'; } renderContent(); }
+function sortTh(which,k,label,cls){ const st=_sortState(which); const a=st.k===k?(st.d==='asc'?' \u25b4':' \u25be'):''; return '<th class="'+(cls?cls+' ':'')+'sortable" onclick="setSort(\''+which+'\',\''+k+'\')">'+label+a+'</th>'; }
 function deltaChip(cur, prev) {
   if (!prevTotals || !prevTotals.has || prev === 0) return '';
   const d = Math.round((cur - prev) / prev * 100);
@@ -973,7 +1012,7 @@ function renderContent() {
       <div style="font-size:11px;color:var(--muted);margin-top:12px">${totalCusts} customers in this period. Tap a segment to open it in Customers.</div>
     </div>
     <div class="grid grid-2">
-      <div class="card"><div class="h">Mike vs Adam</div>
+      <div class="card"><div class="h">Franchisee performance</div>
         <div style="margin-bottom:18px"><div style="display:flex;justify-content:space-between;margin-bottom:7px">${badge('Mike')}<span style="font-size:13px;color:var(--muted)">${mpCAll} customers</span></div>
         <div style="display:flex;gap:18px;font-size:13px"><span><b>${mpJobsAll.toLocaleString()}</b> jobs</span><span><b>${fmt(mpRev)}</b></span><span>avg <b>${fmt(mpAvg)}</b></span></div>
         <div class="pb"><div class="pf" style="background:var(--green4);width:${pairTotal>0?Math.round(mpRev/pairTotal*100):0}%"></div></div></div>
@@ -1028,12 +1067,34 @@ function renderContent() {
   }
 
   else if (activeTab==='Calls') {
-    if (!callsWho) { try { callsWho = localStorage.getItem('mtg_calls_who') || ''; } catch(_) {} }
+    callsWho = (auth && auth.name) ? auth.name : callsWho;   // the updater is simply whoever is logged in
     const s = callsStats || {total:0,missed:0,vm:0,open:0,list:[]};
     let list = s.list;
     if (callsFilter === 'open') list = list.filter(c => !c._status || c._status === 'New');
     const statuses = ['New','Called back','Booked','No answer','Not relevant'];
-    const whoOpts = ['','Mike','Adam','Jacob'];
+    const esc = x => String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const typeBadge = t => { const tl=(t||'').toLowerCase(); const cls = /missed/.test(tl)?'b-missed':(/voicemail/.test(tl)?'b-vm':'b-na'); return '<span class="badge '+cls+'">'+esc(t||'Call')+'</span>'; };
+    const card = c => {
+      const key = String(c._key).replace(/'/g,"\\'");
+      const when = fmtDate(c._date) + (c._time ? ' \u00b7 '+esc(c._time) : '');
+      let vm;
+      if (c._trans) {
+        const full = esc(c._trans);
+        vm = c._trans.length > 90
+          ? '<details class="call-vm"><summary>'+esc(c._trans.slice(0,90))+'\u2026</summary><div class="call-vm-full">'+full+'</div></details>'
+          : '<div class="call-vm">'+full+'</div>';
+      } else {
+        vm = '<div class="call-vm-none">'+(c._dur ? esc(c._dur)+', no transcript' : 'No voicemail')+'</div>';
+      }
+      const sel = '<select onchange="updateCallStatus(\''+key+'\',this.value)">'+statuses.map(st=>'<option value="'+st+'"'+(((c._status||'New')===st)?' selected':'')+'>'+st+'</option>').join('')+'</select>';
+      const auto = (c._detail && /^Auto/.test(c._detail)) ? '<div style="font-size:10px;color:var(--green6);margin-top:4px">'+esc(c._detail)+'</div>' : '';
+      return '<div class="call-item">'+
+        '<div class="call-top">'+typeBadge(c._type)+'<span class="call-when">'+when+'</span><span class="call-owner">'+(c._fr?badge(c._fr):'')+'</span></div>'+
+        '<div class="call-caller">'+(esc(c._caller)||'\u2014')+'</div>'+
+        vm +
+        '<div class="call-status">'+sel+auto+'</div>'+
+      '</div>';
+    };
     el.innerHTML = `
     <div class="grid grid-4">
       <div class="card accent-top"><div class="kpi-l">Total Calls</div><div class="kpi-v">${s.total}</div><div class="kpi-s">in period</div></div>
@@ -1042,30 +1103,14 @@ function renderContent() {
       <div class="card accent-top" style="border-top-color:var(--accent)"><div class="kpi-l">Still Open</div><div class="kpi-v" style="color:var(--amber)">${s.open}</div><div class="kpi-s">need a callback</div></div>
     </div>
     <div class="card">
-      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px">
-        <div class="h" style="margin:0">Call chase list</div>
-        <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-          <span style="font-size:12px;color:var(--muted)">Updating as</span>
-          <select onchange="setCallsWho(this.value)" style="padding:6px 10px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:12px">
-            ${whoOpts.map(w => '<option value="'+w+'"'+(callsWho===w?' selected':'')+'>'+(w||'Pick who you are')+'</option>').join('')}
-          </select>
-        </div>
-      </div>
+      <div class="h" style="margin-bottom:4px">Call chase list</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Updating as <b>${esc(callsWho||'\u2014')}</b>. Changes save for everyone. Tap a voicemail to read the full message.</div>
       <div class="filter-row">
         <button class="filter-btn ${callsFilter==='open'?'active':''}" onclick="callsFilter='open';renderContent()">Still open (${s.open})</button>
         <button class="filter-btn ${callsFilter==='all'?'active':''}" onclick="callsFilter='all';renderContent()">All (${s.total})</button>
       </div>
-      ${list.length===0 ? '<div style="color:var(--muted);text-align:center;padding:40px">No calls to show'+(franchiseeView!=='All'?' for '+franchiseeView:'')+'.</div>' :
-      '<div class="table-wrap"><table><thead><tr><th>When</th><th class="c">Type</th><th>Caller</th><th>Voicemail</th><th class="c">Owner</th><th>Status</th></tr></thead><tbody>'+
-      list.map(c => '<tr><td style="color:var(--muted);font-size:12px;white-space:nowrap">'+fmtDate(c._date)+(c._time?'<br><span style="font-size:11px">'+c._time+'</span>':'')+'</td>'+
-        '<td class="c" style="font-size:12px">'+(c._type||'\u2014')+'</td>'+
-        '<td style="font-weight:500;white-space:nowrap">'+(c._caller||'\u2014')+'</td>'+
-        '<td style="font-size:12px;color:#4a554c;max-width:340px">'+(c._trans ? '<span title="'+String(c._trans).replace(/"/g,'&quot;')+'">'+(c._trans.length>120?c._trans.slice(0,120)+'\u2026':c._trans)+'</span>' : (c._dur?'<span style="color:var(--muted)">'+c._dur+', no transcript</span>':'\u2014'))+'</td>'+
-        '<td class="c">'+(c._fr?badge(c._fr):'\u2014')+'</td>'+
-        '<td><select onchange="updateCallStatus(\''+String(c._key).replace(/'/g,"\\'")+'\',this.value)" style="padding:5px 8px;border:1px solid var(--line);border-radius:7px;font-family:inherit;font-size:12px">'+
-          statuses.map(st => '<option value="'+st+'"'+(((c._status||'New')===st)?' selected':'')+'>'+st+'</option>').join('')+
-        '</select>'+(c._detail&&/^Auto/.test(c._detail)?'<div style="font-size:10px;color:var(--green6);margin-top:3px">'+c._detail+'</div>':'')+'</td></tr>').join('')+
-      '</tbody></table></div>'}
+      ${list.length===0 ? '<div style="color:var(--muted);text-align:center;padding:40px">No calls to show'+(franchiseeView!=='All'?' for '+franchiseeView:'')+'.</div>'
+        : '<div class="call-list">'+list.map(card).join('')+'</div>'}
       <div class="ib ig" style="margin-top:16px"><b>How statuses set themselves:</b> a call closes to <b>Booked</b> automatically when that number becomes a booking, and to <b>Called back</b> when a callback to it appears in the Air Landline export. Anything still <b>New</b> is genuinely waiting. Change a status here and it saves for everyone.</div>
     </div>`;
   }
@@ -1090,8 +1135,8 @@ function renderContent() {
         ${segs.map(s=>'<button class="filter-btn '+(custSegFilter===s?'active':'')+'" onclick="custSegFilter=\''+s+'\';renderContent()">'+s+' ('+(s==='All'?allCustomers.length:allCustomers.filter(c=>c.s===s).length)+')</button>').join('')}
       </div>
       <div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">Showing ${filtered.length} customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView+' only':''}</div>
-      <div class="table-wrap"><table><thead><tr><th>Customer</th><th>Segment</th><th class="r">Jobs</th><th class="r">Revenue</th><th class="r">Avg</th><th class="c">Territory</th><th>First</th><th>Last</th></tr></thead>
-      <tbody>${filtered.map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td>'+badge(c.s)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td class="r">'+fmt(c.a)+'</td><td class="c">'+badge(c.f)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div></div>`;
+      <div class="table-wrap"><table><thead><tr>${sortTh('Customers','n','Customer')}<th>Segment</th>${sortTh('Customers','j','Jobs','r')}${sortTh('Customers','r','Revenue','r')}${sortTh('Customers','a','Avg','r')}<th class="c">Territory</th>${sortTh('Customers','first','First')}${sortTh('Customers','last','Last')}</tr></thead>
+      <tbody>${sortRows(filtered,custSort.k,custSort.d).map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td>'+badge(c.s)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td class="r">'+fmt(c.a)+'</td><td class="c">'+badge(c.f)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div></div>`;
   }
 
   else if (activeTab==='Recurring') {
@@ -1124,8 +1169,8 @@ function renderContent() {
         </div>
       </div>
       <div class="card" style="margin-bottom:24px"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${recCusts.length} active recurring customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, from job history</div>
-        <div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th>Frequency</th><th class="r">Avg/visit</th><th class="r">Jobs</th><th class="r">Lifetime</th><th>Last visit</th></tr></thead>
-        <tbody>${recCusts.map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.freq||'\u2014')+'</td><td class="r">'+(c.visit>0?fmt(c.visit):'\u2014')+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div>
+        <div class="table-wrap"><table><thead><tr>${sortTh('Recurring','n','Customer')}<th class="c">Owner</th><th>Frequency</th>${sortTh('Recurring','visit','Avg/visit','r')}${sortTh('Recurring','j','Jobs','r')}${sortTh('Recurring','r','Lifetime','r')}${sortTh('Recurring','last','Last visit')}</tr></thead>
+        <tbody>${sortRows(recCusts,recSort.k,recSort.d).map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.freq||'\u2014')+'</td><td class="r">'+(c.visit>0?fmt(c.visit):'\u2014')+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div>
       </div>
       ${moves.length ? '<div class="card"><div class="h">Recent schedule changes (live app log)</div><div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th>Service</th><th>Frequency</th><th class="r">Value</th><th class="c">Status</th><th>Created</th><th>Cancelled</th></tr></thead><tbody>'+moves.map(x=>'<tr><td style="font-weight:500">'+(x._cust||'\u2014')+'</td><td class="c">'+(x._franchisee?badge(x._franchisee):'\u2014')+'</td><td style="font-size:12px">'+(x._svc||'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+(x._freq||'\u2014')+'</td><td class="r">'+(x._value>0?fmt(x._value):'\u2014')+'</td><td class="c">'+statusBadge(x._status)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(x._created)+'</td><td style="color:var(--muted);font-size:12px">'+(x._canceled?fmtDate(x._canceled):'\u2014')+'</td></tr>').join('')+'</tbody></table></div></div>' : ''}
     `;
@@ -1137,8 +1182,8 @@ function renderContent() {
     el.innerHTML = `<div class="card"><div class="h" style="color:var(--red)">All ${churnedList.length} churned customers</div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Was recurring or 5+ jobs, no visit in 90+ days.</div>
       ${churnedList.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No churned customers in this period.</div>':
-      '<div class="table-wrap"><table><thead><tr><th>Customer</th><th class="r">Jobs</th><th class="r">Lifetime</th><th class="r">Last Visit</th><th class="r">Days</th><th class="c">Territory</th><th>Services</th></tr></thead>'+
-      '<tbody>'+churnedList.map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--red)">'+fmt(c.r)+'</td><td class="r" style="color:var(--muted)">'+fmtDate(c.last)+'</td><td class="r">'+c.daysSince+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+c.svc+'</td></tr>').join('')+'</tbody></table></div>'+
+      '<div class="table-wrap"><table><thead><tr>'+sortTh('Churned','n','Customer')+sortTh('Churned','j','Jobs','r')+sortTh('Churned','r','Lifetime','r')+sortTh('Churned','last','Last Visit','r')+sortTh('Churned','daysSince','Days','r')+'<th class="c">Territory</th><th>Services</th></tr></thead>'+
+      '<tbody>'+sortRows(churnedList,churnSort.k,churnSort.d).map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--red)">'+fmt(c.r)+'</td><td class="r" style="color:var(--muted)">'+fmtDate(c.last)+'</td><td class="r">'+c.daysSince+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+c.svc+'</td></tr>').join('')+'</tbody></table></div>'+
       '<div class="ib ia"><b>Total lifetime value:</b> '+fmt(total)+'. '+adamCh+' on Adam\'s patch, '+mikeCh+' on Mike\'s. A re-engagement push targeting the top 10 could recover recurring revenue.</div>'}
     </div>`;
   }
@@ -1147,8 +1192,8 @@ function renderContent() {
     el.innerHTML = `<div class="card"><div class="h" style="color:var(--amber)">Jobs missing a price (\u00a30)</div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:16px">${missingPriceData.reduce((s,c)=>s+c.z,0)} jobs at \u00a30 (free assessment visits excluded). Run Fix Missing Prices from the MTG app menu to auto-fix where possible.</div>
       ${missingPriceData.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No missing prices in this period.</div>':
-      '<div class="table-wrap"><table><thead><tr><th>Customer</th><th class="r">£0 Jobs</th><th class="r">Avg When Priced</th><th class="r">Est. Missing</th><th>Service</th></tr></thead>'+
-      '<tbody>'+missingPriceData.map(c=>{const e=c.est;return'<tr><td style="font-weight:500">'+c.n+'</td><td class="r" style="font-weight:600;color:var(--amber)">'+c.z+'</td><td class="r">'+(c.a>0?fmt(c.a):'Never priced')+'</td><td class="r" style="font-weight:600;color:'+(e>0?'var(--green6)':'#ccc')+'">'+(e>0?'~'+fmt(e):'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+(c.svc||'\u2014')+'</td></tr>'}).join('')+'</tbody></table></div>'+
+      '<div class="table-wrap"><table><thead><tr>'+sortTh('Missing Prices','n','Customer')+sortTh('Missing Prices','z','\u00a30 Jobs','r')+sortTh('Missing Prices','a','Avg When Priced','r')+sortTh('Missing Prices','est','Est. Missing','r')+'<th>Service</th></tr></thead>'+
+      '<tbody>'+sortRows(missingPriceData,missSort.k,missSort.d).map(c=>{const e=c.est;return'<tr><td style="font-weight:500">'+c.n+'</td><td class="r" style="font-weight:600;color:var(--amber)">'+c.z+'</td><td class="r">'+(c.a>0?fmt(c.a):'Never priced')+'</td><td class="r" style="font-weight:600;color:'+(e>0?'var(--green6)':'#ccc')+'">'+(e>0?'~'+fmt(e):'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+(c.svc||'\u2014')+'</td></tr>'}).join('')+'</tbody></table></div>'+
       '<div class="ib io"><b>Action:</b> update recurring booking prices in the MTG app for customers showing "Never priced". These are active regulars with no pricing set.</div>'}
     </div>`;
   }
