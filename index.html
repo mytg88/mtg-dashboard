@@ -270,6 +270,27 @@ function normNum(s) {
 let custSort={k:'r',d:'desc'}, recSort={k:'r',d:'desc'}, churnSort={k:'r',d:'desc'}, missSort={k:'z',d:'desc'};
 let dfRange="all", dfFrom=null, dfTo=null, franchiseeView="All";
 
+// Fold the many free-text Service Type values into the canonical service lines shown on the
+// website, so the Services tab is a short, readable list instead of every one-off description.
+// Ordered: first pattern to match wins, anything unmatched lands in "Other".
+const SERVICE_GROUPS = [
+  ['Assessment visits',                   /assessment/i],
+  ['Regular Garden Maintenance',          /regular garden maintenance|garden maintenance|grounds maintenance|strim.*mow.*blow|regular maintenance/i],
+  ['Garden Tidy-Up',                      /tidy/i],
+  ['Hedge Cutting',                       /hedge/i],
+  ['Pressure Washing & Exterior Cleaning',/pressure wash|exterior clean|soft wash|soft was|patio|driveway|jet wash/i],
+  ['Garden Waste & Clearance',            /waste|clearance|tip run|rubbish|bamboo|leaf clear|removal/i],
+  ['Lawn Care & Renovation',              /lawn care|lawn treatment|lawn renovation|renovation|scarif|aerat|overseed|turf|fertilis/i],
+  ['Grass Cutting & Lawn Edging',         /grass cutting|lawn edging|lawn mowing|mowing|\bmow\b/i],
+  ['Planting & Landscaping',              /planting|landscap|plant sourcing|compost|bark|decorative stone|mulch|nursery|garden project|mesh|border/i],
+  ['Weed & Moss Control',                 /weed|moss/i]
+];
+function serviceGroup(name) {
+  const s = String(name || '');
+  for (let i = 0; i < SERVICE_GROUPS.length; i++) if (SERVICE_GROUPS[i][1].test(s)) return SERVICE_GROUPS[i][0];
+  return 'Other';
+}
+
 // ---------- CSV ----------
 function parseCSVLine(line) {
   const result = []; let current = ''; let inQuotes = false;
@@ -770,7 +791,7 @@ function processData() {
 
   const svcMap = {};
   jobs.forEach(j => {
-    const s = j._service;
+    const s = serviceGroup(j._service);
     if (!svcMap[s]) svcMap[s] = { n: s, j: 0, r: 0, priced: 0, pricedSum: 0 };
     svcMap[s].j++; svcMap[s].r += j._amount;
     if (j._amount > 0) { svcMap[s].priced++; svcMap[s].pricedSum += j._amount; }
@@ -781,8 +802,9 @@ function processData() {
     const sd = {}; serviceData.forEach(s => sd[s.n] = s);
     Object.keys(MIKE_HIST_SERVICES).forEach(name => {
       const h = MIKE_HIST_SERVICES[name];
-      if (sd[name]) { sd[name].j += h.j; sd[name].r += h.r; }
-      else sd[name] = { n: name, j: h.j, r: h.r, a: h.j ? Math.round(h.r/h.j) : 0 };
+      const g = serviceGroup(name);
+      if (sd[g]) { sd[g].j += h.j; sd[g].r += h.r; }
+      else sd[g] = { n: g, j: h.j, r: h.r, a: h.j ? Math.round(h.r/h.j) : 0 };
     });
     serviceData = Object.values(sd).sort((a,b) => b.r - a.r);
   }
@@ -1125,10 +1147,11 @@ function renderContent() {
     const aChurn = churnedList.length;
     const aMissing = missingPriceData.reduce((s,c)=>s+c.z,0);
     const aQuotes = leadStats ? (leadStats.byStatus.QUOTED || 0) : 0;
+    const aOpenCalls = callsStats ? callsStats.open : 0;
     const attnCards = [
       { n:aLeads, t:'Leads to action', d:'still marked new', tab:'Leads', warn:aLeads>0 },
       { n:aQuotes, t:'Quotes to chase', d:'awaiting a decision', tab:'Leads', warn:aQuotes>0 },
-      { n:aChurn, t:'Regulars at risk', d:'no visit in 90+ days', tab:'Churned', warn:aChurn>0 },
+      { n:aOpenCalls, t:'Calls still open', d:'need a callback', tab:'Calls', warn:aOpenCalls>0 },
       { n:aMissing, t:'Jobs missing a price', d:'£0, excludes assessments', tab:'Missing Prices', warn:aMissing>0 }
     ];
     // Mike vs Adam always compares both, regardless of the View toggle
@@ -1161,7 +1184,7 @@ function renderContent() {
     if (segPassed) mix.push({ label:'Passed to Adam', n:segPassed, seg:'Passed to Adam', color:'#3949AB' });
     el.innerHTML = `
     <div class="attn">
-      ${attnCards.map(c=>'<div class="attn-card '+(c.warn?'':'ok')+'" onclick="setTab(\''+c.tab+'\')"><div class="attn-n" style="color:'+(c.warn?'var(--accent)':'var(--green4)')+'">'+c.n+'</div><div><div class="attn-t">'+c.t+'</div><div class="attn-d">'+c.d+'</div></div></div>').join('')}
+      ${attnCards.map(c=>{ const click = c.tab==='Calls' ? "callsFilter='open';setTab('Calls')" : "setTab('"+c.tab+"')"; return '<div class="attn-card '+(c.warn?'':'ok')+'" onclick="'+click+'"><div class="attn-n" style="color:'+(c.warn?'var(--accent)':'var(--green4)')+'">'+c.n+'</div><div><div class="attn-t">'+c.t+'</div><div class="attn-d">'+c.d+'</div></div></div>'; }).join('')}
     </div>
     <div class="grid grid-4">
       <div class="card accent-top"><div class="kpi-l">Revenue</div><div class="kpi-v">${fmt(totalRev)}${deltaChip(totalRev, prevTotals?prevTotals.rev:0)}</div><div class="kpi-s">recorded</div></div>
