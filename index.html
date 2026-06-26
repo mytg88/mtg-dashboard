@@ -969,6 +969,13 @@ function renderTabs() {
 function setTab(t) { activeTab=t; custSegFilter="All"; custSearch=""; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 function setView(v) { franchiseeView=v; applyFilters(); renderContent(); dfRender(); }
 function goSeg(seg) { activeTab='Customers'; custSegFilter=seg; custSearch=''; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
+// Re-rendering rebuilds the search box, which drops focus after each keystroke. Put it back.
+function onCustSearch(v, pos) {
+  custSearch = v;
+  renderContent();
+  const el = document.getElementById('custSearchBox');
+  if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (_) {} }
+}
 
 function dfRender() {
   document.querySelectorAll('#dfBar .df-btn[data-range]').forEach(btn => btn.classList.toggle('active', btn.dataset.range === dfRange));
@@ -1190,7 +1197,7 @@ function renderContent() {
     let filtered = allCustomers;
     if (custSegFilter !== 'All') filtered = filtered.filter(c => c.s === custSegFilter);
     if (custSearch) filtered = filtered.filter(c => c.n.toLowerCase().includes(custSearch.toLowerCase()));
-    el.innerHTML = `<input class="search" placeholder="Search customers..." value="${custSearch}" oninput="custSearch=this.value;renderContent()">
+    el.innerHTML = `<input id="custSearchBox" class="search" placeholder="Search customers..." value="${custSearch}" oninput="onCustSearch(this.value, this.selectionStart)">
       <div class="filter-row">
         ${segs.map(s=>'<button class="filter-btn '+(custSegFilter===s?'active':'')+'" onclick="custSegFilter=\''+s+'\';renderContent()">'+s+' ('+(s==='All'?allCustomers.length:allCustomers.filter(c=>c.s===s).length)+')</button>').join('')}
       </div>
