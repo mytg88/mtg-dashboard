@@ -154,6 +154,16 @@ th.sortable:hover{color:var(--green)}
 .call-act.call-call{border-color:#BFE3C6;color:var(--green6)}
 .call-act.call-wa{border-color:#BFE6CC;color:#1DA851}
 .call-act.call-mail{border-color:#CFE0CB;color:var(--blue)}
+.call-cust{font-family:'Fraunces',serif;font-size:15px;font-weight:600;color:var(--ink);margin-bottom:2px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.call-flag{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:5px 10px;border-radius:7px;margin-bottom:8px;width:fit-content;max-width:100%}
+.call-flag.neutral{background:#EEF1EE;color:#566055}
+.call-flag.warn{background:#FFF4E5;color:#B26A00;border:1px solid #F3D9A8}
+.call-flag.warn.hot{background:#FDECEC;color:#B3261E;border-color:#F2C2BE}
+.call-name{margin-bottom:10px}
+.call-name input{width:100%;box-sizing:border-box;font-family:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+.call-name input::placeholder{color:var(--muted)}
+.call-name input:focus{outline:none;border-color:var(--green)}
+.call-saved{font-size:11px;font-weight:600;color:#5E35B1;background:#EDE7F6;padding:2px 7px;border-radius:6px}
 .call-gmail:hover{background:#E8F5E9}
 .call-note{margin-bottom:10px}
 .call-note textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;resize:vertical;color:#3c463d;background:#fff;min-height:38px}
@@ -231,11 +241,24 @@ const API_URL   = 'https://script.google.com/macros/s/AKfycbxN137wCPVA5IVaHseSxC
 let auth = null; // {user, pass, role, name} once logged in. No password is stored in this file.
 // ==============================================================
 
-let rawJobs=[], customers=[], rawLeads=[], rawRecurring=[];
+let rawJobs=[], customers=[], rawLeads=[], rawRecurring=[], numToCust={}, manualNames={};
 let jobsPeriod=[], jobs=[], prevJobs=[], allCustomers=[], churnedList=[], monthlyData=[], serviceData=[], missingPriceData=[];
 let leadStats=null, recurringStats=null, prevTotals=null;
 let rawCalls=[], callsStats=null, callsFilter='open', callsWho='';
 let activeTab="Overview", custSegFilter="All", custSearch="";
+// Possible header names a customer phone number might live under, once it's added to the feed.
+const PHONE_HEADERS = ['Phone','Customer Phone','Mobile','Telephone','Phone Number','Contact Number','Cell','Tel'];
+// Reduce any stored format to the UK national significant number so they all compare equal:
+// +44 7713..., 447713..., 4407713..., 07713..., 7713... all become 7713...; landlines like
+// 01202 736149 / 1202736149 / +441202736149 all become 1202736149.
+function normNum(s) {
+  let d = String(s == null ? '' : s).replace(/\D/g, '');
+  if (!d) return '';
+  if (d.indexOf('00') === 0) d = d.slice(2);   // drop international 00 prefix
+  if (d.indexOf('44') === 0) d = d.slice(2);    // drop UK country code
+  while (d.charAt(0) === '0') d = d.slice(1);    // drop the trunk 0 (and any stray leading zeros)
+  return d;
+}
 let custSort={k:'r',d:'desc'}, recSort={k:'r',d:'desc'}, churnSort={k:'r',d:'desc'}, missSort={k:'z',d:'desc'};
 let dfRange="all", dfFrom=null, dfTo=null, franchiseeView="All";
 
@@ -468,6 +491,14 @@ function handleData(data) {
   rawCalls = data.calls || [];
   customers = [];
 
+  // Manual caller labels (the "name this caller" store), keyed by national number.
+  manualNames = {};
+  (data.contacts || []).forEach(ct => {
+    const num = normNum(ct.Number || ct.number);
+    const nm = String(ct.Name || ct.name || '').trim();
+    if (num && nm) manualNames[num] = { name: nm, by: String(ct['Updated By'] || '').trim() };
+  });
+
   rawJobs.forEach(j => {
     j._amount = parseAmount(j['Amount (£)']);
     j._date = parseDate(j['Date Completed']);
@@ -502,6 +533,7 @@ function handleData(data) {
     c._date = parseDate(col(c,['Logged At','Logged','Date']));
     c._type = (col(c,['Type'])||'').trim();
     c._caller = col(c,['Caller']);
+    c._callerNorm = normNum(c._caller);
     c._fr = (col(c,['Franchisee'])||'').trim();
     c._status = (col(c,['Status'])||'').trim();
     c._detail = col(c,['Status Detail']);
@@ -703,6 +735,20 @@ function processData() {
   allCustomers.forEach(c => { c.inherited = TRANSFERRED_TO_ADAM.has(norm(c.n)); }); // Adam's inherited book, for the tag
   churnedList = allCustomers.filter(c => c.s === 'Churned').sort((a,b) => b.r - a.r);
 
+  // Number -> customer map for the Calls tab. Phone lives on the source rows (leads/recurring/jobs)
+  // under one of PHONE_HEADERS. Empty until a phone column is added to the feed; lights up automatically when it is.
+  numToCust = {};
+  const _custByName = {}; allCustomers.forEach(c => { if (!_custByName[norm(c.n)]) _custByName[norm(c.n)] = c; });
+  const _linkPhone = (nm, ph) => {
+    const p = normNum(ph); if (!p || !nm) return;
+    if (numToCust[p]) return;
+    const cu = _custByName[norm(nm)] || null;
+    numToCust[p] = { name: nm, status: cu ? cu.s : '', fr: cu ? cu.f : '', inherited: cu ? !!cu.inherited : false };
+  };
+  rawRecurring.forEach(r => _linkPhone(r._cust, col(r, PHONE_HEADERS)));
+  rawLeads.forEach(l => _linkPhone(l._name, col(l, PHONE_HEADERS)));
+  rawJobs.forEach(j => _linkPhone(col(j, ['Customer Name','Customer','Name']), col(j, PHONE_HEADERS)));
+
   const monthMap = {};
   jobs.forEach(j => {
     if (!j._date) return;
@@ -812,11 +858,28 @@ function processCalls(b) {
   let cs = rawCalls.filter(c => matchView(c._fr));
   if (b.from && b.to) cs = cs.filter(c => c._date && c._date >= b.from && c._date <= b.to);
   const open = cs.filter(c => !c._status || c._status === 'New');
+  // Group by caller so we can spot people who've tried repeatedly with no callback.
+  const RESOLVED = /^(Called back|Booked)$/i;
+  const byNum = {};
+  cs.forEach(c => {
+    const k = c._callerNorm; if (!k) return;
+    let g = byNum[k];
+    if (!g) g = byNum[k] = { num: k, count: 0, open: 0, resolved: 0, last: null, first: null };
+    g.count++;
+    if (!c._status || c._status === 'New') g.open++;
+    if (RESOLVED.test(c._status || '')) g.resolved++;
+    if (c._date) { if (!g.last || c._date > g.last) g.last = c._date; if (!g.first || c._date < g.first) g.first = c._date; }
+  });
+  // Needs attention = 2+ inbound calls and we've never called back or booked them.
+  Object.values(byNum).forEach(g => { g.attention = g.count >= 2 && g.resolved === 0; });
+  const attentionNums = Object.values(byNum).filter(g => g.attention);
   callsStats = {
     total: cs.length,
     missed: cs.filter(c => /missed/i.test(c._type)).length,
     vm: cs.filter(c => /voicemail/i.test(c._type)).length,
     open: open.length,
+    byNum: byNum,
+    attention: attentionNums.length,
     list: cs.slice().sort((a,b2) => (b2._date?b2._date:0) - (a._date?a._date:0))
   };
 }
@@ -867,6 +930,18 @@ function copyNumQuiet(a) {
   try {
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(a.getAttribute('data-num') || '');
   } catch (e) {}
+}
+// Save a manual name against a number. Applies to every past and future call from that number.
+function saveContact(num, name) {
+  num = normNum(num);
+  name = String(name || '').trim();
+  if (!num) return;
+  if (name) manualNames[num] = { name: name, by: callsWho };
+  else delete manualNames[num];     // clearing the box removes the label everywhere
+  renderContent();
+  apiCall({ action: 'saveContact', num: num, name: name, by: callsWho },
+    function(d) { if (!d || d.error) alert('Could not save the name. Hit Refresh and check it saved.'); },
+    function() { alert('Could not reach the app to save the name. Hit Refresh and try again.'); });
 }
 
 
@@ -1137,9 +1212,18 @@ function renderContent() {
 
   else if (activeTab==='Calls') {
     callsWho = (auth && auth.name) ? auth.name : callsWho;   // the updater is simply whoever is logged in
-    const s = callsStats || {total:0,missed:0,vm:0,open:0,list:[]};
+    const s = callsStats || {total:0,missed:0,vm:0,open:0,list:[],byNum:{},attention:0};
     let list = s.list;
     if (callsFilter === 'open') list = list.filter(c => !c._status || c._status === 'New');
+    else if (callsFilter === 'attention') {
+      list = list.filter(c => { const g = s.byNum[c._callerNorm]; return g && g.attention; })
+        .sort((a, b2) => {
+          const ga = s.byNum[a._callerNorm], gb = s.byNum[b2._callerNorm];
+          if (gb.count !== ga.count) return gb.count - ga.count;                                  // worst offenders first
+          if (a._callerNorm !== b2._callerNorm) return a._callerNorm < b2._callerNorm ? -1 : 1;   // keep each number together
+          return (b2._date ? b2._date : 0) - (a._date ? a._date : 0);
+        });
+    }
     const statuses = ['New','Called back','Booked','No answer','Not relevant'];
     const esc = x => String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const typeBadge = t => { const tl=(t||'').toLowerCase(); const cls = /missed/.test(tl)?'b-missed':(/voicemail/.test(tl)?'b-vm':'b-na'); return '<span class="badge '+cls+'">'+esc(t||'Call')+'</span>'; };
@@ -1174,9 +1258,32 @@ function renderContent() {
       ) : '';
       const note = '<div class="call-note"><textarea rows="2" placeholder="Add a note or transcript correction\u2026" onchange="updateCallNote(\''+key+'\',this.value)">'+esc(c._note||'')+'</textarea></div>';
       const by = c._by ? '<div class="call-by">Last updated by '+esc(c._by)+'</div>' : '';
+      const nKey = c._callerNorm;
+      const manual = nKey ? manualNames[nKey] : null;
+      const autoMatch = nKey ? numToCust[nKey] : null;
+      const known = manual ? { name: manual.name, status: autoMatch?autoMatch.status:'', inherited: autoMatch?autoMatch.inherited:false, manual:true } : autoMatch;
+      const knownLine = known ? ('<div class="call-cust">'+esc(known.name)+
+        (known.status ? '<span style="font-family:\'DM Sans\',sans-serif;font-size:12px;font-weight:500;color:var(--muted)">\u00b7 '+esc(known.status)+'</span>' : '')+
+        (known.inherited ? '<span class="badge b-inherited">inherited</span>' : '')+
+        (known.manual ? '<span class="call-saved">saved</span>' : '')+
+        '</div>') : '';
+      const nameBox = nKey ? ('<div class="call-name"><input type="text" placeholder="Name this caller \u2014 saved for this number" value="'+esc(manual?manual.name:'')+'" onchange="saveContact(\''+nKey+'\', this.value)"></div>') : '';
+      const g = (c._callerNorm && callsStats && callsStats.byNum) ? callsStats.byNum[c._callerNorm] : null;
+      let flag = '';
+      if (g && g.count >= 2) {
+        if (g.attention) {
+          const hot = g.count >= 3 ? ' hot' : '';
+          flag = '<div class="call-flag warn'+hot+'">\u26a0 '+g.count+' calls, no callback yet'+(g.last?' \u00b7 last '+esc(fmtDate(g.last)):'')+'</div>';
+        } else {
+          flag = '<div class="call-flag neutral">'+g.count+' calls from this number</div>';
+        }
+      }
       return '<div class="call-item">'+
         '<div class="call-top">'+typeBadge(c._type)+'<span class="call-when">'+when+'</span><span class="call-owner">'+(c._fr?badge(c._fr):'')+'</span></div>'+
+        knownLine +
         '<div class="call-caller-row"><span class="call-caller">'+(esc(c._caller)||'\u2014')+'</span></div>'+
+        flag +
+        nameBox +
         acts +
         vm +
         note +
@@ -1194,11 +1301,13 @@ function renderContent() {
     <div class="card">
       <div class="h" style="margin-bottom:4px">Call chase list</div>
       <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Updating as <b>${esc(callsWho||'\u2014')}</b>. Changes save for everyone. Tap a voicemail to read the full message. The Gmail link copies the email search, so on mobile just paste it into Gmail\u2019s search box.</div>
+      ${s.attention>0 && callsFilter!=='attention' ? '<div class="call-flag warn" style="margin:0 0 12px;cursor:pointer" onclick="callsFilter=\'attention\';renderContent()">\u26a0 '+s.attention+(s.attention>1?' callers have':' caller has')+' tried more than once with no callback \u2014 tap to review</div>' : ''}
       <div class="filter-row">
         <button class="filter-btn ${callsFilter==='open'?'active':''}" onclick="callsFilter='open';renderContent()">Still open (${s.open})</button>
+        <button class="filter-btn ${callsFilter==='attention'?'active':''}" onclick="callsFilter='attention';renderContent()">Needs attention (${s.attention})</button>
         <button class="filter-btn ${callsFilter==='all'?'active':''}" onclick="callsFilter='all';renderContent()">All (${s.total})</button>
       </div>
-      ${list.length===0 ? '<div style="color:var(--muted);text-align:center;padding:40px">No calls to show'+(franchiseeView!=='All'?' for '+franchiseeView:'')+'.</div>'
+      ${list.length===0 ? '<div style="color:var(--muted);text-align:center;padding:40px">'+(callsFilter==='attention'?'No repeat callers waiting \u2014 everyone who called more than once has had a callback.':'No calls to show'+(franchiseeView!=='All'?' for '+franchiseeView:''))+'.</div>'
         : '<div class="call-list">'+list.map(card).join('')+'</div>'}
       <div class="ib ig" style="margin-top:16px"><b>How statuses set themselves:</b> a call closes to <b>Booked</b> automatically when that number becomes a booking, and to <b>Called back</b> when a callback to it appears in the Air Landline export. Anything still <b>New</b> is genuinely waiting. Change a status here and it saves for everyone.</div>
     </div>`;
