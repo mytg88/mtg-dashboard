@@ -148,6 +148,12 @@ th.sortable:hover{color:var(--green)}
 .b-missed{background:#FFEBEE;color:#C62828}.b-vm{background:#E3F2FD;color:#1565C0}
 .call-caller-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
 .call-gmail{font-size:12px;color:var(--blue);text-decoration:none;border:1px solid #CFE0CB;padding:4px 11px;border-radius:7px;white-space:nowrap;font-weight:500}
+.call-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.call-act{font-size:12px;font-weight:600;padding:8px 13px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);cursor:pointer;font-family:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;line-height:1}
+.call-act:hover{background:var(--paper)}
+.call-act.call-call{border-color:#BFE3C6;color:var(--green6)}
+.call-act.call-wa{border-color:#BFE6CC;color:#1DA851}
+.call-act.call-mail{border-color:#CFE0CB;color:var(--blue)}
 .call-gmail:hover{background:#E8F5E9}
 .call-note{margin-bottom:10px}
 .call-note textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;resize:vertical;color:#3c463d;background:#fff;min-height:38px}
@@ -846,15 +852,20 @@ function updateCallNote(key, note) {
     function(d) { if (!d || d.error) alert('Could not save the note. Hit Refresh and check it saved.'); },
     function() { alert('Could not reach the app to save the note. Hit Refresh and try again.'); });
 }
-// Mobile Gmail ignores a search in the URL and opens the inbox, so copy the search to the
-// clipboard when the link is tapped; the user can paste it into Gmail's search box.
-function copyGmail(a) {
+// Mobile flow: copy the caller number, open Gmail, paste it into the search box.
+// copyNum flashes a tick on the button it was tapped on; copyNumQuiet just copies
+// (used by the Gmail link, which navigates away, so a flash would be pointless).
+function copyNum(btn) {
   try {
-    const q = a.getAttribute('data-q') || '';
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(q);
-    const old = a.textContent;
-    a.textContent = 'Search copied \u2713';
-    setTimeout(function(){ a.textContent = old; }, 1500);
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(btn.getAttribute('data-num') || '');
+  } catch (e) {}
+  if (!btn.getAttribute('data-label')) btn.setAttribute('data-label', btn.textContent);
+  btn.textContent = 'Copied \u2713';
+  setTimeout(function(){ btn.textContent = btn.getAttribute('data-label'); }, 1500);
+}
+function copyNumQuiet(a) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(a.getAttribute('data-num') || '');
   } catch (e) {}
 }
 
@@ -1150,12 +1161,23 @@ function renderContent() {
       const gmailQ = 'from:no-reply@airlandline.co.uk' + (gmailDigits ? ' ' + gmailDigits : '');
       const gmailHash = encodeURIComponent(gmailQ).replace(/%20/g,'+'); // Gmail wants + for spaces, not %20, or mobile ignores the search
       const gmailUrl = 'https://mail.google.com/mail/u/0/#search/' + gmailHash;
-      const gmailCta = '<a class="call-gmail" href="'+gmailUrl+'" target="_blank" rel="noopener" data-q="'+esc(gmailQ)+'" title="Opens Gmail. On mobile, tap the search bar and paste." onclick="copyGmail(this)">'+(/voicemail/i.test(c._type||'') ? '\u25b6 Listen in Gmail' : 'Find in Gmail')+'</a>';
+      const callerRaw = String(c._caller||'').trim();
+      const numAttr = esc(callerRaw);
+      const gmailLabel = /voicemail/i.test(c._type||'') ? '\u25b6 Listen in Gmail' : 'Find in Gmail';
+      const acts = callerRaw ? (
+        '<div class="call-actions">'+
+          '<button class="call-act" data-num="'+numAttr+'" onclick="copyNum(this)">Copy number</button>'+
+          '<a class="call-act call-call" href="tel:'+numAttr+'">\u260e Call</a>'+
+          (gmailDigits ? '<a class="call-act call-wa" href="https://wa.me/'+gmailDigits+'" target="_blank" rel="noopener">WhatsApp</a>' : '')+
+          '<a class="call-act call-mail" href="'+gmailUrl+'" target="_blank" rel="noopener" data-num="'+numAttr+'" title="Opens Gmail and copies the number so you can paste it into search." onclick="copyNumQuiet(this)">'+gmailLabel+'</a>'+
+        '</div>'
+      ) : '';
       const note = '<div class="call-note"><textarea rows="2" placeholder="Add a note or transcript correction\u2026" onchange="updateCallNote(\''+key+'\',this.value)">'+esc(c._note||'')+'</textarea></div>';
       const by = c._by ? '<div class="call-by">Last updated by '+esc(c._by)+'</div>' : '';
       return '<div class="call-item">'+
         '<div class="call-top">'+typeBadge(c._type)+'<span class="call-when">'+when+'</span><span class="call-owner">'+(c._fr?badge(c._fr):'')+'</span></div>'+
-        '<div class="call-caller-row"><span class="call-caller">'+(esc(c._caller)||'\u2014')+'</span>'+gmailCta+'</div>'+
+        '<div class="call-caller-row"><span class="call-caller">'+(esc(c._caller)||'\u2014')+'</span></div>'+
+        acts +
         vm +
         note +
         '<div class="call-status">'+sel+auto+'</div>'+
