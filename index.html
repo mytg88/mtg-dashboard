@@ -68,6 +68,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--paper);color:var(--ink);-
 .b-oneoff{background:#FFF9C4;color:#F57F17}.b-repeat{background:#BBDEFB;color:#1565C0}
 .b-recurring{background:#C8E6C9;color:#2E7D32}
 .b-passed{background:#E8EAF6;color:#3949AB}
+.b-inherited{background:#EDE7F6;color:#5E35B1;margin-left:6px}
 .b-new{background:#FFF3E0;color:#E65100}.b-contacted{background:#E3F2FD;color:#1565C0}
 .b-quoted{background:#F3E5F5;color:#6A1B9A}.b-booked{background:#E8F5E9;color:#2E7D32}
 .b-lost{background:#FFEBEE;color:#C62828}.b-spam{background:#ECEFF1;color:#607D8B}.b-na{background:#EEF1ED;color:#7C8A7E}
@@ -372,6 +373,14 @@ const MIKE_PASSED_EXTRA = [
   {"n":"Louise Chard","j":5,"r":1310,"f":"2023-01-26","l":"2024-12-03"},
   {"n":"Molly Manning","j":1,"r":120,"f":"2024-06-01","l":"2024-06-01"}
 ];
+// The customers Mike handed to Adam when Adam became a franchisee (Adam's "inherited" book).
+// Built from the two sources above so it can't drift. Adam sees these as his customers with an
+// "inherited" tag; Mike sees them as "Passed to Adam"; nobody sees the Mike-only wording in Adam's view.
+const TRANSFERRED_TO_ADAM = new Set(
+  Object.keys(MIKE_CUST_FIX).filter(k => MIKE_CUST_FIX[k] === 'adam')
+    .concat(MIKE_PASSED_EXTRA.map(p => p.n))
+    .map(n => String(n).trim().toLowerCase())
+);
 function monthKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 function monthOverlaps(k,b){ if(!b.from||!b.to) return true; const p=k.split('-'); const y=+p[0],m=+p[1]; const s=new Date(y,m-1,1), e=new Date(y,m,0,23,59,59); return e>=b.from && s<=b.to; }
 // Per-franchisee Zenbooker monthly revenue within bounds b (all franchisees, ignores the view toggle).
@@ -653,7 +662,7 @@ function processData() {
         ex.visit = ex.a;
         if (!ex.first || cf < ex.first) ex.first = cf;
         if (!ex.last || cl > ex.last) ex.last = cl;
-        if (passed) ex.s = 'Passed to Adam';
+        if (passed && franchiseeView === 'Mike') ex.s = 'Passed to Adam'; // live customer: only Mike's view shows "passed"; All/Adam keep their true status (e.g. churned)
         return;
       }
       const av = hc.j ? Math.round(hc.r/hc.j) : 0;
@@ -675,7 +684,7 @@ function processData() {
     allCustomers.forEach(c => {
       const fix = fixNorm[norm(c.n)];
       if (!fix) return;
-      if (fix === 'adam') c.s = 'Passed to Adam';
+      if (fix === 'adam') { if (franchiseeView === 'Mike' || c.hist) c.s = 'Passed to Adam'; } // live customers keep their true status in the overall view, so churned reconciles
       else if (fix === 'repeat') c.s = 'Repeat';
       else if (fix.startsWith('merge:')) {
         const tgt = byNorm[norm(fix.slice(6))];
@@ -685,6 +694,7 @@ function processData() {
     });
     if (drop.size) allCustomers = allCustomers.filter(c => !drop.has(c));
   }
+  allCustomers.forEach(c => { c.inherited = TRANSFERRED_TO_ADAM.has(norm(c.n)); }); // Adam's inherited book, for the tag
   churnedList = allCustomers.filter(c => c.s === 'Churned').sort((a,b) => b.r - a.r);
 
   const monthMap = {};
@@ -836,6 +846,17 @@ function updateCallNote(key, note) {
     function(d) { if (!d || d.error) alert('Could not save the note. Hit Refresh and check it saved.'); },
     function() { alert('Could not reach the app to save the note. Hit Refresh and try again.'); });
 }
+// Mobile Gmail ignores a search in the URL and opens the inbox, so copy the search to the
+// clipboard when the link is tapped; the user can paste it into Gmail's search box.
+function copyGmail(a) {
+  try {
+    const q = a.getAttribute('data-q') || '';
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(q);
+    const old = a.textContent;
+    a.textContent = 'Search copied \u2713';
+    setTimeout(function(){ a.textContent = old; }, 1500);
+  } catch (e) {}
+}
 
 
 // ---------- helpers ----------
@@ -843,6 +864,13 @@ function badge(t) {
   const m = {ACTIVE:'active',Churned:'churned',Mike:'mike',Adam:'adam','One-Off':'oneoff',Repeat:'repeat',Recurring:'recurring','Passed to Adam':'passed',
     NEW:'new',CONTACTED:'contacted',QUOTED:'quoted',BOOKED:'booked',LOST:'lost',SPAM:'spam'};
   return '<span class="badge b-'+(m[t]||'na')+'">'+t+'</span>';
+}
+// Customer name with an "inherited" tag when this is one of Adam's transferred customers.
+// Skipped when the row is shown as "Passed to Adam" (Mike's view), since that already says it.
+function custName(c) {
+  return c.n + ((c.inherited && c.s !== 'Passed to Adam')
+    ? ' <span class="badge b-inherited" title="Customer handed to Adam when he became a franchisee">inherited</span>'
+    : '');
 }
 function statusBadge(s) {
   s = (s||'').trim().toUpperCase();
@@ -1115,7 +1143,7 @@ function renderContent() {
       const gmailQ = 'from:no-reply@airlandline.co.uk' + (gmailDigits ? ' ' + gmailDigits : '');
       const gmailHash = encodeURIComponent(gmailQ).replace(/%20/g,'+'); // Gmail wants + for spaces, not %20, or mobile ignores the search
       const gmailUrl = 'https://mail.google.com/mail/u/0/#search/' + gmailHash;
-      const gmailCta = '<a class="call-gmail" href="'+gmailUrl+'" target="_blank" rel="noopener">'+(/voicemail/i.test(c._type||'') ? '\u25b6 Listen in Gmail' : 'Find in Gmail')+'</a>';
+      const gmailCta = '<a class="call-gmail" href="'+gmailUrl+'" target="_blank" rel="noopener" data-q="'+esc(gmailQ)+'" title="Opens Gmail. On mobile, tap the search bar and paste." onclick="copyGmail(this)">'+(/voicemail/i.test(c._type||'') ? '\u25b6 Listen in Gmail' : 'Find in Gmail')+'</a>';
       const note = '<div class="call-note"><textarea rows="2" placeholder="Add a note or transcript correction\u2026" onchange="updateCallNote(\''+key+'\',this.value)">'+esc(c._note||'')+'</textarea></div>';
       const by = c._by ? '<div class="call-by">Last updated by '+esc(c._by)+'</div>' : '';
       return '<div class="call-item">'+
@@ -1136,7 +1164,7 @@ function renderContent() {
     </div>
     <div class="card">
       <div class="h" style="margin-bottom:4px">Call chase list</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Updating as <b>${esc(callsWho||'\u2014')}</b>. Changes save for everyone. Tap a voicemail to read the full message.</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Updating as <b>${esc(callsWho||'\u2014')}</b>. Changes save for everyone. Tap a voicemail to read the full message. The Gmail link copies the email search, so on mobile just paste it into Gmail\u2019s search box.</div>
       <div class="filter-row">
         <button class="filter-btn ${callsFilter==='open'?'active':''}" onclick="callsFilter='open';renderContent()">Still open (${s.open})</button>
         <button class="filter-btn ${callsFilter==='all'?'active':''}" onclick="callsFilter='all';renderContent()">All (${s.total})</button>
@@ -1158,7 +1186,7 @@ function renderContent() {
   }
 
   else if (activeTab==='Customers') {
-    const segs = ["All","Recurring","Repeat","One-Off","Churned","Passed to Adam"];
+    const segs = ["All","Recurring","Repeat","One-Off","Churned"].concat(franchiseeView==='Adam' ? [] : ["Passed to Adam"]);
     let filtered = allCustomers;
     if (custSegFilter !== 'All') filtered = filtered.filter(c => c.s === custSegFilter);
     if (custSearch) filtered = filtered.filter(c => c.n.toLowerCase().includes(custSearch.toLowerCase()));
@@ -1168,7 +1196,7 @@ function renderContent() {
       </div>
       <div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">Showing ${filtered.length} customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView+' only':''}</div>
       <div class="table-wrap"><table><thead><tr>${sortTh('Customers','n','Customer')}<th>Segment</th>${sortTh('Customers','j','Jobs','r')}${sortTh('Customers','r','Revenue','r')}${sortTh('Customers','a','Avg','r')}<th class="c">Territory</th>${sortTh('Customers','first','First')}${sortTh('Customers','last','Last')}</tr></thead>
-      <tbody>${sortRows(filtered,custSort.k,custSort.d).map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td>'+badge(c.s)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td class="r">'+fmt(c.a)+'</td><td class="c">'+badge(c.f)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div></div>`;
+      <tbody>${sortRows(filtered,custSort.k,custSort.d).map(c=>'<tr><td style="font-weight:500">'+custName(c)+'</td><td>'+badge(c.s)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td class="r">'+fmt(c.a)+'</td><td class="c">'+badge(c.f)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div></div>`;
   }
 
   else if (activeTab==='Recurring') {
@@ -1202,7 +1230,7 @@ function renderContent() {
       </div>
       <div class="card" style="margin-bottom:24px"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${recCusts.length} active recurring customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, from job history</div>
         <div class="table-wrap"><table><thead><tr>${sortTh('Recurring','n','Customer')}<th class="c">Owner</th><th>Frequency</th>${sortTh('Recurring','visit','Avg/visit','r')}${sortTh('Recurring','j','Jobs','r')}${sortTh('Recurring','r','Lifetime','r')}${sortTh('Recurring','last','Last visit')}</tr></thead>
-        <tbody>${sortRows(recCusts,recSort.k,recSort.d).map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.freq||'\u2014')+'</td><td class="r">'+(c.visit>0?fmt(c.visit):'\u2014')+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div>
+        <tbody>${sortRows(recCusts,recSort.k,recSort.d).map(c=>'<tr><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.freq||'\u2014')+'</td><td class="r">'+(c.visit>0?fmt(c.visit):'\u2014')+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div>
       </div>
       ${moves.length ? '<div class="card"><div class="h">Recent schedule changes (live app log)</div><div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th>Service</th><th>Frequency</th><th class="r">Value</th><th class="c">Status</th><th>Created</th><th>Cancelled</th></tr></thead><tbody>'+moves.map(x=>'<tr><td style="font-weight:500">'+(x._cust||'\u2014')+'</td><td class="c">'+(x._franchisee?badge(x._franchisee):'\u2014')+'</td><td style="font-size:12px">'+(x._svc||'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+(x._freq||'\u2014')+'</td><td class="r">'+(x._value>0?fmt(x._value):'\u2014')+'</td><td class="c">'+statusBadge(x._status)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(x._created)+'</td><td style="color:var(--muted);font-size:12px">'+(x._canceled?fmtDate(x._canceled):'\u2014')+'</td></tr>').join('')+'</tbody></table></div></div>' : ''}
     `;
@@ -1215,7 +1243,7 @@ function renderContent() {
       <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Was recurring or 5+ jobs, no visit in 90+ days.</div>
       ${churnedList.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No churned customers in this period.</div>':
       '<div class="table-wrap"><table><thead><tr>'+sortTh('Churned','n','Customer')+sortTh('Churned','j','Jobs','r')+sortTh('Churned','r','Lifetime','r')+sortTh('Churned','last','Last Visit','r')+sortTh('Churned','daysSince','Days','r')+'<th class="c">Territory</th><th>Services</th></tr></thead>'+
-      '<tbody>'+sortRows(churnedList,churnSort.k,churnSort.d).map(c=>'<tr><td style="font-weight:500">'+c.n+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--red)">'+fmt(c.r)+'</td><td class="r" style="color:var(--muted)">'+fmtDate(c.last)+'</td><td class="r">'+c.daysSince+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+c.svc+'</td></tr>').join('')+'</tbody></table></div>'+
+      '<tbody>'+sortRows(churnedList,churnSort.k,churnSort.d).map(c=>'<tr><td style="font-weight:500">'+custName(c)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--red)">'+fmt(c.r)+'</td><td class="r" style="color:var(--muted)">'+fmtDate(c.last)+'</td><td class="r">'+c.daysSince+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+c.svc+'</td></tr>').join('')+'</tbody></table></div>'+
       '<div class="ib ia"><b>Total lifetime value:</b> '+fmt(total)+'. '+adamCh+' on Adam\'s patch, '+mikeCh+' on Mike\'s. A re-engagement push targeting the top 10 could recover recurring revenue.</div>'}
     </div>`;
   }
