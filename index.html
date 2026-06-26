@@ -1262,13 +1262,16 @@ function renderContent() {
       const gmailUrl = 'https://mail.google.com/mail/u/0/#search/' + gmailHash;
       const callerRaw = String(c._caller||'').trim();
       const numAttr = esc(callerRaw);
-      const gmailLabel = /voicemail/i.test(c._type||'') ? '\u25b6 Listen in Gmail' : 'Find in Gmail';
+      const isVoicemail = /voicemail/i.test(c._type||'');
+      const gmailBtn = isVoicemail
+        ? '<a class="call-act call-mail" href="'+gmailUrl+'" target="_blank" rel="noopener" data-num="'+numAttr+'" title="Opens Gmail and copies the number so you can paste it into search." onclick="copyNumQuiet(this)">\u25b6 Listen in Gmail</a>'
+        : '';
       const acts = callerRaw ? (
         '<div class="call-actions">'+
           '<button class="call-act" data-num="'+numAttr+'" onclick="copyNum(this)">Copy number</button>'+
           '<a class="call-act call-call" href="tel:'+numAttr+'">\u260e Call</a>'+
           (gmailDigits ? '<a class="call-act call-wa" href="https://wa.me/'+gmailDigits+'" target="_blank" rel="noopener">WhatsApp</a>' : '')+
-          '<a class="call-act call-mail" href="'+gmailUrl+'" target="_blank" rel="noopener" data-num="'+numAttr+'" title="Opens Gmail and copies the number so you can paste it into search." onclick="copyNumQuiet(this)">'+gmailLabel+'</a>'+
+          gmailBtn+
         '</div>'
       ) : '';
       const note = '<div class="call-note"><textarea rows="2" placeholder="Add a note or transcript correction\u2026" onchange="updateCallNote(\''+key+'\',this.value)">'+esc(c._note||'')+'</textarea></div>';
