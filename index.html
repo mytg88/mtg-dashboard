@@ -145,6 +145,13 @@ th.sortable:hover{color:var(--green)}
 .call-vm-none{font-size:12px;color:var(--muted);margin-bottom:10px}
 .call-status select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:13px;width:100%;max-width:240px;background:#fff}
 .b-missed{background:#FFEBEE;color:#C62828}.b-vm{background:#E3F2FD;color:#1565C0}
+.call-caller-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.call-gmail{font-size:12px;color:var(--blue);text-decoration:none;border:1px solid #CFE0CB;padding:4px 11px;border-radius:7px;white-space:nowrap;font-weight:500}
+.call-gmail:hover{background:#E8F5E9}
+.call-note{margin-bottom:10px}
+.call-note textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;resize:vertical;color:#3c463d;background:#fff;min-height:38px}
+.call-note textarea:focus{outline:none;border-color:var(--green)}
+.call-by{font-size:11px;color:var(--muted);margin-top:8px}
 @media(max-width:640px){
   .header{padding:20px 18px 16px}
   .header h1{font-size:23px}
@@ -313,6 +320,9 @@ function matchView(f) { return franchiseeView === 'All' || f === franchiseeView;
 // QuickBooks connects. Annual totals: 2021 £24,903 · 2022 £28,999 · 2023 £48,636 ·
 // 2024 £71,886 · 2025 £66,525. Counts (jobs/customers/services) are never touched.
 const HIST_CUTOFF = "2025-12";
+// Adam officially started April 2025. Any job tagged to him before then predates the franchise,
+// so it is reassigned to Mike (whose revenue for that period comes from invoiced history, so no double count).
+const ADAM_START = new Date(2025, 3, 1);
 // invoiced history from Michael CSV (dupe IV0807/IV0919 removed). Revenue 2021-03..2025-12;
 // jobs/customers only pre-Oct-2024 (Zenbooker covers Oct-2024 onward).
 // revenue: real work-completed shape, each calendar year scaled to verified paid total.
@@ -449,6 +459,7 @@ function handleData(data) {
     if (svc === 'Regular Garden Maintenance Visits' || svc === 'Regular Strim, Mow, & Blow' || svc === 'Strim, Mow, & Blow') svc = 'Regular Garden Maintenance';
     j._service = svc;
     j._franchisee = j['Franchisee'] || '';
+    if (j._franchisee === 'Adam' && j._date && j._date < ADAM_START) j._franchisee = 'Mike'; // Adam started Apr 2025
   });
   rawLeads.forEach(l => {
     l._date = parseDate(col(l,['Date Received','Received','Date']));
@@ -481,6 +492,7 @@ function handleData(data) {
     c._dur = col(c,['Duration']);
     c._trans = col(c,['Transcription']);
     c._by = col(c,['Updated By']);
+    c._note = col(c,['Notes','Note']);
     c._key = col(c,['Key']);
   });
 
@@ -805,13 +817,22 @@ function apiCall(extra, onOk, onErr) {
 }
 function setCallsWho(v) { callsWho = v; try { localStorage.setItem('mtg_calls_who', v); } catch(_) {} }
 function updateCallStatus(key, status) {
-  if (!callsWho) { alert('Pick who you are first, using the dropdown at the top of the Calls tab.'); renderContent(); return; }
+  if (!callsWho) callsWho = (auth && auth.name) ? auth.name : 'Unknown';
   const rec = rawCalls.find(c => c._key === key);
   if (rec) { rec['Status'] = status; rec._status = status; rec['Updated By'] = callsWho; rec._by = callsWho; }
   applyFilters(); renderContent();
   apiCall({ action:'updateCallStatus', key:key, status:status, by:callsWho },
     function(d) { if (!d || d.error) alert('Could not save that change. Hit Refresh and check it saved.'); },
     function() { alert('Could not reach the app to save. Hit Refresh and try again.'); });
+}
+function updateCallNote(key, note) {
+  if (!callsWho) callsWho = (auth && auth.name) ? auth.name : 'Unknown';
+  const rec = rawCalls.find(c => c._key === key);
+  if (rec) { rec['Notes'] = note; rec._note = note; rec['Updated By'] = callsWho; rec._by = callsWho; }
+  // No re-render here, so the box keeps focus and the caret while typing; the change saves on blur.
+  apiCall({ action:'updateCallNote', key:key, note:note, by:callsWho },
+    function(d) { if (!d || d.error) alert('Could not save the note. Hit Refresh and check it saved.'); },
+    function() { alert('Could not reach the app to save the note. Hit Refresh and try again.'); });
 }
 
 
@@ -1019,7 +1040,7 @@ function renderContent() {
         <div><div style="display:flex;justify-content:space-between;margin-bottom:7px">${badge('Adam')}<span style="font-size:13px;color:var(--muted)">${apC} customers</span></div>
         <div style="display:flex;gap:18px;font-size:13px"><span><b>${ap.length}</b> jobs</span><span><b>${fmt(apRev)}</b></span><span>avg <b>${fmt(apAvg)}</b></span></div>
         <div class="pb"><div class="pf" style="background:var(--blue4);width:${pairTotal>0?Math.round(apRev/pairTotal*100):0}%"></div></div></div>
-        ${monthlyData.some(m=>m.m < '2024-10') ? '<div style="font-size:11px;color:var(--muted);margin-top:14px;line-height:1.5">Mike\'s revenue and jobs are full invoiced history back to 2021. Adam\'s are from job records (October 2024 onward), so the two cover different spans.</div>' : ''}
+        ${monthlyData.some(m=>m.m < '2024-10') ? '<div style="font-size:11px;color:var(--muted);margin-top:14px;line-height:1.5">Mike\'s figures are his full invoiced history back to 2021. Adam\'s run from when he joined the franchise in April 2025, so the two naturally cover different spans.</div>' : ''}
       </div>
       <div class="card"><div class="h">Service mix</div>
         ${serviceData.slice(0,8).map(s=>'<div class="svc-row"><span class="svc-n">'+s.n+'</span><span class="svc-s svc-g">'+s.j+'</span><span class="svc-s">'+fmt(s.r)+'</span></div>').join('')}
@@ -1088,11 +1109,18 @@ function renderContent() {
       }
       const sel = '<select onchange="updateCallStatus(\''+key+'\',this.value)">'+statuses.map(st=>'<option value="'+st+'"'+(((c._status||'New')===st)?' selected':'')+'>'+st+'</option>').join('')+'</select>';
       const auto = (c._detail && /^Auto/.test(c._detail)) ? '<div style="font-size:10px;color:var(--green6);margin-top:4px">'+esc(c._detail)+'</div>' : '';
+      const gmailQ = encodeURIComponent(((c._caller ? c._caller+' ' : '') + 'Air Landline').trim());
+      const gmailUrl = 'https://mail.google.com/mail/u/0/#search/' + gmailQ;
+      const gmailCta = '<a class="call-gmail" href="'+gmailUrl+'" target="_blank" rel="noopener">'+(/voicemail/i.test(c._type||'') ? '\u25b6 Listen in Gmail' : 'Find in Gmail')+'</a>';
+      const note = '<div class="call-note"><textarea rows="2" placeholder="Add a note or transcript correction\u2026" onchange="updateCallNote(\''+key+'\',this.value)">'+esc(c._note||'')+'</textarea></div>';
+      const by = c._by ? '<div class="call-by">Last updated by '+esc(c._by)+'</div>' : '';
       return '<div class="call-item">'+
         '<div class="call-top">'+typeBadge(c._type)+'<span class="call-when">'+when+'</span><span class="call-owner">'+(c._fr?badge(c._fr):'')+'</span></div>'+
-        '<div class="call-caller">'+(esc(c._caller)||'\u2014')+'</div>'+
+        '<div class="call-caller-row"><span class="call-caller">'+(esc(c._caller)||'\u2014')+'</span>'+gmailCta+'</div>'+
         vm +
+        note +
         '<div class="call-status">'+sel+auto+'</div>'+
+        by +
       '</div>';
     };
     el.innerHTML = `
