@@ -164,6 +164,14 @@ th.sortable:hover{color:var(--green)}
 .call-name input::placeholder{color:var(--muted)}
 .call-name input:focus{outline:none;border-color:var(--green)}
 .call-saved{font-size:11px;font-weight:600;color:#5E35B1;background:#EDE7F6;padding:2px 7px;border-radius:6px}
+.call-history{margin-top:10px}
+.call-history summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--green6)}
+.hist-list{margin-top:8px;border-top:1px solid var(--line)}
+.hist-row{display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:12px}
+.hist-when{color:var(--muted);min-width:150px}
+.hist-type{flex:1;color:var(--ink)}
+.hist-st{font-weight:600;color:var(--ink)}
+.bulk-l{font-size:12px;font-weight:600;color:var(--green6);margin-right:8px}
 .call-gmail:hover{background:#E8F5E9}
 .call-note{margin-bottom:10px}
 .call-note textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;resize:vertical;color:#3c463d;background:#fff;min-height:38px}
@@ -864,8 +872,9 @@ function processCalls(b) {
   cs.forEach(c => {
     const k = c._callerNorm; if (!k) return;
     let g = byNum[k];
-    if (!g) g = byNum[k] = { num: k, count: 0, open: 0, resolved: 0, last: null, first: null };
+    if (!g) g = byNum[k] = { num: k, count: 0, open: 0, resolved: 0, last: null, first: null, calls: [] };
     g.count++;
+    g.calls.push(c);
     if (!c._status || c._status === 'New') g.open++;
     if (RESOLVED.test(c._status || '')) g.resolved++;
     if (c._date) { if (!g.last || c._date > g.last) g.last = c._date; if (!g.first || c._date < g.first) g.first = c._date; }
@@ -905,6 +914,19 @@ function updateCallStatus(key, status) {
   apiCall({ action:'updateCallStatus', key:key, status:status, by:callsWho },
     function(d) { if (!d || d.error) alert('Could not save that change. Hit Refresh and check it saved.'); },
     function() { alert('Could not reach the app to save. Hit Refresh and try again.'); });
+}
+// Bulk: set every call from one number to the same status, in a single request.
+function updateCallsForNumber(num, status) {
+  if (!callsWho) callsWho = (auth && auth.name) ? auth.name : 'Unknown';
+  num = normNum(num);
+  let n = 0;
+  rawCalls.forEach(c => {
+    if (c._callerNorm === num) { c['Status'] = status; c._status = status; c['Updated By'] = callsWho; c._by = callsWho; n++; }
+  });
+  applyFilters(); renderContent();
+  apiCall({ action:'updateCallsByNumber', num:num, status:status, by:callsWho },
+    function(d) { if (!d || d.error) alert('Could not update those calls. Hit Refresh and check.'); },
+    function() { alert('Could not reach the app to update. Hit Refresh and try again.'); });
 }
 function updateCallNote(key, note) {
   if (!callsWho) callsWho = (auth && auth.name) ? auth.name : 'Unknown';
@@ -1213,21 +1235,10 @@ function renderContent() {
   else if (activeTab==='Calls') {
     callsWho = (auth && auth.name) ? auth.name : callsWho;   // the updater is simply whoever is logged in
     const s = callsStats || {total:0,missed:0,vm:0,open:0,list:[],byNum:{},attention:0};
-    let list = s.list;
-    if (callsFilter === 'open') list = list.filter(c => !c._status || c._status === 'New');
-    else if (callsFilter === 'attention') {
-      list = list.filter(c => { const g = s.byNum[c._callerNorm]; return g && g.attention; })
-        .sort((a, b2) => {
-          const ga = s.byNum[a._callerNorm], gb = s.byNum[b2._callerNorm];
-          if (gb.count !== ga.count) return gb.count - ga.count;                                  // worst offenders first
-          if (a._callerNorm !== b2._callerNorm) return a._callerNorm < b2._callerNorm ? -1 : 1;   // keep each number together
-          return (b2._date ? b2._date : 0) - (a._date ? a._date : 0);
-        });
-    }
     const statuses = ['New','Called back','Booked','No answer','Not relevant'];
     const esc = x => String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const typeBadge = t => { const tl=(t||'').toLowerCase(); const cls = /missed/.test(tl)?'b-missed':(/voicemail/.test(tl)?'b-vm':'b-na'); return '<span class="badge '+cls+'">'+esc(t||'Call')+'</span>'; };
-    const card = c => {
+    const card = (c, history) => {
       const key = String(c._key).replace(/'/g,"\\'");
       const when = fmtDate(c._date) + (c._time ? ' \u00b7 '+esc(c._time) : '');
       let vm;
@@ -1239,7 +1250,11 @@ function renderContent() {
       } else {
         vm = '<div class="call-vm-none">'+(c._dur ? esc(c._dur)+', no transcript' : 'No voicemail')+'</div>';
       }
-      const sel = '<select onchange="updateCallStatus(\''+key+'\',this.value)">'+statuses.map(st=>'<option value="'+st+'"'+(((c._status||'New')===st)?' selected':'')+'>'+st+'</option>').join('')+'</select>';
+      const grouped = !!(history && history.length > 1);
+      const opts = sv => statuses.map(st=>'<option value="'+st+'"'+(((sv||'New')===st)?' selected':'')+'>'+st+'</option>').join('');
+      const sel = grouped
+        ? '<select onchange="updateCallsForNumber(\''+c._callerNorm+'\',this.value)">'+opts(c._status)+'</select>'
+        : '<select onchange="updateCallStatus(\''+key+'\',this.value)">'+opts(c._status)+'</select>';
       const auto = (c._detail && /^Auto/.test(c._detail)) ? '<div style="font-size:10px;color:var(--green6);margin-top:4px">'+esc(c._detail)+'</div>' : '';
       const gmailDigits = String(c._caller||'').replace(/\D/g,'');
       const gmailQ = 'from:no-reply@airlandline.co.uk' + (gmailDigits ? ' ' + gmailDigits : '');
@@ -1278,6 +1293,14 @@ function renderContent() {
           flag = '<div class="call-flag neutral">'+g.count+' calls from this number</div>';
         }
       }
+      let histHtml = '';
+      if (history && history.length > 1) {
+        const rows = history.slice().sort((x,y) => (y._date?y._date.getTime():0) - (x._date?x._date.getTime():0)).map(h => {
+          const w = fmtDate(h._date) + (h._time ? ' '+esc(h._time) : '');
+          return '<div class="hist-row"><span class="hist-when">'+w+'</span><span class="hist-type">'+esc(h._type||'Call')+'</span><span class="hist-st">'+esc(h._status||'New')+'</span></div>';
+        }).join('');
+        histHtml = '<details class="call-history"><summary>View all '+history.length+' calls from this number</summary><div class="hist-list">'+rows+'</div></details>';
+      }
       return '<div class="call-item">'+
         '<div class="call-top">'+typeBadge(c._type)+'<span class="call-when">'+when+'</span><span class="call-owner">'+(c._fr?badge(c._fr):'')+'</span></div>'+
         knownLine +
@@ -1287,10 +1310,38 @@ function renderContent() {
         acts +
         vm +
         note +
-        '<div class="call-status">'+sel+auto+'</div>'+
+        (grouped ? '<div class="call-status"><span class="bulk-l">Set all '+history.length+' calls to</span>'+sel+auto+'</div>' : '<div class="call-status">'+sel+auto+'</div>')+
+        histHtml +
         by +
       '</div>';
     };
+    const latestOf = arr => arr.slice().sort((x,y) => (y._date?y._date.getTime():0) - (x._date?x._date.getTime():0))[0];
+    const isOpen = c => !c._status || c._status === 'New';
+    let cardsHtml = '', isEmpty = true;
+    if (callsFilter === 'attention') {
+      // One card per number (worst offenders first), representative = the latest call.
+      const groups = Object.values(s.byNum).filter(gg => gg.attention)
+        .sort((ga, gb) => (gb.count - ga.count) || ((gb.last?gb.last.getTime():0) - (ga.last?ga.last.getTime():0)));
+      isEmpty = groups.length === 0;
+      cardsHtml = groups.map(gg => card(latestOf(gg.calls), gg.calls)).join('');
+    } else {
+      // Group every caller into one card. Un-numbered calls can't be grouped, so they stay individual.
+      const units = [];
+      Object.values(s.byNum).forEach(gg => {
+        if (callsFilter === 'open' && gg.open === 0) return;                 // only callers with an open call
+        const openCalls = gg.calls.filter(isOpen);
+        const rep = (callsFilter === 'open' && openCalls.length) ? latestOf(openCalls) : latestOf(gg.calls);
+        units.push({ rep: rep, calls: gg.calls });
+      });
+      s.list.forEach(c => {
+        if (c._callerNorm) return;                                          // already grouped above
+        if (callsFilter === 'open' && !isOpen(c)) return;
+        units.push({ rep: c, calls: [c] });
+      });
+      units.sort((a, b) => ((b.rep && b.rep._date)?b.rep._date.getTime():0) - ((a.rep && a.rep._date)?a.rep._date.getTime():0));
+      isEmpty = units.length === 0;
+      cardsHtml = units.map(u => card(u.rep, u.calls.length > 1 ? u.calls : null)).join('');
+    }
     el.innerHTML = `
     <div class="grid grid-4">
       <div class="card accent-top"><div class="kpi-l">Total Calls</div><div class="kpi-v">${s.total}</div><div class="kpi-s">in period</div></div>
@@ -1307,8 +1358,8 @@ function renderContent() {
         <button class="filter-btn ${callsFilter==='attention'?'active':''}" onclick="callsFilter='attention';renderContent()">Needs attention (${s.attention})</button>
         <button class="filter-btn ${callsFilter==='all'?'active':''}" onclick="callsFilter='all';renderContent()">All (${s.total})</button>
       </div>
-      ${list.length===0 ? '<div style="color:var(--muted);text-align:center;padding:40px">'+(callsFilter==='attention'?'No repeat callers waiting \u2014 everyone who called more than once has had a callback.':'No calls to show'+(franchiseeView!=='All'?' for '+franchiseeView:''))+'.</div>'
-        : '<div class="call-list">'+list.map(card).join('')+'</div>'}
+      ${isEmpty ? '<div style="color:var(--muted);text-align:center;padding:40px">'+(callsFilter==='attention'?'No repeat callers waiting \u2014 everyone who called more than once has had a callback.':'No calls to show'+(franchiseeView!=='All'?' for '+franchiseeView:''))+'.</div>'
+        : '<div class="call-list">'+cardsHtml+'</div>'}
       <div class="ib ig" style="margin-top:16px"><b>How statuses set themselves:</b> a call closes to <b>Booked</b> automatically when that number becomes a booking, and to <b>Called back</b> when a callback to it appears in the Air Landline export. Anything still <b>New</b> is genuinely waiting. Change a status here and it saves for everyone.</div>
     </div>`;
   }
