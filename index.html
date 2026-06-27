@@ -922,29 +922,46 @@ function processRecurring(b) {
 function processCalls(b) {
   let cs = rawCalls.filter(c => matchView(c._fr));
   if (b.from && b.to) cs = cs.filter(c => c._date && c._date >= b.from && c._date <= b.to);
-  const open = cs.filter(c => isCallOpen(c._status));
-  // Group by caller so we can spot people who've tried repeatedly with no callback.
+  const now = Date.now();
+  const AGE_MS = 31 * 24 * 3600 * 1000;   // a missed call with no message ages out after 31 days
+  // Group by caller so we can spot repeat callers and age out stale ones.
   const byNum = {};
   cs.forEach(c => {
+    c._aged = false;
     const k = c._callerNorm; if (!k) return;
     let g = byNum[k];
-    if (!g) g = byNum[k] = { num: k, count: 0, open: 0, resolved: 0, last: null, first: null, calls: [] };
+    if (!g) g = byNum[k] = { num: k, count: 0, open: 0, resolved: 0, last: null, first: null, calls: [], hasVM: false };
     g.count++;
     g.calls.push(c);
+    if (/voicemail/i.test(c._type || '')) g.hasVM = true;
     if (isCallOpen(c._status)) g.open++; else g.resolved++;   // "resolved" here means any closed outcome
     if (c._date) { if (!g.last || c._date > g.last) g.last = c._date; if (!g.first || c._date < g.first) g.first = c._date; }
   });
-  // Needs attention = 2+ inbound calls and we've never given any of them an outcome.
-  Object.values(byNum).forEach(g => { g.attention = g.count >= 2 && g.resolved === 0; });
+  // Un-numbered calls can't be grouped, so age them one by one.
+  cs.forEach(c => {
+    if (c._callerNorm) return;
+    c._aged = isCallOpen(c._status) && !/voicemail/i.test(c._type || '') && !!c._date && (now - c._date.getTime()) > AGE_MS;
+  });
+  Object.values(byNum).forEach(g => {
+    // A whole number ages out only when every call is still open, none left a voicemail,
+    // and the most recent attempt was over 31 days ago. Voicemails never auto-age.
+    g.aged = (g.resolved === 0 && !g.hasVM && !!g.last && (now - g.last.getTime()) > AGE_MS);
+    if (g.aged) g.calls.forEach(c => { c._aged = true; });
+    g.openActive = g.aged ? 0 : g.open;
+    g.ignoredCount = g.calls.filter(c => c._aged || c._status === 'Ignored').length;
+    g.ignored = g.openActive === 0 && g.ignoredCount > 0;          // shows in the Ignored filter
+    g.attention = g.count >= 2 && g.resolved === 0 && !g.aged;
+  });
   const attentionNums = Object.values(byNum).filter(g => g.attention);
   callsStats = {
     total: cs.length,
     missed: cs.filter(c => /missed/i.test(c._type)).length,
     vm: cs.filter(c => /voicemail/i.test(c._type)).length,
-    open: open.length,
+    open: cs.filter(c => isCallOpen(c._status) && !c._aged).length,
+    ignored: cs.filter(c => c._aged || c._status === 'Ignored').length,
     byNum: byNum,
     attention: attentionNums.length,
-    list: cs.slice().sort((a,b2) => (b2._date?b2._date:0) - (a._date?a._date:0))
+    list: cs.slice().sort((a, b2) => (b2._date ? b2._date : 0) - (a._date ? a._date : 0))
   };
 }
 function apiCall(extra, onOk, onErr) {
@@ -1347,7 +1364,7 @@ function renderContent() {
 
   else if (activeTab==='Calls') {
     callsWho = (auth && auth.name) ? auth.name : callsWho;   // the updater is simply whoever is logged in
-    const s = callsStats || {total:0,missed:0,vm:0,open:0,list:[],byNum:{},attention:0};
+    const s = callsStats || {total:0,missed:0,vm:0,open:0,ignored:0,list:[],byNum:{},attention:0};
     // [value, friendly label, pill colour]. Open outcomes keep a call in the list; the rest close it.
     const ST = [
       ['Booked','Job booked','green'],
@@ -1358,11 +1375,12 @@ function renderContent() {
       ['Moved to WhatsApp','Moved to WhatsApp','grey'],
       ['Moved to email','Moved to email','grey'],
       ['Not relevant','Not relevant','grey'],
+      ['Ignored','Ignored','grey'],
       ['New','New','amber']
     ];
     const stLabel = v => { for (const x of ST) if (x[0]===v) return x[1]; return v || 'New'; };
     const stCls   = v => { for (const x of ST) if (x[0]===v) return x[2]; return 'amber'; };
-    const menuVals = ['Booked','Resolved','Called back','Needs callback','Left message','Moved to WhatsApp','Moved to email','Not relevant'];
+    const menuVals = ['Booked','Resolved','Called back','Needs callback','Left message','Moved to WhatsApp','Moved to email','Not relevant','Ignored'];
     const esc = x => String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const typeBadge = t => { const tl=(t||'').toLowerCase(); const cls = /missed/.test(tl)?'b-missed':(/voicemail/.test(tl)?'b-vm':'b-na'); return '<span class="badge '+cls+'">'+esc(t||'Call')+'</span>'; };
     const card = (c, history) => {
@@ -1396,7 +1414,8 @@ function renderContent() {
       }
       let statusCtl;
       if (open) {
-        const lead = (stRaw !== 'New') ? '<span class="call-pill pill-amber">'+esc(stLabel(stRaw))+'</span>' : '';
+        const lead = c._aged ? '<span class="call-pill pill-grey">No callback 31+ days</span>'
+          : (stRaw !== 'New') ? '<span class="call-pill pill-amber">'+esc(stLabel(stRaw))+'</span>' : '';
         statusCtl = lead +
           '<details class="call-menu"><summary class="call-set-btn">'+(grouped ? 'Set all '+cnt : 'Set outcome')+' \u25be</summary><div class="call-menu-list">'+menuHtml+'</div></details>';
       } else {
@@ -1469,7 +1488,7 @@ function renderContent() {
       '</div>';
     };
     const latestOf = arr => arr.slice().sort((x,y) => (y._date?y._date.getTime():0) - (x._date?x._date.getTime():0))[0];
-    const isOpen = c => isCallOpen(c._status);
+    const isOpen = c => isCallOpen(c._status) && !c._aged;
     const hasVM = u => u.calls.some(c => /voicemail/i.test(c._type||''));
     let units = [];
     if (callsFilter === 'attention') {
@@ -1480,7 +1499,8 @@ function renderContent() {
     } else {
       // Group every caller into one card. Un-numbered calls can't be grouped, so they stay individual.
       Object.values(s.byNum).forEach(gg => {
-        if (callsFilter === 'open' && gg.open === 0) return;                 // only callers with an open call
+        if (callsFilter === 'open' && (gg.aged || gg.open === 0)) return;     // only callers with a live open call
+        if (callsFilter === 'ignored' && !gg.ignored) return;                 // only aged-out / ignored callers
         const openCalls = gg.calls.filter(isOpen);
         const rep = (callsFilter === 'open' && openCalls.length) ? latestOf(openCalls) : latestOf(gg.calls);
         units.push({ rep: rep, calls: gg.calls });
@@ -1488,6 +1508,7 @@ function renderContent() {
       s.list.forEach(c => {
         if (c._callerNorm) return;                                          // already grouped above
         if (callsFilter === 'open' && !isOpen(c)) return;
+        if (callsFilter === 'ignored' && !(c._aged || c._status === 'Ignored')) return;
         units.push({ rep: c, calls: [c] });
       });
       units.sort((a, b) => ((b.rep && b.rep._date)?b.rep._date.getTime():0) - ((a.rep && a.rep._date)?a.rep._date.getTime():0));
@@ -1525,6 +1546,7 @@ function renderContent() {
         <div class="filter-row">
           <button class="filter-btn ${callsFilter==='open'?'active':''}" onclick="callsFilter='open';renderContent()">Still open (${s.open})</button>
           <button class="filter-btn ${callsFilter==='attention'?'active':''}" onclick="callsFilter='attention';renderContent()">Needs attention (${s.attention})</button>
+          <button class="filter-btn ${callsFilter==='ignored'?'active':''}" onclick="callsFilter='ignored';renderContent()">Ignored (${s.ignored})</button>
           <button class="filter-btn ${callsFilter==='all'?'active':''}" onclick="callsFilter='all';renderContent()">All (${s.total})</button>
         </div>
         <input id="callSearchBox" class="search" placeholder="Search name, number, note or message..." value="${esc(callSearch)}" oninput="onCallSearch(this.value, this.selectionStart)" style="margin-bottom:12px">
@@ -1534,9 +1556,9 @@ function renderContent() {
           <button class="filter-btn ${callType==='novm'?'active':''}" onclick="callType='novm';renderContent()">No voicemail</button>
         </div>
       </div>
-      ${isEmpty ? '<div style="color:var(--muted);text-align:center;padding:40px">'+((cq||callType!=='all')?'No calls match your search or filter.':(callsFilter==='attention'?'No repeat callers waiting \u2014 everyone who called more than once has had a callback.':'No calls to show'+(franchiseeView!=='All'?' for '+franchiseeView:'')))+'.</div>'
+      ${isEmpty ? '<div style="color:var(--muted);text-align:center;padding:40px">'+((cq||callType!=='all')?'No calls match your search or filter.':(callsFilter==='attention'?'No repeat callers waiting \u2014 everyone who called more than once has had a callback.':callsFilter==='ignored'?'Nothing has aged out \u2014 no unactioned missed calls older than 31 days.':'No calls to show'+(franchiseeView!=='All'?' for '+franchiseeView:'')))+'.</div>'
         : '<div class="call-list">'+cardsHtml+'</div>'}
-      <div class="ib ig" style="margin-top:16px"><b>How the list works:</b> a call stays here until you give it an outcome. Hit <b>Set outcome</b> and pick what actually happened \u2014 job booked, resolved, called back, moved to WhatsApp or email, or not relevant \u2014 or transfer it to the other operator. <b>Needs another callback</b> and <b>Left a message</b> keep a call in the list so it isn\u2019t forgotten. Every change saves for everyone.</div>
+      <div class="ib ig" style="margin-top:16px"><b>How the list works:</b> a call stays here until you give it an outcome. Hit <b>Set outcome</b> and pick what actually happened \u2014 job booked, resolved, called back, moved to WhatsApp or email, or not relevant \u2014 or transfer it to the other operator. <b>Needs another callback</b> and <b>Left a message</b> keep a call in the list. A missed call with no message that goes 31 days with no callback drops into <b>Ignored</b> on its own; voicemails always stay until you action them. Every change saves for everyone.</div>
     </div>`;
   }
 
