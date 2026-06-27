@@ -164,7 +164,7 @@ th.sortable:hover{color:var(--green)}
 .call-name input{width:100%;box-sizing:border-box;font-family:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
 .call-name input::placeholder{color:var(--muted)}
 .call-name input:focus{outline:none;border-color:var(--green)}
-.call-saved{font-size:11px;font-weight:600;color:#5E35B1;background:#EDE7F6;padding:2px 7px;border-radius:6px}
+.name-edit{font-size:11px;font-weight:600;color:var(--green6);background:none;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;padding:0;text-decoration:underline}
 .call-history{margin-top:10px}
 .call-history summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--green6)}
 .hist-list{margin-top:8px;border-top:1px solid var(--line)}
@@ -995,6 +995,18 @@ function saveContact(num, name) {
     function() { alert('Could not reach the app to save the name. Hit Refresh and try again.'); });
 }
 
+// Reveal the hidden name input for an already-named caller and focus it.
+function editName(btn) {
+  const card = btn.closest('.call-item');
+  const input = card ? card.querySelector('.call-name input') : null;
+  if (!input) return;
+  input.style.display = '';
+  btn.style.display = 'none';
+  input.focus();
+  const n = input.value.length;
+  try { input.setSelectionRange(n, n); } catch (e) {}
+}
+
 
 // ---------- helpers ----------
 function badge(t) {
@@ -1335,9 +1347,10 @@ function renderContent() {
       const knownLine = known ? ('<div class="call-cust">'+esc(known.name)+
         (known.status ? '<span style="font-family:\'DM Sans\',sans-serif;font-size:12px;font-weight:500;color:var(--muted)">\u00b7 '+esc(known.status)+'</span>' : '')+
         (known.inherited ? '<span class="badge b-inherited">inherited</span>' : '')+
-        (known.manual ? '<span class="call-saved">saved</span>' : '')+
+        (nKey ? '<button class="name-edit" onclick="editName(this)">edit name</button>' : '')+
         '</div>') : '';
-      const nameBox = nKey ? ('<div class="call-name"><input type="text" placeholder="Name this caller \u2014 saved for this number" value="'+esc(manual?manual.name:'')+'" onchange="saveContact(\''+nKey+'\', this.value)"></div>') : '';
+      // Input shown only when no name is set yet; once named, it collapses behind the "edit name" link.
+      const nameBox = nKey ? ('<div class="call-name"><input type="text" placeholder="Name this caller \u2014 saved for this number" value="'+esc(known?known.name:'')+'" onchange="saveContact(\''+nKey+'\', this.value)"'+(known?' style="display:none"':'')+'></div>') : '';
       const g = (c._callerNorm && callsStats && callsStats.byNum) ? callsStats.byNum[c._callerNorm] : null;
       let flag = '';
       if (g && g.count >= 2) {
