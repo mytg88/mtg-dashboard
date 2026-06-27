@@ -147,8 +147,8 @@ th.sortable:hover{color:var(--green)}
 .call-vm-full{margin-top:8px;padding:10px 12px;background:var(--paper);border-radius:8px;color:#3c463d}
 .call-vm-none{font-size:12px;color:var(--muted);margin-bottom:10px}
 .call-head-actions{margin-left:auto;display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
-.call-primary{font-size:12.5px;font-weight:700;padding:8px 14px;border:none;border-radius:8px;background:var(--green);color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;box-shadow:0 1px 2px rgba(20,40,30,.18)}
-.call-primary:hover{background:var(--green6)}
+.call-set-btn{font-size:12.5px;font-weight:700;padding:8px 15px;border:none;border-radius:8px;background:var(--ink);color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;box-shadow:0 1px 2px rgba(20,40,30,.18)}
+.call-set-btn:hover{background:#22372b}
 .call-menu{position:relative;display:inline-block}
 .call-menu>summary{list-style:none;cursor:pointer}
 .call-menu>summary::-webkit-details-marker{display:none}
@@ -1394,13 +1394,11 @@ function renderContent() {
         menuHtml += '<div class="cmenu-div"></div>';
         menuHtml += targets.map(t => '<button class="cmenu-item xfer" onclick="transferCalls(\''+c._callerNorm+'\',\''+t+'\')">\u2192 Transfer to '+t+'</button>').join('');
       }
-      const menu = grouped ? cnt + ' calls' : 'outcomes';
       let statusCtl;
       if (open) {
         const lead = (stRaw !== 'New') ? '<span class="call-pill pill-amber">'+esc(stLabel(stRaw))+'</span>' : '';
         statusCtl = lead +
-          '<button class="call-primary" onclick="'+setExpr('Resolved')+'">\u2713 '+(grouped ? 'Resolve all '+cnt : 'Mark resolved')+'</button>'+
-          '<details class="call-menu"><summary class="call-menu-btn" title="Other outcomes for these '+menu+'">\u25be</summary><div class="call-menu-list">'+menuHtml+'</div></details>';
+          '<details class="call-menu"><summary class="call-set-btn">'+(grouped ? 'Set all '+cnt : 'Set outcome')+' \u25be</summary><div class="call-menu-list">'+menuHtml+'</div></details>';
       } else {
         statusCtl = '<span class="call-pill pill-'+stCls(stRaw)+'">'+esc(stLabel(stRaw))+'</span>'+
           '<details class="call-menu"><summary class="call-menu-btn change" title="Change the outcome">change</summary><div class="call-menu-list">'+menuHtml+'</div></details>';
@@ -1538,7 +1536,7 @@ function renderContent() {
       </div>
       ${isEmpty ? '<div style="color:var(--muted);text-align:center;padding:40px">'+((cq||callType!=='all')?'No calls match your search or filter.':(callsFilter==='attention'?'No repeat callers waiting \u2014 everyone who called more than once has had a callback.':'No calls to show'+(franchiseeView!=='All'?' for '+franchiseeView:'')))+'.</div>'
         : '<div class="call-list">'+cardsHtml+'</div>'}
-      <div class="ib ig" style="margin-top:16px"><b>How the list works:</b> a call stays here until you give it an outcome. <b>Mark resolved</b> clears the common ones in one tap; the <b>\u25be</b> menu holds the rest \u2014 job booked, called back, moved to WhatsApp or email, not relevant, or transfer to the other operator. <b>Needs another callback</b> and <b>Left a message</b> keep a call in the list so it isn\u2019t forgotten. Every change saves for everyone.</div>
+      <div class="ib ig" style="margin-top:16px"><b>How the list works:</b> a call stays here until you give it an outcome. Hit <b>Set outcome</b> and pick what actually happened \u2014 job booked, resolved, called back, moved to WhatsApp or email, or not relevant \u2014 or transfer it to the other operator. <b>Needs another callback</b> and <b>Left a message</b> keep a call in the list so it isn\u2019t forgotten. Every change saves for everyone.</div>
     </div>`;
   }
 
