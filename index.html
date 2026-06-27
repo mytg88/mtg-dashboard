@@ -593,22 +593,28 @@ function prevUkTaxYear() {
 }
 function dfBounds() {
   const now = new Date(); const y = now.getFullYear(), m = now.getMonth();
+  let b;
   switch (dfRange) {
-    case 'this-month':    return { from: new Date(y, m, 1),     to: new Date(y, m+1, 0, 23, 59, 59) };
-    case 'last-month':    return { from: new Date(y, m-1, 1),   to: new Date(y, m, 0, 23, 59, 59) };
-    case 'ytd':           return { from: new Date(y, 0, 1),     to: now };
-    case 'tax-year':      return ukTaxYearBounds();
-    case 'last-tax-year': return prevUkTaxYear();
-    case 'last-12mo':     return { from: new Date(y-1, m, now.getDate()), to: now };
+    case 'this-month':    b = { from: new Date(y, m, 1),     to: new Date(y, m+1, 0, 23, 59, 59) }; break;
+    case 'last-month':    b = { from: new Date(y, m-1, 1),   to: new Date(y, m, 0, 23, 59, 59) }; break;
+    case 'ytd':           b = { from: new Date(y, 0, 1),     to: now }; break;
+    case 'tax-year':      b = ukTaxYearBounds(); break;
+    case 'last-tax-year': b = prevUkTaxYear(); break;
+    case 'last-12mo':     b = { from: new Date(y-1, m, now.getDate()), to: now }; break;
     case 'all':           return { from: null, to: null };
-    case 'custom':        return { from: dfFrom, to: dfTo };
+    case 'custom':        b = { from: dfFrom, to: dfTo }; break;
+    default:              return { from: null, to: null };
   }
-  return { from: null, to: null };
+  // Never let an in-progress period run past now, so it compares like-for-like with last year.
+  if (b && b.to && b.to > now) b.to = now;
+  return b || { from: null, to: null };
 }
 function prevBounds(b) {
   if (!b.from || !b.to) return { from: null, to: null };
-  const len = b.to - b.from;
-  return { from: new Date(b.from.getTime() - len - 1), to: new Date(b.from.getTime() - 1) };
+  // Year-on-year: the same window one year earlier. Gardening is seasonal, so this June
+  // should be compared with last June, not with May.
+  const shift = (d) => { const n = new Date(d.getTime()); n.setFullYear(n.getFullYear() - 1); return n; };
+  return { from: shift(b.from), to: shift(b.to) };
 }
 
 // ---------- aggregation ----------
@@ -1026,11 +1032,25 @@ function sortRows(arr, k, d){
 }
 function setSort(which,k){ const st=_sortState(which); if(st.k===k){ st.d=st.d==='asc'?'desc':'asc'; } else { st.k=k; st.d='desc'; } renderContent(); }
 function sortTh(which,k,label,cls){ const st=_sortState(which); const a=st.k===k?(st.d==='asc'?' \u25b4':' \u25be'):''; return '<th class="'+(cls?cls+' ':'')+'sortable" onclick="setSort(\''+which+'\',\''+k+'\')">'+label+a+'</th>'; }
-function deltaChip(cur, prev) {
+function comparisonLabel() {
+  switch (dfRange) {
+    case 'this-month':
+    case 'last-month': { const pf = prevBounds(dfBounds()).from; return pf ? 'vs ' + pf.toLocaleDateString('en-GB',{month:'short',year:'numeric'}) : ''; }
+    case 'ytd':           return 'vs the same dates last year';
+    case 'tax-year':      return 'vs last tax year so far';
+    case 'last-tax-year': return 'vs the tax year before';
+    case 'last-12mo':     return 'vs the 12 months before';
+    case 'custom':        return 'vs a year earlier';
+    case 'all':           return '';
+  }
+  return '';
+}
+function deltaChip(cur, prev, label) {
   if (!prevTotals || !prevTotals.has || prev === 0) return '';
   const d = Math.round((cur - prev) / prev * 100);
-  if (d === 0) return '<span class="chip chip-flat">0%</span>';
-  return '<span class="chip '+(d>0?'chip-up':'chip-down')+'">'+(d>0?'\u25b2':'\u25bc')+' '+Math.abs(d)+'%</span>';
+  const t = label ? ' title="'+label+'"' : '';
+  if (d === 0) return '<span class="chip chip-flat"'+t+'>0%</span>';
+  return '<span class="chip '+(d>0?'chip-up':'chip-down')+'"'+t+'>'+(d>0?'\u25b2':'\u25bc')+' '+Math.abs(d)+'%</span>';
 }
 
 // ---------- SVG charts ----------
@@ -1148,6 +1168,7 @@ function renderContent() {
     const aMissing = missingPriceData.reduce((s,c)=>s+c.z,0);
     const aQuotes = leadStats ? (leadStats.byStatus.QUOTED || 0) : 0;
     const aOpenCalls = callsStats ? callsStats.open : 0;
+    const cmpLabel = comparisonLabel();
     const attnCards = [
       { n:aLeads, t:'Leads to action', d:'still marked new', tab:'Leads', warn:aLeads>0 },
       { n:aQuotes, t:'Quotes to chase', d:'awaiting a decision', tab:'Leads', warn:aQuotes>0 },
@@ -1187,11 +1208,12 @@ function renderContent() {
       ${attnCards.map(c=>{ const click = c.tab==='Calls' ? "callsFilter='open';setTab('Calls')" : "setTab('"+c.tab+"')"; return '<div class="attn-card '+(c.warn?'':'ok')+'" onclick="'+click+'"><div class="attn-n" style="color:'+(c.warn?'var(--accent)':'var(--green4)')+'">'+c.n+'</div><div><div class="attn-t">'+c.t+'</div><div class="attn-d">'+c.d+'</div></div></div>'; }).join('')}
     </div>
     <div class="grid grid-4">
-      <div class="card accent-top"><div class="kpi-l">Revenue</div><div class="kpi-v">${fmt(totalRev)}${deltaChip(totalRev, prevTotals?prevTotals.rev:0)}</div><div class="kpi-s">recorded</div></div>
-      <div class="card accent-top"><div class="kpi-l">Completed Jobs</div><div class="kpi-v">${totalJobs.toLocaleString()}${deltaChip(totalJobs, prevTotals?prevTotals.jobs:0)}</div><div class="kpi-s">completed</div></div>
-      <div class="card accent-top"><div class="kpi-l">Active Customers</div><div class="kpi-v">${totalCusts}${deltaChip(totalCusts, prevTotals?prevTotals.custs:0)}</div><div class="kpi-s">with a job in period</div></div>
+      <div class="card accent-top"><div class="kpi-l">Revenue</div><div class="kpi-v">${fmt(totalRev)}${deltaChip(totalRev, prevTotals?prevTotals.rev:0, cmpLabel)}</div><div class="kpi-s">recorded</div></div>
+      <div class="card accent-top"><div class="kpi-l">Completed Jobs</div><div class="kpi-v">${totalJobs.toLocaleString()}${deltaChip(totalJobs, prevTotals?prevTotals.jobs:0, cmpLabel)}</div><div class="kpi-s">completed</div></div>
+      <div class="card accent-top"><div class="kpi-l">Active Customers</div><div class="kpi-v">${totalCusts}${deltaChip(totalCusts, prevTotals?prevTotals.custs:0, cmpLabel)}</div><div class="kpi-s">with a job in period</div></div>
       <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Active Recurring</div><div class="kpi-v">${recCusts.length}</div><div class="kpi-s">customers on a schedule</div></div>
     </div>
+    ${cmpLabel && prevTotals && prevTotals.has ? '<div style="font-size:12px;color:var(--muted);margin:-14px 0 22px;display:flex;align-items:center;gap:6px"><span class="chip chip-up" style="pointer-events:none">\u25b2</span><span class="chip chip-down" style="pointer-events:none">\u25bc</span> compared with the same period last year ('+cmpLabel.replace(/^vs /,'')+'). Active recurring is a live snapshot, so it has no comparison.</div>' : ''}
     ${monthlyData.some(m=>m.m < '2024-10') ? '<div style="font-size:11px;color:var(--muted);margin:-14px 0 22px;line-height:1.5">Revenue, completed jobs and customers cover the full history back to 2021. Recurring status comes from live job records, so customers who left before October 2024 show as repeat, one-off or churned.</div>' : ''}
     <div class="card" style="margin-bottom:28px"><div class="h">Revenue trend</div>${areaChartSVG(monthlyData,'#2E7D32')}</div>
     <div class="card" style="margin-bottom:28px"><div class="h">Customer mix</div>
