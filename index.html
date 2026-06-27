@@ -252,7 +252,7 @@ let auth = null; // {user, pass, role, name} once logged in. No password is stor
 let rawJobs=[], customers=[], rawLeads=[], rawRecurring=[], numToCust={}, manualNames={};
 let jobsPeriod=[], jobs=[], prevJobs=[], allCustomers=[], churnedList=[], monthlyData=[], serviceData=[], missingPriceData=[];
 let leadStats=null, recurringStats=null, prevTotals=null;
-let rawCalls=[], callsStats=null, callsFilter='open', callsWho='';
+let rawCalls=[], callsStats=null, callsFilter='open', callsWho='', callSearch='', callType='all';
 let activeTab="Overview", custSegFilter="All", custSearch="";
 // Possible header names a customer phone number might live under, once it's added to the feed.
 const PHONE_HEADERS = ['Phone','Customer Phone','Mobile','Telephone','Phone Number','Contact Number','Cell','Tel'];
@@ -1116,7 +1116,7 @@ const tabList = ["Overview","Leads","Calls","Revenue","Customers","Recurring","C
 function renderTabs() {
   document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+t+'</button>').join('');
 }
-function setTab(t) { activeTab=t; custSegFilter="All"; custSearch=""; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
+function setTab(t) { activeTab=t; custSegFilter="All"; custSearch=""; callSearch=""; callType="all"; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 function setView(v) { franchiseeView=v; applyFilters(); renderContent(); dfRender(); }
 function goSeg(seg) { activeTab='Customers'; custSegFilter=seg; custSearch=''; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 // Re-rendering rebuilds the search box, which drops focus after each keystroke. Put it back.
@@ -1124,6 +1124,12 @@ function onCustSearch(v, pos) {
   custSearch = v;
   renderContent();
   const el = document.getElementById('custSearchBox');
+  if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (_) {} }
+}
+function onCallSearch(v, pos) {
+  callSearch = v;
+  renderContent();
+  const el = document.getElementById('callSearchBox');
   if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (_) {} }
 }
 
@@ -1365,16 +1371,15 @@ function renderContent() {
     };
     const latestOf = arr => arr.slice().sort((x,y) => (y._date?y._date.getTime():0) - (x._date?x._date.getTime():0))[0];
     const isOpen = c => !c._status || c._status === 'New';
-    let cardsHtml = '', isEmpty = true;
+    const hasVM = u => u.calls.some(c => /voicemail/i.test(c._type||''));
+    let units = [];
     if (callsFilter === 'attention') {
-      // One card per number (worst offenders first), representative = the latest call.
-      const groups = Object.values(s.byNum).filter(gg => gg.attention)
-        .sort((ga, gb) => (gb.count - ga.count) || ((gb.last?gb.last.getTime():0) - (ga.last?ga.last.getTime():0)));
-      isEmpty = groups.length === 0;
-      cardsHtml = groups.map(gg => card(latestOf(gg.calls), gg.calls)).join('');
+      // Worst offenders first, representative = the latest call.
+      Object.values(s.byNum).filter(gg => gg.attention)
+        .sort((ga, gb) => (gb.count - ga.count) || ((gb.last?gb.last.getTime():0) - (ga.last?ga.last.getTime():0)))
+        .forEach(gg => units.push({ rep: latestOf(gg.calls), calls: gg.calls }));
     } else {
       // Group every caller into one card. Un-numbered calls can't be grouped, so they stay individual.
-      const units = [];
       Object.values(s.byNum).forEach(gg => {
         if (callsFilter === 'open' && gg.open === 0) return;                 // only callers with an open call
         const openCalls = gg.calls.filter(isOpen);
@@ -1387,9 +1392,25 @@ function renderContent() {
         units.push({ rep: c, calls: [c] });
       });
       units.sort((a, b) => ((b.rep && b.rep._date)?b.rep._date.getTime():0) - ((a.rep && a.rep._date)?a.rep._date.getTime():0));
-      isEmpty = units.length === 0;
-      cardsHtml = units.map(u => card(u.rep, u.calls.length > 1 ? u.calls : null)).join('');
     }
+    // With / without voicemail
+    if (callType === 'vm') units = units.filter(hasVM);
+    else if (callType === 'novm') units = units.filter(u => !hasVM(u));
+    // Free-text search across name, number, notes and transcripts
+    const cq = callSearch.trim().toLowerCase();
+    if (cq) {
+      const cqDigits = cq.replace(/\D/g, '');
+      units = units.filter(u => {
+        const num = u.rep._callerNorm || '';
+        if (String(u.rep._caller||'').toLowerCase().includes(cq)) return true;
+        if (cqDigits && num.includes(cqDigits)) return true;
+        const known = (manualNames[num] && manualNames[num].name) || (numToCust[num] && numToCust[num].name) || '';
+        if (known.toLowerCase().includes(cq)) return true;
+        return u.calls.some(c => String(c._note||'').toLowerCase().includes(cq) || String(c._trans||'').toLowerCase().includes(cq));
+      });
+    }
+    const isEmpty = units.length === 0;
+    const cardsHtml = units.map(u => card(u.rep, u.calls.length > 1 ? u.calls : null)).join('');
     el.innerHTML = `
     <div class="grid grid-4">
       <div class="card accent-top"><div class="kpi-l">Total Calls</div><div class="kpi-v">${s.total}</div><div class="kpi-s">in period</div></div>
@@ -1406,7 +1427,13 @@ function renderContent() {
         <button class="filter-btn ${callsFilter==='attention'?'active':''}" onclick="callsFilter='attention';renderContent()">Needs attention (${s.attention})</button>
         <button class="filter-btn ${callsFilter==='all'?'active':''}" onclick="callsFilter='all';renderContent()">All (${s.total})</button>
       </div>
-      ${isEmpty ? '<div style="color:var(--muted);text-align:center;padding:40px">'+(callsFilter==='attention'?'No repeat callers waiting \u2014 everyone who called more than once has had a callback.':'No calls to show'+(franchiseeView!=='All'?' for '+franchiseeView:''))+'.</div>'
+      <input id="callSearchBox" class="search" placeholder="Search name, number, note or message..." value="${esc(callSearch)}" oninput="onCallSearch(this.value, this.selectionStart)" style="margin-bottom:12px">
+      <div class="filter-row">
+        <button class="filter-btn ${callType==='all'?'active':''}" onclick="callType='all';renderContent()">All types</button>
+        <button class="filter-btn ${callType==='vm'?'active':''}" onclick="callType='vm';renderContent()">Voicemail</button>
+        <button class="filter-btn ${callType==='novm'?'active':''}" onclick="callType='novm';renderContent()">No voicemail</button>
+      </div>
+      ${isEmpty ? '<div style="color:var(--muted);text-align:center;padding:40px">'+((cq||callType!=='all')?'No calls match your search or filter.':(callsFilter==='attention'?'No repeat callers waiting \u2014 everyone who called more than once has had a callback.':'No calls to show'+(franchiseeView!=='All'?' for '+franchiseeView:'')))+'.</div>'
         : '<div class="call-list">'+cardsHtml+'</div>'}
       <div class="ib ig" style="margin-top:16px"><b>How statuses set themselves:</b> a call closes to <b>Booked</b> automatically when that number becomes a booking, and to <b>Called back</b> when a callback to it appears in the Air Landline export. Anything still <b>New</b> is genuinely waiting. Change a status here and it saves for everyone.</div>
     </div>`;
