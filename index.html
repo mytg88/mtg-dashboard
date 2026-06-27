@@ -132,7 +132,8 @@ tr:hover td{background:#FAFBF9}
 th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
 th.sortable:hover{color:var(--green)}
 .call-list{display:flex;flex-direction:column;gap:14px}
-.call-item{border:1px solid #D3DCCF;border-radius:12px;padding:15px 17px;background:#F7F9F5;box-shadow:0 1px 3px rgba(20,40,30,.06)}
+.call-item{position:relative;border:1px solid #D3DCCF;border-radius:12px;padding:15px 17px;background:#F7F9F5;box-shadow:0 1px 3px rgba(20,40,30,.06)}
+.call-item:has(details.call-menu[open]){z-index:5}
 .call-controls{border-bottom:2px solid var(--line);padding-bottom:18px;margin-bottom:22px}
 .call-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:7px}
 .call-when{font-size:12px;color:var(--muted)}
@@ -145,7 +146,28 @@ th.sortable:hover{color:var(--green)}
 .call-vm[open] summary:after{content:" \25b4"}
 .call-vm-full{margin-top:8px;padding:10px 12px;background:var(--paper);border-radius:8px;color:#3c463d}
 .call-vm-none{font-size:12px;color:var(--muted);margin-bottom:10px}
-.call-status select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:13px;width:100%;max-width:240px;background:#fff}
+.call-head-actions{margin-left:auto;display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.call-primary{font-size:12.5px;font-weight:700;padding:8px 14px;border:none;border-radius:8px;background:var(--green);color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;box-shadow:0 1px 2px rgba(20,40,30,.18)}
+.call-primary:hover{background:var(--green6)}
+.call-menu{position:relative;display:inline-block}
+.call-menu>summary{list-style:none;cursor:pointer}
+.call-menu>summary::-webkit-details-marker{display:none}
+.call-menu-btn{display:inline-block;font-size:12.5px;font-weight:600;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 11px;white-space:nowrap}
+.call-menu-btn:hover{background:var(--paper)}
+.call-menu-btn.change{color:var(--green6);border-color:#CFE0CB}
+.call-menu-list{position:absolute;right:0;top:calc(100% + 5px);z-index:30;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px rgba(20,40,30,.18);padding:6px;min-width:212px;display:flex;flex-direction:column;gap:1px}
+.cmenu-item{text-align:left;font-size:13px;font-family:inherit;color:var(--ink);background:none;border:none;border-radius:7px;padding:9px 11px;cursor:pointer;white-space:nowrap}
+.cmenu-item:hover{background:var(--paper)}
+.cmenu-item.on{font-weight:700;color:var(--green6)}
+.cmenu-item.on:before{content:"\2713  "}
+.cmenu-item.xfer{color:var(--blue);font-weight:600}
+.cmenu-div{height:1px;background:var(--line);margin:5px 2px}
+.call-pill{font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:20px;white-space:nowrap}
+.pill-green{background:#E8F5E9;color:var(--green6)}
+.pill-blue{background:#E3F2FD;color:#1565C0}
+.pill-grey{background:#EEF1ED;color:#5b665c}
+.pill-amber{background:#FFF4E5;color:#B26A00}
+.call-xfer-note{font-size:11px;color:var(--blue);font-weight:600;margin-bottom:8px}
 .b-missed{background:#FFEBEE;color:#C62828}.b-vm{background:#E3F2FD;color:#1565C0}
 .call-caller-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
 .call-gmail{font-size:12px;color:var(--blue);text-decoration:none;border:1px solid #CFE0CB;padding:4px 11px;border-radius:7px;white-space:nowrap;font-weight:500}
@@ -267,6 +289,12 @@ function normNum(s) {
   if (d.indexOf('44') === 0) d = d.slice(2);    // drop UK country code
   while (d.charAt(0) === '0') d = d.slice(1);    // drop the trunk 0 (and any stray leading zeros)
   return d;
+}
+// A call stays in the chase list (counts as "open") only for these. Anything else is a closed outcome.
+// 'No answer' is a legacy value kept open so old rows behave sensibly.
+function isCallOpen(st) {
+  st = String(st == null ? '' : st).trim();
+  return st === '' || st === 'New' || st === 'Needs callback' || st === 'Left message' || st === 'No answer';
 }
 let custSort={k:'r',d:'desc'}, recSort={k:'r',d:'desc'}, churnSort={k:'r',d:'desc'}, missSort={k:'z',d:'desc'};
 let dfRange="all", dfFrom=null, dfTo=null, franchiseeView="All";
@@ -894,9 +922,8 @@ function processRecurring(b) {
 function processCalls(b) {
   let cs = rawCalls.filter(c => matchView(c._fr));
   if (b.from && b.to) cs = cs.filter(c => c._date && c._date >= b.from && c._date <= b.to);
-  const open = cs.filter(c => !c._status || c._status === 'New');
+  const open = cs.filter(c => isCallOpen(c._status));
   // Group by caller so we can spot people who've tried repeatedly with no callback.
-  const RESOLVED = /^(Called back|Booked)$/i;
   const byNum = {};
   cs.forEach(c => {
     const k = c._callerNorm; if (!k) return;
@@ -904,11 +931,10 @@ function processCalls(b) {
     if (!g) g = byNum[k] = { num: k, count: 0, open: 0, resolved: 0, last: null, first: null, calls: [] };
     g.count++;
     g.calls.push(c);
-    if (!c._status || c._status === 'New') g.open++;
-    if (RESOLVED.test(c._status || '')) g.resolved++;
+    if (isCallOpen(c._status)) g.open++; else g.resolved++;   // "resolved" here means any closed outcome
     if (c._date) { if (!g.last || c._date > g.last) g.last = c._date; if (!g.first || c._date < g.first) g.first = c._date; }
   });
-  // Needs attention = 2+ inbound calls and we've never called back or booked them.
+  // Needs attention = 2+ inbound calls and we've never given any of them an outcome.
   Object.values(byNum).forEach(g => { g.attention = g.count >= 2 && g.resolved === 0; });
   const attentionNums = Object.values(byNum).filter(g => g.attention);
   callsStats = {
@@ -956,6 +982,29 @@ function updateCallsForNumber(num, status) {
   apiCall({ action:'updateCallsByNumber', num:num, status:status, by:callsWho },
     function(d) { if (!d || d.error) alert('Could not update those calls. Hit Refresh and check.'); },
     function() { alert('Could not reach the app to update. Hit Refresh and try again.'); });
+}
+// Move every call from one number to the other operator's list. Lands as a fresh open item for them.
+function transferCalls(num, to) {
+  if (!callsWho) callsWho = (auth && auth.name) ? auth.name : 'Unknown';
+  num = normNum(num);
+  if (!num || (to !== 'Mike' && to !== 'Adam')) return;
+  let from = '';
+  rawCalls.forEach(c => { if (c._callerNorm === num && c._fr) from = c._fr; });
+  if (!confirm('Move every call from this number to ' + to + '\u2019s list? It will show as a new open call for ' + to + '.')) return;
+  let n = 0;
+  rawCalls.forEach(c => {
+    if (c._callerNorm === num) {
+      c['Franchisee'] = to; c._fr = to;
+      c['Status'] = 'New'; c._status = 'New';
+      c['Status Detail'] = 'Transferred from ' + (from || '?') + ' by ' + callsWho; c._detail = c['Status Detail'];
+      c['Updated By'] = callsWho; c._by = callsWho;
+      n++;
+    }
+  });
+  applyFilters(); renderContent();
+  apiCall({ action:'transferCalls', num:num, to:to, by:callsWho },
+    function(d) { if (!d || d.error) alert('Could not transfer those calls. Hit Refresh and check it saved.'); },
+    function() { alert('Could not reach the app to transfer. Hit Refresh and try again.'); });
 }
 function updateCallNote(key, note) {
   if (!callsWho) callsWho = (auth && auth.name) ? auth.name : 'Unknown';
@@ -1299,7 +1348,21 @@ function renderContent() {
   else if (activeTab==='Calls') {
     callsWho = (auth && auth.name) ? auth.name : callsWho;   // the updater is simply whoever is logged in
     const s = callsStats || {total:0,missed:0,vm:0,open:0,list:[],byNum:{},attention:0};
-    const statuses = ['New','Called back','Booked','No answer','Not relevant'];
+    // [value, friendly label, pill colour]. Open outcomes keep a call in the list; the rest close it.
+    const ST = [
+      ['Booked','Job booked','green'],
+      ['Resolved','Resolved','green'],
+      ['Called back','Called back','blue'],
+      ['Needs callback','Needs another callback','amber'],
+      ['Left message','Left a message','amber'],
+      ['Moved to WhatsApp','Moved to WhatsApp','grey'],
+      ['Moved to email','Moved to email','grey'],
+      ['Not relevant','Not relevant','grey'],
+      ['New','New','amber']
+    ];
+    const stLabel = v => { for (const x of ST) if (x[0]===v) return x[1]; return v || 'New'; };
+    const stCls   = v => { for (const x of ST) if (x[0]===v) return x[2]; return 'amber'; };
+    const menuVals = ['Booked','Resolved','Called back','Needs callback','Left message','Moved to WhatsApp','Moved to email','Not relevant'];
     const esc = x => String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const typeBadge = t => { const tl=(t||'').toLowerCase(); const cls = /missed/.test(tl)?'b-missed':(/voicemail/.test(tl)?'b-vm':'b-na'); return '<span class="badge '+cls+'">'+esc(t||'Call')+'</span>'; };
     const card = (c, history) => {
@@ -1315,11 +1378,35 @@ function renderContent() {
         vm = '<div class="call-vm-none">'+(c._dur ? esc(c._dur)+', no transcript' : 'No voicemail')+'</div>';
       }
       const grouped = !!(history && history.length > 1);
-      const opts = sv => statuses.map(st=>'<option value="'+st+'"'+(((sv||'New')===st)?' selected':'')+'>'+st+'</option>').join('');
-      const sel = grouped
-        ? '<select onchange="updateCallsForNumber(\''+c._callerNorm+'\',this.value)">'+opts(c._status)+'</select>'
-        : '<select onchange="updateCallStatus(\''+key+'\',this.value)">'+opts(c._status)+'</select>';
-      const auto = (c._detail && /^Auto/.test(c._detail)) ? '<div style="font-size:10px;color:var(--green6);margin-top:4px">'+esc(c._detail)+'</div>' : '';
+      const cnt = grouped ? history.length : 1;
+      const stRaw = c._status || 'New';
+      const open = isCallOpen(stRaw);
+      const setExpr = v => grouped
+        ? "updateCallsForNumber('"+c._callerNorm+"','"+v+"')"
+        : "updateCallStatus('"+key+"','"+v+"')";
+      let menuHtml = menuVals.map(v =>
+        '<button class="cmenu-item'+(stRaw===v?' on':'')+'" onclick="'+setExpr(v)+'">'+esc(stLabel(v))+'</button>'
+      ).join('');
+      if (!open) menuHtml += '<button class="cmenu-item" onclick="'+setExpr('New')+'">Reopen (mark New)</button>';
+      const owner = c._fr || '';
+      const targets = (c._callerNorm) ? ['Mike','Adam'].filter(x => x !== owner) : [];
+      if (targets.length) {
+        menuHtml += '<div class="cmenu-div"></div>';
+        menuHtml += targets.map(t => '<button class="cmenu-item xfer" onclick="transferCalls(\''+c._callerNorm+'\',\''+t+'\')">\u2192 Transfer to '+t+'</button>').join('');
+      }
+      const menu = grouped ? cnt + ' calls' : 'outcomes';
+      let statusCtl;
+      if (open) {
+        const lead = (stRaw !== 'New') ? '<span class="call-pill pill-amber">'+esc(stLabel(stRaw))+'</span>' : '';
+        statusCtl = lead +
+          '<button class="call-primary" onclick="'+setExpr('Resolved')+'">\u2713 '+(grouped ? 'Resolve all '+cnt : 'Mark resolved')+'</button>'+
+          '<details class="call-menu"><summary class="call-menu-btn" title="Other outcomes for these '+menu+'">\u25be</summary><div class="call-menu-list">'+menuHtml+'</div></details>';
+      } else {
+        statusCtl = '<span class="call-pill pill-'+stCls(stRaw)+'">'+esc(stLabel(stRaw))+'</span>'+
+          '<details class="call-menu"><summary class="call-menu-btn change" title="Change the outcome">change</summary><div class="call-menu-list">'+menuHtml+'</div></details>';
+      }
+      const ownerPill = (franchiseeView==='All' && c._fr) ? '<span class="call-owner-pill">'+badge(c._fr)+'</span>' : '';
+      const xferNote = (c._detail && /^Transferred/i.test(c._detail)) ? '<div class="call-xfer-note">'+esc(c._detail)+'</div>' : '';
       const gmailDigits = String(c._caller||'').replace(/\D/g,'');
       const gmailQ = 'from:no-reply@airlandline.co.uk' + (gmailDigits ? ' ' + gmailDigits : '');
       const gmailHash = encodeURIComponent(gmailQ).replace(/%20/g,'+'); // Gmail wants + for spaces, not %20, or mobile ignores the search
@@ -1365,26 +1452,26 @@ function renderContent() {
       if (history && history.length > 1) {
         const rows = history.slice().sort((x,y) => (y._date?y._date.getTime():0) - (x._date?x._date.getTime():0)).map(h => {
           const w = fmtDate(h._date) + (h._time ? ' '+esc(h._time) : '');
-          return '<div class="hist-row"><span class="hist-when">'+w+'</span><span class="hist-type">'+esc(h._type||'Call')+'</span><span class="hist-st">'+esc(h._status||'New')+'</span></div>';
+          return '<div class="hist-row"><span class="hist-when">'+w+'</span><span class="hist-type">'+esc(h._type||'Call')+'</span><span class="hist-st">'+esc(stLabel(h._status||'New'))+'</span></div>';
         }).join('');
         histHtml = '<details class="call-history"><summary>View all '+history.length+' calls from this number</summary><div class="hist-list">'+rows+'</div></details>';
       }
       return '<div class="call-item">'+
-        '<div class="call-top">'+typeBadge(c._type)+'<span class="call-when">'+when+'</span><span class="call-owner">'+(c._fr?badge(c._fr):'')+'</span></div>'+
+        '<div class="call-top">'+typeBadge(c._type)+'<span class="call-when">'+when+'</span>'+ownerPill+'<div class="call-head-actions">'+statusCtl+'</div></div>'+
         knownLine +
         '<div class="call-caller-row"><span class="call-caller">'+(esc(c._caller)||'\u2014')+'</span></div>'+
         flag +
+        xferNote +
         nameBox +
         acts +
         vm +
         note +
-        (grouped ? '<div class="call-status"><span class="bulk-l">Set all '+history.length+' calls to</span>'+sel+auto+'</div>' : '<div class="call-status">'+sel+auto+'</div>')+
         histHtml +
         by +
       '</div>';
     };
     const latestOf = arr => arr.slice().sort((x,y) => (y._date?y._date.getTime():0) - (x._date?x._date.getTime():0))[0];
-    const isOpen = c => !c._status || c._status === 'New';
+    const isOpen = c => isCallOpen(c._status);
     const hasVM = u => u.calls.some(c => /voicemail/i.test(c._type||''));
     let units = [];
     if (callsFilter === 'attention') {
@@ -1451,7 +1538,7 @@ function renderContent() {
       </div>
       ${isEmpty ? '<div style="color:var(--muted);text-align:center;padding:40px">'+((cq||callType!=='all')?'No calls match your search or filter.':(callsFilter==='attention'?'No repeat callers waiting \u2014 everyone who called more than once has had a callback.':'No calls to show'+(franchiseeView!=='All'?' for '+franchiseeView:'')))+'.</div>'
         : '<div class="call-list">'+cardsHtml+'</div>'}
-      <div class="ib ig" style="margin-top:16px"><b>How statuses set themselves:</b> a call closes to <b>Booked</b> automatically when that number becomes a booking, and to <b>Called back</b> when a callback to it appears in the Air Landline export. Anything still <b>New</b> is genuinely waiting. Change a status here and it saves for everyone.</div>
+      <div class="ib ig" style="margin-top:16px"><b>How the list works:</b> a call stays here until you give it an outcome. <b>Mark resolved</b> clears the common ones in one tap; the <b>\u25be</b> menu holds the rest \u2014 job booked, called back, moved to WhatsApp or email, not relevant, or transfer to the other operator. <b>Needs another callback</b> and <b>Left a message</b> keep a call in the list so it isn\u2019t forgotten. Every change saves for everyone.</div>
     </div>`;
   }
 
@@ -1609,7 +1696,12 @@ function applyRole() {
     callsWho = auth.name;
   } else {
     if (vs) vs.style.display = '';
-    if (auth) callsWho = auth.name;
+    if (auth) {
+      callsWho = auth.name;
+      // Default the opening view to the logged-in operator; the All toggle stays available.
+      const op = { mike: 'Mike', adam: 'Adam' }[(auth.name || '').toLowerCase()];
+      if (op) franchiseeView = op;
+    }
   }
 }
 
