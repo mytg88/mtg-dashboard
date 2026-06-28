@@ -105,6 +105,26 @@ tr:hover td{background:#FAFBF9}
 .note-in::placeholder{color:#b3bdb4}
 .disp-sel{font-family:'DM Sans',sans-serif;font-size:12px;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 7px;background:#fff;max-width:210px}
 .disp-sel.unset{color:var(--muted)}
+.sc-q{padding:15px 0;border-bottom:1px solid #F0F3EE}
+.sc-q:last-child{border-bottom:none}
+.sc-qh{font-size:14px;font-weight:600;color:var(--ink);margin-bottom:10px;line-height:1.4}
+.sc-w{font-size:10px;font-weight:700;color:var(--accent);background:#FBEEDD;padding:2px 8px;border-radius:20px;margin-left:8px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.sc-opts{display:flex;gap:10px}
+.sc-opt{flex:1;text-align:left;background:#fff;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:border-color .12s,background .12s}
+.sc-opt:hover{border-color:#BCCBBE}
+.sc-opt.on{border-color:var(--green4);background:#F1F8F1;box-shadow:inset 0 0 0 1px var(--green4)}
+.sc-opt-l{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:5px}
+.sc-opt.on .sc-opt-l{color:var(--green6)}
+.sc-opt-d{display:block;font-size:12px;color:#46514A;line-height:1.4}
+.sc-grade{display:inline-flex;align-items:center;justify-content:center;min-width:48px;height:48px;padding:0 8px;border-radius:12px;color:#fff;font-family:'Fraunces',serif;font-size:21px;font-weight:600}
+.sc-track{height:10px;border-radius:6px;background:#EEF1ED;overflow:hidden;margin-top:14px}
+.sc-fill{height:10px;border-radius:6px;transition:width .2s,background .2s}
+.sc-bar{position:sticky;top:0;z-index:20;box-shadow:0 2px 12px rgba(20,40,30,.08)}
+.sc-pill{font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;color:#fff;border:none;border-radius:20px;padding:4px 11px;cursor:pointer;white-space:nowrap}
+.sc-pill-empty{background:#fff;color:var(--green6);border:1px solid #CFE0CB}
+.sc-pill-empty:hover{background:#E8F5E9}
+.sc-badge{display:inline-flex;align-items:center;justify-content:center;min-width:30px;padding:2px 8px;border-radius:20px;color:#fff;font-weight:700;font-size:11px}
+@media (max-width:680px){.sc-opts{flex-direction:column}}
 .df-bar{background:var(--card);border-bottom:1px solid var(--line);padding:14px 36px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .df-label{font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.6px;margin-right:4px}
 .df-btn{padding:6px 14px;border:1px solid #CFE0CB;background:var(--card);color:var(--green);border-radius:20px;font-size:12px;font-family:inherit;cursor:pointer;transition:all .15s}
@@ -278,7 +298,8 @@ const API_URL   = 'https://script.google.com/macros/s/AKfycbxN137wCPVA5IVaHseSxC
 let auth = null; // {user, pass, role, name} once logged in. No password is stored in this file.
 // ==============================================================
 
-let rawJobs=[], customers=[], rawLeads=[], rawRecurring=[], numToCust={}, manualNames={}, customerNotes={};
+let rawJobs=[], customers=[], rawLeads=[], rawRecurring=[], numToCust={}, manualNames={}, customerNotes={}, scorecards={};
+let scoreEditFor=null;
 let jobsPeriod=[], jobs=[], prevJobs=[], allCustomers=[], churnedList=[], monthlyData=[], serviceData=[], missingPriceData=[];
 let leadStats=null, recurringStats=null, prevTotals=null;
 let rawCalls=[], callsStats=null, callsFilter='open', callsWho='', callSearch='', callType='all';
@@ -571,6 +592,17 @@ function handleData(data) {
     customerNotes[nm] = { disposition: String(cn.Disposition || '').trim(), note: String(cn.Note || ''), by: String(cn['Updated By'] || '').trim() };
   });
 
+  // Regular-job scorecards, keyed by normalised customer name. The Scores cell is a
+  // JSON string of {questionId: 1|2|3}; we parse it and recompute percent/grade locally.
+  scorecards = {};
+  (data.scorecards || []).forEach(sc => {
+    const nm = normName(sc.Customer || sc.customer);
+    if (!nm) return;
+    let scores = {};
+    try { const p = JSON.parse(sc.Scores || sc.scores || '{}'); if (p && typeof p === 'object') scores = p; } catch (e) {}
+    scorecards[nm] = { scores: scores, by: String(sc['Scored By'] || '').trim(), at: String(sc['Scored At'] || '').trim() };
+  });
+
   rawJobs.forEach(j => {
     j._amount = parseAmount(j['Amount (£)']);
     j._date = parseDate(j['Date Completed']);
@@ -812,6 +844,7 @@ function processData() {
   }
   allCustomers.forEach(c => { c.inherited = TRANSFERRED_TO_ADAM.has(norm(c.n)); }); // Adam's inherited book, for the tag
   allCustomers.forEach(c => { const cn = customerNotes[norm(c.n)]; c.disp = cn ? cn.disposition : ''; c.note = cn ? cn.note : ''; }); // saved churn reason + note
+  allCustomers.forEach(c => { c.score = scorecards[norm(c.n)] || null; }); // saved scorecard {scores,by,at} or null
   churnedList = allCustomers.filter(c => c.s === 'Churned').sort((a,b) => b.r - a.r);
 
   // Number -> customer map for the Calls tab. Phone lives on the source rows (leads/recurring/jobs)
@@ -1031,7 +1064,195 @@ function saveCustomerNoteText(name, note){
   allCustomers.forEach(c => { if(normName(c.n)===k){ c.disp = disp; c.note = note; } });
   apiCall({ action:'saveCustomerNote', name:name, disposition:disp, note:note, by:who }, _custNoteOk, _custNoteErr);
 }
-function setCallsWho(v) { callsWho = v; try { localStorage.setItem('mtg_calls_who', v); } catch(_) {} }
+// ---------- regular-job scorecard ----------
+// Fixed question set. id matches the original scorecard numbering (15 was never used).
+// m is the weight: the seven importance-3 questions count double. o = [poor, okay, good] examples.
+const SCORE_THEMES = ['Money & reliability','Communication & relationship','Route & access','The work itself'];
+const SCORE_QUESTIONS = [
+  {id:1, t:'Money & reliability', m:2, q:'Does the customer pay invoices on time?', o:['Frequently late; must chase, or it threatens cashflow','Usually on time; the odd chase needed','Reliably on time or early; auto-pay or standing order']},
+  {id:3, t:'Money & reliability', m:2, q:'Do they stick to the agreed schedule (no last-minute cancellations)?', o:['Frequent short-notice cancels or reschedules','Occasional changes with reasonable notice','Rarely changes; reliably keeps booked slots']},
+  {id:7, t:'Money & reliability', m:2, q:'What is the approximate annual value of this job?', o:['Low annual revenue (under £1k)','Moderate revenue (£1k to £2.5k)','High anchor account (£2.5k or more)']},
+  {id:21, t:'Money & reliability', m:2, q:'Does the client have realistic expectations (scope clear, few add-ons, no time-consuming queries)?', o:['Constant scope creep; unclear or changing demands','Mostly clear scope; extras arise occasionally','Clear, realistic scope; changes agreed and scheduled properly']},
+  {id:2, t:'Communication & relationship', m:1, q:'Is the customer easy to contact, i.e. do they respond promptly to calls, emails or texts?', o:['Slow or unreliable replies; repeated follow-ups needed','Responds within a reasonable window (by next day)','Responds promptly the same day; easy on multiple channels']},
+  {id:4, t:'Communication & relationship', m:1, q:'Does the client respect professional boundaries (no late-night calls, no unpaid extras)?', o:['Regular boundary pushes; out-of-hours contact; expects free work','Generally respectful; slips now and then','Always professional; contacts appropriately; agrees extras first']},
+  {id:12, t:'Communication & relationship', m:1, q:'Is the customer friendly, polite and pleasant to deal with?', o:['Difficult or rude; tense interactions','Civil but neutral; occasional friction','Warm, polite, easy rapport']},
+  {id:13, t:'Communication & relationship', m:1, q:'Does the customer take pride in the garden\u2019s appearance?', o:['Minimal pride; happy with the bare minimum','Shows some pride; wants it looking decent','High pride; proactive; notices detail; supports upkeep']},
+  {id:14, t:'Communication & relationship', m:1, q:'Does the customer show appreciation and trust (thanks, referrals, leaves you to it)?', o:['Rarely appreciative; mistrustful; supervises constantly','Generally appreciative but checks in often','Thanks you; refers others; comfortable leaving you to it']},
+  {id:16, t:'Communication & relationship', m:1, q:'Are they open to extra services (pressure washing, planting, mulching)?', o:['Rejects extras; strictly minimum service','Occasional yes to small extras','Welcomes proposals; books add-on work']},
+  {id:5, t:'Route & access', m:2, q:'Does the location fit naturally into your weekly route, keeping extra travel and fuel low?', o:['Out of area; long detour','Moderate detour but can batch with others','On or near the existing route; minimal extra travel']},
+  {id:8, t:'Route & access', m:1, q:'Is there clear, easy physical access to the garden (gates, paths, no steps)?', o:['Narrow or obstructed; heavy lifts or many steps','Some obstacles; workable with effort','Wide, direct, step-free; easy to move kit']},
+  {id:9, t:'Route & access', m:1, q:'Is on-site parking consistently available?', o:['No nearby parking; fines or long walks','Usually street parking within a short walk','Reliable on-site or drive parking next to the work']},
+  {id:10, t:'Route & access', m:1, q:'Can you enter the garden without the client present if rescheduling or running late?', o:['Must wait for the client; missed visits','Spare key or code sometimes; not always reliable','Full independent access (key, code, unlocked route)']},
+  {id:11, t:'Route & access', m:1, q:'Is the site secure enough that tools can be left briefly without concern?', o:['High theft risk; nothing can be left','Can leave light kit briefly if watched','Designated safe area; low risk']},
+  {id:6, t:'The work itself', m:1, q:'Is the garden overall attractive and well-kept (healthy plants, no large areas of neglect)?', o:['Neglected; major weed or dieback issues','Mixed; needs work but improving','Generally tidy and healthy; good showcase potential']},
+  {id:17, t:'The work itself', m:2, q:'Is the garden free of excessive hazards, and are any pets well controlled and cleaned up after?', o:['Serious hazards or pet risks; unsafe to work','Some hazards; need vigilance','Generally clear and safe; pets secured or managed']},
+  {id:18, t:'The work itself', m:1, q:'Is the garden free from extreme physical demands (steep slopes, very high hedges)?', o:['Highly strenuous; specialist gear every visit','Some demanding features but manageable','Normal workload; minimal heavy or awkward labour']},
+  {id:19, t:'The work itself', m:1, q:'Do you get enough time to make an impact and stay on top of the important tasks?', o:['Chronically under-time; work left unfinished','Marginal time; must prioritise core tasks','Adequate or ample time; can keep a high standard']},
+  {id:20, t:'The work itself', m:2, q:'Do you enjoy working here and feel confident you can maintain it to a good standard?', o:['Dread visits; don\u2019t feel you can keep the standard','Neutral; okay but not inspiring','Look forward to visits; confident in great results']}
+];
+function scoreGrade(pct){ return pct>=80?'A':pct>=65?'B':pct>=50?'C':'Review'; }
+function scoreGradeColor(g){ return g==='A'?'var(--green6)':g==='B'?'var(--blue)':g==='C'?'var(--accent)':'var(--red)'; }
+// Weighted total over answered questions only, so the running grade is meaningful mid-way.
+// When all 20 are answered this equals the original sheet's percent.
+function scoreCompute(scores){
+  scores = scores || {};
+  let got=0, ansMax=0, ans=0, poor=0;
+  SCORE_QUESTIONS.forEach(q=>{ const s=scores[q.id]; if(s>=1&&s<=3){ got+=s*q.m; ansMax+=3*q.m; ans++; if(s===1) poor++; } });
+  const pct = ansMax ? Math.round(got/ansMax*100) : 0;
+  return { got, ansMax, ans, total:SCORE_QUESTIONS.length, pct, grade:scoreGrade(pct), poor, complete: ans===SCORE_QUESTIONS.length };
+}
+// Estimated yearly value from visit price and cadence (used for the value axis and as a hint).
+function annualValue(c){
+  if(!c) return 0;
+  let perYear = 26;
+  const f = String(c.freq||'').toLowerCase();
+  const m = f.match(/every\s+(\d+)\s+week/);
+  if(/every\s+week|weekly/.test(f)) perYear = 52;
+  else if(m) perYear = Math.max(1, Math.round(52/parseInt(m[1],10)));
+  else if(/month/.test(f)) perYear = 12;
+  const per = c.visit>0 ? c.visit : (c.j ? c.r/c.j : 0);
+  return Math.round(per*perYear);
+}
+function hasScore(c){ return !!(c && c.score && c.score.scores && Object.keys(c.score.scores).length); }
+// The grade pill / "Score" button shown on each recurring row.
+function scorePill(c){
+  if(!hasScore(c)) return '<button class="sc-pill sc-pill-empty" onclick="openScorecard(this.closest(\'tr\').dataset.cust)">Score</button>';
+  const r = scoreCompute(c.score.scores);
+  const lab = r.complete ? (r.grade+' \u00b7 '+r.pct+'%') : (r.pct+'% \u00b7 '+r.ans+'/'+r.total);
+  return '<button class="sc-pill" style="background:'+scoreGradeColor(r.grade)+'" onclick="openScorecard(this.closest(\'tr\').dataset.cust)">'+escAttr(lab)+'</button>';
+}
+function openScorecard(name){ scoreEditFor=name; activeTab='Scorecard'; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
+function closeScorecard(){ scoreEditFor=null; renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
+// Pick a score for one question. Surgical DOM update so the long form does not re-render or jump.
+function pickScore(qid, score){
+  if(!scoreEditFor) return;
+  const k = normName(scoreEditFor), who = (auth && auth.name) ? auth.name : 'Unknown';
+  if(!scorecards[k]) scorecards[k] = { scores:{}, by:who, at:'' };
+  scorecards[k].scores[qid] = score;
+  scorecards[k].by = who;
+  allCustomers.forEach(c => { if(normName(c.n)===k) c.score = scorecards[k]; });
+  const wrap = document.getElementById('q'+qid);
+  if(wrap){ wrap.querySelectorAll('.sc-opt').forEach(el=>el.classList.remove('on')); const pick=wrap.querySelector('.sc-opt[data-s="'+score+'"]'); if(pick) pick.classList.add('on'); }
+  updateScoreBar();
+  saveScorecardNow(scoreEditFor);
+}
+function updateScoreBar(){
+  if(!scoreEditFor) return;
+  const k = normName(scoreEditFor), sc = scorecards[k] ? scorecards[k].scores : {};
+  const r = scoreCompute(sc), col = scoreGradeColor(r.grade);
+  const fill = document.getElementById('scBarFill'); if(fill){ fill.style.width = r.pct+'%'; fill.style.background = col; }
+  const pctEl = document.getElementById('scBarPct'); if(pctEl) pctEl.textContent = r.pct+'%';
+  const gEl = document.getElementById('scBarGrade'); if(gEl){ gEl.textContent = r.grade; gEl.style.background = col; }
+  const cEl = document.getElementById('scBarCount'); if(cEl) cEl.textContent = r.ans+' of '+r.total+' answered';
+}
+function _scoreOk(d){ const m=document.getElementById('scSaveMsg'); if(m){ if(!d||d.error){ m.textContent='Could not save, check connection.'; m.style.color='var(--red)'; } else { m.textContent='Saved.'; m.style.color='var(--muted)'; } } }
+function _scoreErr(){ const m=document.getElementById('scSaveMsg'); if(m){ m.textContent='Could not reach the app to save.'; m.style.color='var(--red)'; } }
+function saveScorecardNow(name){
+  const k = normName(name), sc = scorecards[k] ? scorecards[k].scores : {};
+  const r = scoreCompute(sc), who = (auth && auth.name) ? auth.name : 'Unknown';
+  apiCall({ action:'saveScorecard', name:name, scores:JSON.stringify(sc), percent:r.pct+'%', grade:r.complete?r.grade:(r.grade+' (in progress)'), by:who }, _scoreOk, _scoreErr);
+}
+// The scoring form for one customer (long, grouped by theme, with a sticky running grade).
+function scorecardFormHTML(name){
+  const k=normName(name), sc=scorecards[k]?scorecards[k].scores:{};
+  const r=scoreCompute(sc), cust=allCustomers.find(c=>normName(c.n)===k), av=annualValue(cust);
+  const who=(scorecards[k]&&scorecards[k].by)?scorecards[k].by:'', at=(scorecards[k]&&scorecards[k].at)?scorecards[k].at:'';
+  let body='';
+  SCORE_THEMES.forEach(theme=>{
+    const qs=SCORE_QUESTIONS.filter(q=>q.t===theme);
+    body+='<div class="card" style="margin-bottom:16px"><div class="h" style="margin-bottom:4px">'+theme+'</div>';
+    qs.forEach(q=>{
+      const cur=sc[q.id];
+      body+='<div class="sc-q" id="q'+q.id+'"><div class="sc-qh">'+q.q+(q.m>1?'<span class="sc-w">counts double</span>':'')+'</div><div class="sc-opts">';
+      [1,2,3].forEach(sv=>{ const lab=['Poor','Okay','Good'][sv-1];
+        body+='<button class="sc-opt'+(cur===sv?' on':'')+'" data-s="'+sv+'" onclick="pickScore('+q.id+','+sv+')"><span class="sc-opt-l">'+lab+'</span><span class="sc-opt-d">'+escAttr(q.o[sv-1])+'</span></button>'; });
+      body+='</div></div>';
+    });
+    body+='</div>';
+  });
+  const col=scoreGradeColor(r.grade);
+  const meta=(who||at)?'<div style="font-size:11px;color:var(--muted);margin-top:3px">last scored'+(who?' by '+escAttr(who):'')+(at?' \u00b7 '+escAttr(at):'')+'</div>':'';
+  return '<div style="margin-bottom:14px"><button class="df-btn" onclick="closeScorecard()">\u2190 All scorecards</button></div>'
+    + '<div class="card sc-bar" style="margin-bottom:18px"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px">'
+    +   '<div><div style="font-family:\'Fraunces\',serif;font-size:20px;font-weight:600;color:var(--ink)">'+escAttr(cust?cust.n:name)+'</div><div style="font-size:12px;color:var(--muted)" id="scBarCount">'+r.ans+' of '+r.total+' answered</div>'+meta+'</div>'
+    +   '<div style="display:flex;align-items:center;gap:14px"><div style="text-align:right"><div style="font-family:\'Fraunces\',serif;font-size:30px;font-weight:600;line-height:1" id="scBarPct">'+r.pct+'%</div><div style="font-size:11px;color:var(--muted)">'+(av?'~'+fmt(av)+'/yr est.':'')+'</div></div><span class="sc-grade" id="scBarGrade" style="background:'+col+'">'+r.grade+'</span></div>'
+    + '</div><div class="sc-track"><div class="sc-fill" id="scBarFill" style="width:'+r.pct+'%;background:'+col+'"></div></div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-top:8px" id="scSaveMsg">Each answer saves automatically.</div></div>'
+    + body
+    + '<div style="margin:6px 0 30px"><button class="df-btn" onclick="closeScorecard()">\u2190 Back to all scorecards</button></div>';
+}
+// Value-against-quality scatter. scored = [{c, r, av}].
+function scorecardQuadrantSVG(scored){
+  if(!scored.length) return '';
+  const W=720,H=400,padL=66,padR=20,padT=44,padB=52, plotW=W-padL-padR, plotH=H-padT-padB;
+  const vals=scored.map(s=>s.av); let maxV=Math.max(1,...vals);
+  const step=maxV>4000?1000:maxV>2000?500:maxV>1000?250:100; maxV=Math.max(step,Math.ceil(maxV/step)*step);
+  const xMin=30,xMax=100;
+  const xs=p=>padL+(Math.max(xMin,Math.min(xMax,p))-xMin)/(xMax-xMin)*plotW;
+  const ys=v=>padT+(1-Math.max(0,Math.min(maxV,v))/maxV)*plotH;
+  const sv=vals.slice().sort((a,b)=>a-b);
+  const medV=sv.length%2?sv[(sv.length-1)/2]:Math.round((sv[sv.length/2-1]+sv[sv.length/2])/2);
+  const xL=xs(65), yL=ys(medV), split=scored.length>=2;
+  let s='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;font-family:\'DM Sans\',sans-serif" xmlns="http://www.w3.org/2000/svg">';
+  s+='<rect x="'+padL+'" y="'+padT+'" width="'+plotW+'" height="'+plotH+'" fill="#FAFBF9" stroke="var(--line)"/>';
+  if(split){
+    s+='<rect x="'+xL+'" y="'+padT+'" width="'+(padL+plotW-xL)+'" height="'+(yL-padT)+'" fill="#2E7D32" opacity="0.05"/>';
+    s+='<rect x="'+padL+'" y="'+padT+'" width="'+(xL-padL)+'" height="'+(yL-padT)+'" fill="#D98A2B" opacity="0.06"/>';
+    s+='<rect x="'+xL+'" y="'+yL+'" width="'+(padL+plotW-xL)+'" height="'+(padT+plotH-yL)+'" fill="#1565C0" opacity="0.05"/>';
+    s+='<rect x="'+padL+'" y="'+yL+'" width="'+(xL-padL)+'" height="'+(padT+plotH-yL)+'" fill="#C62828" opacity="0.05"/>';
+    s+='<line x1="'+xL+'" y1="'+padT+'" x2="'+xL+'" y2="'+(padT+plotH)+'" stroke="#BBB" stroke-dasharray="4 4"/>';
+    s+='<line x1="'+padL+'" y1="'+yL+'" x2="'+(padL+plotW)+'" y2="'+yL+'" stroke="#BBB" stroke-dasharray="4 4"/>';
+    const lab=(x,y,t1,t2,c)=>'<text x="'+x+'" y="'+y+'" text-anchor="middle" font-size="11" font-weight="700" fill="'+c+'" opacity="0.85">'+t1+'</text><text x="'+x+'" y="'+(y+13)+'" text-anchor="middle" font-size="9.5" fill="'+c+'" opacity="0.7">'+t2+'</text>';
+    s+=lab((xL+padL+plotW)/2, padT+16, 'Keep & protect', 'high value, strong', '#2E7D32');
+    s+=lab((padL+xL)/2, padT+16, 'Fix or reprice', 'high value, weak', '#B5681B');
+    s+=lab((xL+padL+plotW)/2, padT+plotH-16, 'Nurture or upsell', 'easy, lower value', '#1565C0');
+    s+=lab((padL+xL)/2, padT+plotH-16, 'Consider dropping', 'low value, weak', '#C62828');
+  }
+  s+='<text x="'+(padL+plotW/2)+'" y="'+(H-14)+'" text-anchor="middle" font-size="11" fill="var(--muted)">Quality score \u2192</text>';
+  s+='<text x="15" y="'+(padT+plotH/2)+'" text-anchor="middle" font-size="11" fill="var(--muted)" transform="rotate(-90 15 '+(padT+plotH/2)+')">Estimated annual value \u2192</text>';
+  [30,65,100].forEach(t=>{ s+='<text x="'+xs(t)+'" y="'+(padT+plotH+16)+'" text-anchor="middle" font-size="9.5" fill="var(--muted)">'+t+'%</text>'; });
+  (split?[0,medV,maxV]:[0,maxV]).forEach(v=>{ s+='<text x="'+(padL-7)+'" y="'+(ys(v)+3)+'" text-anchor="end" font-size="9.5" fill="var(--muted)">'+fmt(v)+'</text>'; });
+  scored.forEach(o=>{ const cx=xs(o.r.pct), cy=ys(o.av), c=scoreGradeColor(o.r.grade);
+    const tip=o.c.n+' \u00b7 '+o.r.grade+' '+o.r.pct+'% \u00b7 ~'+fmt(o.av)+'/yr'+(o.r.complete?'':' (in progress)');
+    s+='<circle cx="'+cx+'" cy="'+cy+'" r="7" fill="'+c+'" stroke="#fff" stroke-width="2"><title>'+escAttr(tip)+'</title></circle>'; });
+  return s+'</svg>';
+}
+// The Scorecard tab: results view (default) or the form when a customer is open.
+function renderScorecardTab(){
+  if(scoreEditFor) return scorecardFormHTML(scoreEditFor);
+  const regs=allCustomers.filter(c=>c.s==='Recurring');
+  const scored=regs.filter(hasScore).map(c=>({c, r:scoreCompute(c.score.scores), av:annualValue(c)})).sort((a,b)=>a.r.pct-b.r.pct);
+  const unscored=regs.filter(c=>!hasScore(c)).sort((a,b)=>b.r-a.r);
+  const arg=n=>JSON.stringify(n).replace(/"/g,'&quot;');
+  const intro='<div class="card" style="margin-bottom:20px"><div class="h">Regular customer scorecard</div><div style="font-size:13px;color:var(--muted);line-height:1.6">Score each regular against 20 questions covering money, reliability, the relationship, access and the work itself. The seven most important questions count double. You get a percentage and a grade (A from 80, B from 65, C from 50, anything lower flagged for review), plus a map of who is worth keeping and who costs more than they return. Scores save as you go.</div></div>';
+  const quad='<div class="card" style="margin-bottom:20px"><div class="h">Value against quality</div>'
+    + (scored.length?scorecardQuadrantSVG(scored)+'<div style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.5">Each dot is a scored regular. Further right is a stronger relationship, higher up is more annual value. Top-right are your anchors; top-left earn their keep on value but need fixing or repricing; bottom-left cost more than they return.</div>':'<div style="color:var(--muted);text-align:center;padding:30px">Score a few regulars to see the value and quality map.</div>')
+    + '</div>';
+  let weakest='';
+  if(scored.length){
+    const agg=SCORE_QUESTIONS.map(q=>{ let sum=0,n=0; scored.forEach(o=>{ const v=o.c.score.scores[q.id]; if(v>=1&&v<=3){sum+=v;n++;} }); return {q,avg:n?sum/n:null,n}; }).filter(x=>x.n>0).sort((a,b)=>a.avg-b.avg).slice(0,5);
+    weakest='<div class="card" style="margin-bottom:20px"><div class="h">Weakest points across your book</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px">Lowest average answers across every scored regular. A low score here is a pattern worth fixing, not just one awkward customer.</div>'
+      + agg.map(x=>{ const pc=Math.round((x.avg-1)/2*100), col=pc>=66?'var(--green4)':pc>=33?'var(--accent)':'var(--red)'; return '<div style="display:flex;align-items:center;gap:12px;margin-bottom:9px"><div style="flex:1;font-size:12.5px;color:var(--ink)">'+x.q.q+'</div><div style="width:110px;height:8px;background:#EEF1ED;border-radius:5px;overflow:hidden"><div style="height:8px;width:'+pc+'%;background:'+col+'"></div></div><div style="width:30px;text-align:right;font-size:12px;font-weight:700;color:'+col+'">'+x.avg.toFixed(1)+'</div></div>'; }).join('')
+      + '</div>';
+  }
+  let table='';
+  if(scored.length){
+    table='<div class="card" style="margin-bottom:20px"><div class="h">Scored regulars ('+scored.length+')</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px">Weakest first. Concerns are the questions you marked poor, hover to see which.</div>'
+      + '<div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Grade</th><th class="r">Score</th><th class="r">Concerns</th><th class="r">Annual value</th><th class="c">Owner</th><th>Scored</th><th></th></tr></thead><tbody>'
+      + scored.map(o=>{ const poorQs=SCORE_QUESTIONS.filter(q=>o.c.score.scores[q.id]===1).map(q=>q.q);
+          const conc=o.r.poor>0?'<span style="color:var(--red);font-weight:700;cursor:help" title="'+escAttr(poorQs.join(' \u00b7 '))+'">'+o.r.poor+'</span>':'<span style="color:var(--muted)">0</span>';
+          const inprog=o.r.complete?'':' <span style="font-size:10px;color:var(--accent)">part</span>';
+          return '<tr><td style="font-weight:500">'+custName(o.c)+'</td><td class="c"><span class="sc-badge" style="background:'+scoreGradeColor(o.r.grade)+'">'+o.r.grade+'</span></td><td class="r" style="font-weight:600">'+o.r.pct+'%'+inprog+'</td><td class="r">'+conc+'</td><td class="r">'+(o.av?fmt(o.av):'\u2014')+'</td><td class="c">'+badge(o.c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+escAttr(o.c.score.at||'\u2014')+'</td><td><button class="df-btn" onclick="openScorecard('+arg(o.c.n)+')">Open</button></td></tr>'; }).join('')
+      + '</tbody></table></div></div>';
+  }
+  let todo='';
+  if(unscored.length){
+    todo='<div class="card" style="margin-bottom:20px"><div class="h">Not yet scored ('+unscored.length+')</div><div style="display:flex;flex-wrap:wrap;gap:8px">'
+      + unscored.map(c=>'<button class="sc-pill sc-pill-empty" style="font-weight:500" onclick="openScorecard('+arg(c.n)+')">'+escAttr(c.n)+' +</button>').join('')
+      + '</div></div>';
+  }
+  return intro + quad + weakest + table + todo;
+}
 function updateCallStatus(key, status) {
   if (!callsWho) callsWho = (auth && auth.name) ? auth.name : 'Unknown';
   const rec = rawCalls.find(c => c._key === key);
@@ -1368,11 +1589,11 @@ function stackedServiceSVG(top, colorOf) {
   return '<div class="svg-wrap"><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">' + grid + bars + xl + '</svg></div>' + legend;
 }
 
-const tabList = ["Overview","Leads","Calls","Revenue","Customers","Recurring","Missing Prices"];
+const tabList = ["Overview","Leads","Calls","Revenue","Customers","Recurring","Scorecard","Missing Prices"];
 function renderTabs() {
   document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+t+'</button>').join('');
 }
-function setTab(t) { activeTab=t; custSegFilter="All"; custSearch=""; callSearch=""; callType="all"; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
+function setTab(t) { activeTab=t; custSegFilter="All"; custSearch=""; callSearch=""; callType="all"; scoreEditFor=null; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 function setView(v) { franchiseeView=v; applyFilters(); renderContent(); dfRender(); }
 function goSeg(seg) { activeTab='Customers'; custSegFilter=seg; custSearch=''; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 // Re-rendering rebuilds the search box, which drops focus after each keystroke. Put it back.
@@ -1929,12 +2150,16 @@ function renderContent() {
       </div>
 
       <div class="card" style="margin-bottom:24px"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${recCusts.length} active recurring customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, from job history</div>
-        <div class="table-wrap"><table><thead><tr>${sortTh('Recurring','n','Customer')}<th class="c">Owner</th><th>Frequency</th>${sortTh('Recurring','visit','Avg/visit','r')}${sortTh('Recurring','j','Jobs','r')}${sortTh('Recurring','r','Lifetime','r')}${sortTh('Recurring','first','First')}${sortTh('Recurring','last','Last visit')}<th>Note</th></tr></thead>
-        <tbody>${sortRows(recCusts,recSort.k,recSort.d).map(c=>'<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.freq||'\u2014')+'</td><td class="r">'+(c.visit>0?fmt(c.visit):'\u2014')+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td><input class="note-in" placeholder="Add a note" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>').join('')}</tbody></table></div>
+        <div class="table-wrap"><table><thead><tr>${sortTh('Recurring','n','Customer')}<th class="c">Owner</th><th>Frequency</th>${sortTh('Recurring','visit','Avg/visit','r')}${sortTh('Recurring','j','Jobs','r')}${sortTh('Recurring','r','Lifetime','r')}${sortTh('Recurring','first','First')}${sortTh('Recurring','last','Last visit')}<th>Score</th><th>Note</th></tr></thead>
+        <tbody>${sortRows(recCusts,recSort.k,recSort.d).map(c=>'<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.freq||'\u2014')+'</td><td class="r">'+(c.visit>0?fmt(c.visit):'\u2014')+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td>'+scorePill(c)+'</td><td><input class="note-in" placeholder="Add a note" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>').join('')}</tbody></table></div>
       </div>
       ${churnedSection}
       ${moves.length ? '<div class="card"><div class="h">Recent schedule changes (live app log)</div><div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th>Service</th><th>Frequency</th><th class="r">Value</th><th class="c">Status</th><th>Created</th><th>Cancelled</th></tr></thead><tbody>'+moves.map(x=>'<tr><td style="font-weight:500">'+(x._cust||'\u2014')+'</td><td class="c">'+(x._franchisee?badge(x._franchisee):'\u2014')+'</td><td style="font-size:12px">'+(x._svc||'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+(x._freq||'\u2014')+'</td><td class="r">'+(x._value>0?fmt(x._value):'\u2014')+'</td><td class="c">'+statusBadge(x._status)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(x._created)+'</td><td style="color:var(--muted);font-size:12px">'+(x._canceled?fmtDate(x._canceled):'\u2014')+'</td></tr>').join('')+'</tbody></table></div></div>' : ''}
     `;
+  }
+
+  else if (activeTab==='Scorecard') {
+    el.innerHTML = renderScorecardTab();
   }
 
   else if (activeTab==='Missing Prices') {
