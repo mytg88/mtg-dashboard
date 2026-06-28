@@ -770,6 +770,18 @@ function processData() {
     custMap[name].franchisee = j._franchisee || custMap[name].franchisee;
   });
 
+  // True lifetime value per customer, independent of the selected period: all-time view-filtered
+  // Zenbooker revenue, plus Mike's pre-Zenbooker invoiced and cash work and his folded-in historical customers.
+  const ltvRev = {};
+  const addLtv = (nm, amt) => { if (!nm || !amt) return; const key = norm(nm); ltvRev[key] = (ltvRev[key] || 0) + amt; };
+  histJobs.forEach(j => addLtv(NAME_ALIAS[j['Customer Name']] || j['Customer Name'], j._amount));
+  if (franchiseeView !== 'Adam') {
+    Object.keys(MIKE_CUST_PRIOR).forEach(nm => addLtv(nm, MIKE_CUST_PRIOR[nm].pr));
+    Object.keys(MIKE_CASH_PRIOR).forEach(nm => addLtv(nm, MIKE_CASH_PRIOR[nm].pr));
+    MIKE_HIST_CUSTOMERS.forEach(hc => addLtv(hc.n, hc.r));
+    MIKE_PASSED_EXTRA.forEach(hc => addLtv(hc.n, hc.r));
+  }
+
   allCustomers = Object.values(custMap).map(c => {
     const h = histMap[norm(c.name)] || { hasRecurring:false, freq:'', count:c.jobs.length, first:null, last:null };
     const priced = c.jobs.filter(j => j._amount > 0);
@@ -850,12 +862,14 @@ function processData() {
       else if (fix === 'repeat') c.s = 'Repeat';
       else if (fix.startsWith('merge:')) {
         const tgt = byNorm[norm(fix.slice(6))];
-        if (tgt && tgt !== c) { tgt.r = Math.round((tgt.r + c.r) * 100) / 100; tgt.j += c.j; tgt.a = tgt.j ? Math.round(tgt.r/tgt.j) : tgt.a; }
+        if (tgt && tgt !== c) { tgt.r = Math.round((tgt.r + c.r) * 100) / 100; tgt.j += c.j; tgt.a = tgt.j ? Math.round(tgt.r/tgt.j) : tgt.a; ltvRev[norm(tgt.n)] = (ltvRev[norm(tgt.n)]||0) + (ltvRev[norm(c.n)]||0); }
         drop.add(c);
       }
     });
     if (drop.size) allCustomers = allCustomers.filter(c => !drop.has(c));
   }
+  // True all-time lifetime value, never below the period figure (so a short period can't make it look smaller than it is).
+  allCustomers.forEach(c => { c.ltv = Math.round(Math.max(ltvRev[norm(c.n)] || 0, c.r) * 100) / 100; });
   allCustomers.forEach(c => { c.inherited = TRANSFERRED_TO_ADAM.has(norm(c.n)); }); // Adam's inherited book, for the tag
   allCustomers.forEach(c => { const cn = customerNotes[norm(c.n)]; c.disp = cn ? cn.disposition : ''; c.note = cn ? cn.note : ''; }); // saved churn reason + note
   allCustomers.forEach(c => { c.score = scorecards[norm(c.n)] || null; }); // saved scorecard {scores,by,at} or null
@@ -1267,37 +1281,41 @@ function scorecardFormHTML(name){
 // Value-against-quality scatter. scored = [{c, r, av}].
 function scorecardQuadrantSVG(scored){
   if(!scored.length) return '';
-  const W=720,H=400,padL=66,padR=20,padT=44,padB=52, plotW=W-padL-padR, plotH=H-padT-padB;
+  const W=720,H=410,padL=66,padR=20,padT=24,padB=52, plotW=W-padL-padR, plotH=H-padT-padB;
+  // Reserve label bands at top and bottom and a small side inset, so dots sit in a central
+  // data area and never collide with the quadrant labels or straddle the frame edge.
+  const bandT=44, bandB=42, insetX=18;
+  const dataT=padT+bandT, dataB=padT+plotH-bandB, dataL=padL+insetX, dataR=padL+plotW-insetX;
   const vals=scored.map(s=>s.av); let maxV=Math.max(1,...vals);
   const step=maxV>4000?1000:maxV>2000?500:maxV>1000?250:100; maxV=Math.max(step,Math.ceil(maxV/step)*step);
   const xMin=30,xMax=100;
-  const xs=p=>padL+(Math.max(xMin,Math.min(xMax,p))-xMin)/(xMax-xMin)*plotW;
-  const ys=v=>padT+(1-Math.max(0,Math.min(maxV,v))/maxV)*plotH;
+  const xs=p=>dataL+(Math.max(xMin,Math.min(xMax,p))-xMin)/(xMax-xMin)*(dataR-dataL);
+  const ys=v=>dataB-(Math.max(0,Math.min(maxV,v))/maxV)*(dataB-dataT);
   const sv=vals.slice().sort((a,b)=>a-b);
   const medV=sv.length%2?sv[(sv.length-1)/2]:Math.round((sv[sv.length/2-1]+sv[sv.length/2])/2);
   const xL=xs(65), yL=ys(medV), split=scored.length>=2;
   let s='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:auto;font-family:\'DM Sans\',sans-serif" xmlns="http://www.w3.org/2000/svg">';
-  s+='<rect x="'+padL+'" y="'+padT+'" width="'+plotW+'" height="'+plotH+'" fill="#FAFBF9" stroke="var(--line)"/>';
+  s+='<rect x="'+padL+'" y="'+padT+'" width="'+plotW+'" height="'+plotH+'" rx="6" fill="#FBFCFA" stroke="var(--line)"/>';
   if(split){
     s+='<rect x="'+xL+'" y="'+padT+'" width="'+(padL+plotW-xL)+'" height="'+(yL-padT)+'" fill="#2E7D32" opacity="0.05"/>';
     s+='<rect x="'+padL+'" y="'+padT+'" width="'+(xL-padL)+'" height="'+(yL-padT)+'" fill="#D98A2B" opacity="0.06"/>';
     s+='<rect x="'+xL+'" y="'+yL+'" width="'+(padL+plotW-xL)+'" height="'+(padT+plotH-yL)+'" fill="#1565C0" opacity="0.05"/>';
     s+='<rect x="'+padL+'" y="'+yL+'" width="'+(xL-padL)+'" height="'+(padT+plotH-yL)+'" fill="#C62828" opacity="0.05"/>';
-    s+='<line x1="'+xL+'" y1="'+padT+'" x2="'+xL+'" y2="'+(padT+plotH)+'" stroke="#BBB" stroke-dasharray="4 4"/>';
-    s+='<line x1="'+padL+'" y1="'+yL+'" x2="'+(padL+plotW)+'" y2="'+yL+'" stroke="#BBB" stroke-dasharray="4 4"/>';
-    const lab=(x,y,t1,t2,c)=>'<text x="'+x+'" y="'+y+'" text-anchor="middle" font-size="11" font-weight="700" fill="'+c+'" opacity="0.85">'+t1+'</text><text x="'+x+'" y="'+(y+13)+'" text-anchor="middle" font-size="9.5" fill="'+c+'" opacity="0.7">'+t2+'</text>';
-    s+=lab((xL+padL+plotW)/2, padT+16, 'Keep & protect', 'high value, strong', '#2E7D32');
-    s+=lab((padL+xL)/2, padT+16, 'Fix or reprice', 'high value, weak', '#B5681B');
-    s+=lab((xL+padL+plotW)/2, padT+plotH-16, 'Nurture or upsell', 'easy, lower value', '#1565C0');
-    s+=lab((padL+xL)/2, padT+plotH-16, 'Consider dropping', 'low value, weak', '#C62828');
+    s+='<line x1="'+xL+'" y1="'+padT+'" x2="'+xL+'" y2="'+(padT+plotH)+'" stroke="#C7CFC4" stroke-dasharray="4 4"/>';
+    s+='<line x1="'+padL+'" y1="'+yL+'" x2="'+(padL+plotW)+'" y2="'+yL+'" stroke="#C7CFC4" stroke-dasharray="4 4"/>';
+    const lab=(x,y,t1,t2,c)=>'<text x="'+x+'" y="'+y+'" text-anchor="middle" font-size="11.5" font-weight="700" fill="'+c+'">'+t1+'</text><text x="'+x+'" y="'+(y+14)+'" text-anchor="middle" font-size="9.5" fill="'+c+'" opacity="0.75">'+t2+'</text>';
+    s+=lab((xL+padL+plotW)/2, padT+18, 'Keep & protect', 'high value, strong', '#2E7D32');
+    s+=lab((padL+xL)/2, padT+18, 'Fix or reprice', 'high value, weak', '#B5681B');
+    s+=lab((xL+padL+plotW)/2, padT+plotH-26, 'Nurture or upsell', 'easy, lower value', '#1565C0');
+    s+=lab((padL+xL)/2, padT+plotH-26, 'Consider dropping', 'low value, weak', '#C62828');
   }
-  s+='<text x="'+(padL+plotW/2)+'" y="'+(H-14)+'" text-anchor="middle" font-size="11" fill="var(--muted)">Quality score \u2192</text>';
+  s+='<text x="'+(padL+plotW/2)+'" y="'+(H-12)+'" text-anchor="middle" font-size="11" fill="var(--muted)">Quality score \u2192</text>';
   s+='<text x="15" y="'+(padT+plotH/2)+'" text-anchor="middle" font-size="11" fill="var(--muted)" transform="rotate(-90 15 '+(padT+plotH/2)+')">Estimated annual value \u2192</text>';
-  [30,65,100].forEach(t=>{ s+='<text x="'+xs(t)+'" y="'+(padT+plotH+16)+'" text-anchor="middle" font-size="9.5" fill="var(--muted)">'+t+'%</text>'; });
-  (split?[0,medV,maxV]:[0,maxV]).forEach(v=>{ s+='<text x="'+(padL-7)+'" y="'+(ys(v)+3)+'" text-anchor="end" font-size="9.5" fill="var(--muted)">'+fmt(v)+'</text>'; });
+  [30,65,100].forEach(t=>{ s+='<text x="'+xs(t)+'" y="'+(padT+plotH+18)+'" text-anchor="middle" font-size="9.5" fill="var(--muted)">'+t+'%</text>'; });
+  (split?[0,medV,maxV]:[0,maxV]).forEach(v=>{ s+='<text x="'+(padL-8)+'" y="'+(ys(v)+3)+'" text-anchor="end" font-size="9.5" fill="var(--muted)">'+fmt(v)+'</text>'; });
   scored.forEach(o=>{ const cx=xs(o.r.pct), cy=ys(o.av), c=scoreGradeColor(o.r.grade);
     const tip=o.c.n+' \u00b7 '+o.r.grade+' '+o.r.pct+'% \u00b7 ~'+fmt(o.av)+'/yr'+(o.r.complete?'':' (in progress)');
-    s+='<circle cx="'+cx+'" cy="'+cy+'" r="7" fill="'+c+'" stroke="#fff" stroke-width="2"><title>'+escAttr(tip)+'</title></circle>'; });
+    s+='<circle cx="'+cx+'" cy="'+cy+'" r="7" fill="'+c+'" stroke="#fff" stroke-width="2.5"><title>'+escAttr(tip)+'</title></circle>'; });
   return s+'</svg>';
 }
 // The Scorecard tab: results view (default) or the form when a customer is open.
@@ -2166,7 +2184,10 @@ function renderContent() {
   else if (activeTab==='Recurring') {
     const recRound = recCusts.reduce((s,c)=>s+(c.visit||c.a),0);
     const recVisitAvg = recCusts.length ? Math.round(recRound/recCusts.length) : 0;
-    const recAvgLtv = recCusts.length ? Math.round(recCusts.reduce((s,c)=>s+c.r,0)/recCusts.length) : 0;
+    const recAvgLtv = recCusts.length ? Math.round(recCusts.reduce((s,c)=>s+(c.ltv!=null?c.ltv:c.r),0)/recCusts.length) : 0;
+    const recIsAllTime = dfRange === 'all';
+    const recAvgPeriod = recCusts.length ? Math.round(recCusts.reduce((s,c)=>s+c.r,0)/recCusts.length) : 0;
+    const recPeriodName = ({'this-month':'this month','last-month':'last month','ytd':'this year so far','tax-year':'this tax year','last-tax-year':'last tax year','last-12mo':'the last 12 months','custom':'this period'})[dfRange] || 'this period';
     const recMike = recCusts.filter(c=>c.f==='Mike').length, recAdam = recCusts.filter(c=>c.f==='Adam').length;
     const w = recurringStats || {gained:0,lost:0,net:0,list:[],mapped:false};
     const netColor = w.net>0?'var(--green6)':(w.net<0?'var(--red)':'var(--muted)');
@@ -2183,8 +2204,8 @@ function renderContent() {
     const totRev = allCustomers.reduce((s,c)=>s+c.r,0) || 1;
     const recRev = recAll.reduce((s,c)=>s+c.r,0);
     const recShare = Math.round(recRev/totRev*100);
-    const recLtv = recAll.length ? Math.round(recRev/recAll.length) : 0;
-    const oneLtv = oneAll.length ? Math.round(oneAll.reduce((s,c)=>s+c.r,0)/oneAll.length) : 0;
+    const recLtv = recAll.length ? Math.round(recAll.reduce((s,c)=>s+(c.ltv!=null?c.ltv:c.r),0)/recAll.length) : 0;
+    const oneLtv = oneAll.length ? Math.round(oneAll.reduce((s,c)=>s+(c.ltv!=null?c.ltv:c.r),0)/oneAll.length) : 0;
     const ltvMult = oneLtv ? Math.round(recLtv/oneLtv) : 0;
     const recAvgJobs = recAll.length ? Math.round(recAll.reduce((s,c)=>s+c.j,0)/recAll.length) : 0;
     const statTile = (v,l) => '<div style="flex:1;min-width:118px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;border-left:4px solid var(--green4)"><div class="serif" style="font-size:26px;font-weight:600;color:var(--ink);line-height:1">'+v+'</div><div style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.4">'+l+'</div></div>';
@@ -2204,7 +2225,7 @@ function renderContent() {
         </ul>
       </div>` : '<div class="card"><div class="h">Why recurring is worth most</div><div style="color:var(--muted);font-size:13px">No recurring customers in this view yet.</div></div>';
     // Churned regulars, folded in from the old Churned tab (the other side of the recurring book).
-    const chTotal = churnedList.reduce((s,c)=>s+c.r,0);
+    const chTotal = churnedList.reduce((s,c)=>s+(c.ltv!=null?c.ltv:c.r),0);
     const chMike = churnedList.filter(c=>c.f==='Mike').length, chAdam = churnedList.filter(c=>c.f==='Adam').length;
     const chWho = franchiseeView==='All' ? (chMike+' on Mike\u2019s patch, '+chAdam+' on Adam\u2019s') : ('all on '+franchiseeView+'\u2019s patch');
     const churnedSection = `<div class="card" style="margin-bottom:24px">
@@ -2213,15 +2234,15 @@ function renderContent() {
         <div style="font-size:13px;color:var(--muted);margin-bottom:12px">${churnedList.length} churned${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}. Was recurring or had 5+ jobs, then no visit for 90+ days.</div>
         ${churnedList.length ? churnReasonBreakdownHTML(churnedList) : ''}
         ${churnedList.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No churned customers in this period.</div>':
-          '<div class="table-wrap"><table><thead><tr>'+sortTh('Churned','n','Customer')+'<th class="c">Owner</th>'+sortTh('Churned','j','Jobs','r')+sortTh('Churned','r','Lifetime','r')+sortTh('Churned','first','First','r')+sortTh('Churned','last','Last visit','r')+sortTh('Churned','daysSince','Days since last visit','r')+'<th>Reason &amp; note</th></tr></thead>'+
-          '<tbody>'+sortRows(churnedList,churnSort.k,churnSort.d).map(c=>'<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--red)">'+fmt(c.r)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td class="r">'+c.daysSince+'</td><td><select class="disp-sel'+(c.disp?'':' unset')+'" onchange="setCustomerDisp(this.closest(\'tr\').dataset.cust, this.value)">'+dispOptions(c.disp)+'</select><input class="note-in" style="margin-top:5px" placeholder="Add a note" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>').join('')+'</tbody></table></div>'+
+          '<div class="table-wrap"><table><thead><tr>'+sortTh('Churned','n','Customer')+'<th class="c">Owner</th>'+sortTh('Churned','j','Jobs','r')+sortTh('Churned','ltv','Lifetime','r')+sortTh('Churned','first','First','r')+sortTh('Churned','last','Last visit','r')+sortTh('Churned','daysSince','Days since last visit','r')+'<th>Reason &amp; note</th></tr></thead>'+
+          '<tbody>'+sortRows(churnedList,churnSort.k,churnSort.d).map(c=>'<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--red)">'+fmt(c.ltv!=null?c.ltv:c.r)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td class="r">'+c.daysSince+'</td><td><select class="disp-sel'+(c.disp?'':' unset')+'" onchange="setCustomerDisp(this.closest(\'tr\').dataset.cust, this.value)">'+dispOptions(c.disp)+'</select><input class="note-in" style="margin-top:5px" placeholder="Add a note" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>').join('')+'</tbody></table></div>'+
           '<div class="ib ig"><b>Total lifetime value lost:</b> '+fmt(chTotal)+'. '+chWho+'. A re-engagement push targeting the biggest names could win back recurring revenue.</div>'}
       </div>`;
     el.innerHTML = `
       <div class="grid grid-4">
         <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Active Recurring</div><div class="kpi-v">${recCusts.length}</div><div class="kpi-s">customers on a schedule</div></div>
         <div class="card accent-top"><div class="kpi-l">Avg per Visit</div><div class="kpi-v">${fmt(recVisitAvg)}</div><div class="kpi-s">${fmt(recRound)} for one round of all</div></div>
-        <div class="card accent-top"><div class="kpi-l">Avg Customer LTV</div><div class="kpi-v">${fmt(recAvgLtv)}</div><div class="kpi-s">lifetime revenue per regular</div></div>
+        <div class="card accent-top"><div class="kpi-l">Avg Customer LTV</div><div class="kpi-v">${fmt(recAvgLtv)}</div><div class="kpi-s">lifetime revenue per regular, all time</div>${recIsAllTime?'':'<div class="kpi-s" style="margin-top:3px;color:var(--green6);font-weight:600">'+fmt(recAvgPeriod)+' avg in '+recPeriodName+'</div>'}</div>
         <div class="card accent-top"><div class="kpi-l">Regulars Gained</div><div class="kpi-v">${w.gained}</div><div class="kpi-s">first visit in period</div></div>
         <div class="card accent-top" style="border-top-color:var(--red)"><div class="kpi-l">Regulars Lost</div><div class="kpi-v" style="color:var(--red)">${w.lost}</div><div class="kpi-s">churned in period</div></div>
       </div>
@@ -2236,8 +2257,8 @@ function renderContent() {
       </div>
 
       <div class="card" style="margin-bottom:24px"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${recCusts.length} active recurring customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, from job history</div>
-        <div class="table-wrap"><table><thead><tr>${sortTh('Recurring','n','Customer')}<th class="c">Owner</th><th>Frequency</th>${sortTh('Recurring','visit','Avg/visit','r')}${sortTh('Recurring','j','Jobs','r')}${sortTh('Recurring','r','Lifetime','r')}${sortTh('Recurring','first','First')}${sortTh('Recurring','last','Last visit')}<th>Score</th><th>Note</th></tr></thead>
-        <tbody>${sortRows(recCusts,recSort.k,recSort.d).map(c=>'<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.freq||'\u2014')+'</td><td class="r">'+(c.visit>0?fmt(c.visit):'\u2014')+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td>'+scorePill(c)+'</td><td><input class="note-in" placeholder="Add a note" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>').join('')}</tbody></table></div>
+        <div class="table-wrap"><table><thead><tr>${sortTh('Recurring','n','Customer')}<th class="c">Owner</th><th>Frequency</th>${sortTh('Recurring','visit','Avg/visit','r')}${sortTh('Recurring','j','Jobs','r')}${sortTh('Recurring','ltv','Lifetime','r')}${sortTh('Recurring','first','First')}${sortTh('Recurring','last','Last visit')}<th>Score</th><th>Note</th></tr></thead>
+        <tbody>${sortRows(recCusts,recSort.k,recSort.d).map(c=>'<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.freq||'\u2014')+'</td><td class="r">'+(c.visit>0?fmt(c.visit):'\u2014')+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.ltv!=null?c.ltv:c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td>'+scorePill(c)+'</td><td><input class="note-in" placeholder="Add a note" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>').join('')}</tbody></table></div>
       </div>
       ${churnedSection}
       ${moves.length ? '<div class="card"><div class="h">Recent schedule changes (live app log)</div><div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th>Service</th><th>Frequency</th><th class="r">Value</th><th class="c">Status</th><th>Created</th><th>Cancelled</th></tr></thead><tbody>'+moves.map(x=>'<tr><td style="font-weight:500">'+(x._cust||'\u2014')+'</td><td class="c">'+(x._franchisee?badge(x._franchisee):'\u2014')+'</td><td style="font-size:12px">'+(x._svc||'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+(x._freq||'\u2014')+'</td><td class="r">'+(x._value>0?fmt(x._value):'\u2014')+'</td><td class="c">'+statusBadge(x._status)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(x._created)+'</td><td style="color:var(--muted);font-size:12px">'+(x._canceled?fmtDate(x._canceled):'\u2014')+'</td></tr>').join('')+'</tbody></table></div></div>' : ''}
