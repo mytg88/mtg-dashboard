@@ -884,6 +884,30 @@ function processData() {
   const jobPc = {};
   histJobs.forEach(j => { const nm = NAME_ALIAS[j['Customer Name']] || j['Customer Name']; if (!nm || !j._postcode) return; const k = norm(nm); const d = j._date ? j._date.getTime() : 0; if (!jobPc[k] || d >= jobPc[k].d) jobPc[k] = { pc: j._postcode, d }; });
   allCustomers.forEach(c => { const k = norm(c.n); c.postcode = pcByCust[k] || (jobPc[k] ? jobPc[k].pc : '') || ''; });
+  // Best-estimate annual value: realised regular-maintenance revenue over the trailing 12 months
+  // (extras such as pressure washing or lawn care are excluded by counting only the maintenance
+  // service), annualised for customers with under a year of history. Falls back to the cadence x
+  // price model only when there is too little real data to trust.
+  const REF = (function(){ let mx = 0; rawJobs.forEach(j => { if (j._date && j._date.getTime() > mx) mx = j._date.getTime(); }); return mx ? new Date(mx) : new Date(); })();
+  const winStart = REF.getTime() - 365 * 864e5;
+  const recSum = {}, recFirst = {};
+  histJobs.forEach(j => {
+    if (j._service !== 'Regular Garden Maintenance' || !j._date || !(j._amount > 0)) return;
+    const nm = NAME_ALIAS[j['Customer Name']] || j['Customer Name']; if (!nm) return;
+    const k = norm(nm), t = j._date.getTime();
+    if (recFirst[k] === undefined || t < recFirst[k]) recFirst[k] = t;
+    if (t >= winStart && t <= REF.getTime()) recSum[k] = (recSum[k] || 0) + j._amount;
+  });
+  allCustomers.forEach(c => {
+    const k = norm(c.n), sum = recSum[k] || 0, first = recFirst[k];
+    let best;
+    if (sum > 0 && first !== undefined) {
+      const activeDays = (REF.getTime() - Math.max(first, winStart)) / 864e5;
+      best = activeDays >= 330 ? sum : (activeDays >= 60 ? sum * 365 / activeDays : annualValue(c));
+    } else best = annualValue(c);
+    c.annual = Math.round(best);
+    c.annualReal = sum > 0;  // true when the figure came from real visits, not the model
+  });
   churnedList = allCustomers.filter(c => c.s === 'Churned').sort((a,b) => b.r - a.r);
 
   // Number -> customer map for the Calls tab. Phone lives on the source rows (leads/recurring/jobs)
@@ -1262,7 +1286,7 @@ function saveScorecardNow(name){
 // The scoring form for one customer (long, grouped by theme, with a sticky running grade).
 function scorecardFormHTML(name){
   const k=normName(name), sc=scorecards[k]?scorecards[k].scores:{};
-  const r=scoreCompute(sc), cust=allCustomers.find(c=>normName(c.n)===k), av=annualValue(cust);
+  const r=scoreCompute(sc), cust=allCustomers.find(c=>normName(c.n)===k), av=(cust?cust.annual:0);
   const who=(scorecards[k]&&scorecards[k].by)?scorecards[k].by:'', at=(scorecards[k]&&scorecards[k].at)?scorecards[k].at:'';
   let body='';
   SCORE_THEMES.forEach(theme=>{
@@ -1333,7 +1357,7 @@ function scorecardQuadrantSVG(scored){
 function renderScorecardTab(){
   if(scoreEditFor) return scorecardFormHTML(scoreEditFor);
   const regs=allCustomers.filter(c=>c.s==='Recurring');
-  const scored=regs.filter(hasScore).map(c=>({c, r:scoreCompute(c.score.scores), av:annualValue(c)})).sort((a,b)=>a.r.pct-b.r.pct);
+  const scored=regs.filter(hasScore).map(c=>({c, r:scoreCompute(c.score.scores), av:c.annual})).sort((a,b)=>a.r.pct-b.r.pct);
   const unscored=regs.filter(c=>!hasScore(c)).sort((a,b)=>b.r-a.r);
   const arg=n=>JSON.stringify(n).replace(/"/g,'&quot;');
   const startLabel = unscored.length ? ('Start scoring \u00b7 '+unscored.length+' to go') : 'Step through to review';
@@ -1351,12 +1375,13 @@ function renderScorecardTab(){
   }
   let table='';
   if(scored.length){
-    table='<div class="card" style="margin-bottom:20px"><div class="h">Scored regulars ('+scored.length+')</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px">Weakest first. Concerns are the questions you marked poor, hover to see which.</div>'
+    table='<div class="card" style="margin-bottom:20px"><div class="h">Scored regulars ('+scored.length+')</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px">Weakest first. Concerns are the questions you marked poor, hover to see which. Annual value is their actual regular-maintenance income over the last 12 months, before any extras; values marked <span style="color:var(--accent)">est</span> are too new for a full year and are estimated.</div>'
       + '<div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Grade</th><th class="r">Score</th><th class="r">Concerns</th><th class="r">Annual value</th><th class="c">Owner</th><th>Scored</th><th></th></tr></thead><tbody>'
       + scored.map(o=>{ const poorQs=SCORE_QUESTIONS.filter(q=>o.c.score.scores[q.id]===1).map(q=>q.q);
           const conc=o.r.poor>0?'<span style="color:var(--red);font-weight:700;cursor:help" title="'+escAttr(poorQs.join(' \u00b7 '))+'">'+o.r.poor+'</span>':'<span style="color:var(--muted)">0</span>';
           const inprog=o.r.complete?'':' <span style="font-size:10px;color:var(--accent)">part</span>';
-          return '<tr><td style="font-weight:500">'+custName(o.c)+'</td><td class="c"><span class="sc-badge" style="background:'+scoreGradeColor(o.r.grade)+'">'+o.r.grade+'</span></td><td class="r" style="font-weight:600">'+o.r.pct+'%'+inprog+'</td><td class="r">'+conc+'</td><td class="r">'+(o.av?fmt(o.av):'\u2014')+'</td><td class="c">'+badge(o.c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+escAttr(o.c.score.at||'\u2014')+'</td><td><button class="df-btn" onclick="openScorecard('+arg(o.c.n)+')">Open</button></td></tr>'; }).join('')
+          const avCell=o.av?(fmt(o.av)+(o.c.annualReal?'':' <span style="font-size:10px;color:var(--accent)">est</span>')):'\u2014';
+          return '<tr><td style="font-weight:500">'+custName(o.c)+'</td><td class="c"><span class="sc-badge" style="background:'+scoreGradeColor(o.r.grade)+'">'+o.r.grade+'</span></td><td class="r" style="font-weight:600">'+o.r.pct+'%'+inprog+'</td><td class="r">'+conc+'</td><td class="r">'+avCell+'</td><td class="c">'+badge(o.c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+escAttr(o.c.score.at||'\u2014')+'</td><td><button class="df-btn" onclick="openScorecard('+arg(o.c.n)+')">Open</button></td></tr>'; }).join('')
       + '</tbody></table></div></div>';
   }
   let todo='';
@@ -1406,7 +1431,7 @@ function renderLiveMarkers(){
     const g = geoCache[p.pc]; if(!g) return;
     const c = p.c, churned = c.s==='Churned', op = c.f;
     const color = churned ? '#9AA59B' : (op==='Adam' ? '#1565C0' : '#E07B1A');
-    const sc = hasScore(c) ? scoreCompute(c.score.scores) : null, av = annualValue(c);
+    const sc = hasScore(c) ? scoreCompute(c.score.scores) : null, av = c.annual;
     const html = '<div style="font-family:DM Sans,sans-serif;min-width:150px"><div style="font-weight:700;font-size:13px;margin-bottom:2px">'+escAttr(c.n)+'</div>'
       + '<div style="font-size:12px;color:#5b665c">'+escAttr(op||'')+(churned?' \u00b7 churned':'')+'</div>'
       + (sc?'<div style="font-size:12px;margin-top:3px"><b>'+sc.grade+'</b> \u00b7 '+sc.pct+'%</div>':'')
