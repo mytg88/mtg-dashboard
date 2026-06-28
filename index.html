@@ -141,6 +141,10 @@ tr:hover td{background:#FAFBF9}
 @media (max-width:680px){.sc-opts{grid-template-columns:1fr}}
 .live-map{height:560px;border-radius:11px;overflow:hidden;border:1px solid var(--line);background:#EAEFEA}
 .live-map .leaflet-popup-content{margin:11px 13px}
+.live-map .leaflet-overlay-pane svg{filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.28))}
+.map-badge-wrap{background:transparent;border:0}
+.map-badge{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2.5px solid #fff;box-shadow:0 2px 5px rgba(0,0,0,.32)}
+.map-badge svg{width:15px;height:15px;fill:#fff}
 @media (max-width:680px){.live-map{height:440px}}
 .df-bar{background:var(--card);border-bottom:1px solid var(--line);padding:14px 36px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .df-label{font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.6px;margin-right:4px}
@@ -315,7 +319,7 @@ const API_URL   = 'https://script.google.com/macros/s/AKfycbxN137wCPVA5IVaHseSxC
 let auth = null; // {user, pass, role, name} once logged in. No password is stored in this file.
 // ==============================================================
 
-let rawJobs=[], customers=[], rawLeads=[], rawRecurring=[], numToCust={}, manualNames={}, customerNotes={}, scorecards={};
+let rawJobs=[], customers=[], rawLeads=[], rawRecurring=[], numToCust={}, manualNames={}, customerNotes={}, scorecards={}, plan={};
 let scoreEditFor=null;
 let jobsPeriod=[], jobs=[], prevJobs=[], allCustomers=[], churnedList=[], monthlyData=[], serviceData=[], missingPriceData=[];
 let leadStats=null, recurringStats=null, prevTotals=null;
@@ -619,6 +623,16 @@ function handleData(data) {
     try { const p = JSON.parse(sc.Scores || sc.scores || '{}'); if (p && typeof p === 'object') scores = p; } catch (e) {}
     scorecards[nm] = { scores: scores, by: String(sc['Scored By'] || '').trim(), at: String(sc['Scored At'] || '').trim() };
   });
+  // Seasonal value plans, keyed by normalised name. The Plan cell is a JSON blob of the
+  // edited fields; anything not stored falls back to a sensible default derived from live data.
+  plan = {};
+  (data.plan || []).forEach(p => {
+    const nm = normName(p.Customer || p.customer);
+    if (!nm) return;
+    let obj = {};
+    try { const j = JSON.parse(p.Plan || p.plan || '{}'); if (j && typeof j === 'object') obj = j; } catch (e) {}
+    plan[nm] = obj;
+  });
 
   rawJobs.forEach(j => {
     j._amount = parseAmount(j['Amount (£)']);
@@ -877,7 +891,7 @@ function processData() {
   allCustomers.forEach(c => { c.ltv = Math.round(Math.max(ltvRev[norm(c.n)] || 0, c.r) * 100) / 100; });
   allCustomers.forEach(c => { c.inherited = TRANSFERRED_TO_ADAM.has(norm(c.n)); }); // Adam's inherited book, for the tag
   allCustomers.forEach(c => { const cn = customerNotes[norm(c.n)]; c.disp = cn ? cn.disposition : ''; c.note = cn ? cn.note : ''; }); // saved churn reason + note
-  allCustomers.forEach(c => { c.score = scorecards[norm(c.n)] || null; }); // saved scorecard {scores,by,at} or null
+  allCustomers.forEach(c => { c.score = scorecards[norm(c.n)] || null; c.plan = plan[norm(c.n)] || null; }); // saved scorecard / saved season plan or null
   // Each customer's postcode for the map: prefer their active recurring booking, else their most recent job.
   const pcByCust = {};
   rawRecurring.forEach(r => { if (r._postcode && r._cust) { const k = norm(r._cust); if (!pcByCust[k]) pcByCust[k] = r._postcode; } });
@@ -1393,8 +1407,66 @@ function renderScorecardTab(){
   return intro + quad + weakest + table + todo;
 }
 // ---------- regulars map (Leaflet, lazy-loaded) ----------
-let liveMap=null, mapShowChurned=false, geoCache={};
+let liveMap=null, mapShowChurned=false, geoCache={}, placeGeo={};
 try { geoCache = JSON.parse(localStorage.getItem('mtg_geo')||'{}') || {}; } catch(e){ geoCache={}; }
+try { placeGeo = JSON.parse(localStorage.getItem('mtg_geo_places')||'{}') || {}; } catch(e){ placeGeo={}; }
+// Fixed reference points on the map: where each operator starts, the tips we use, and trade suppliers.
+// Add more by extending this list (kind start|tip|supplier; q is a free-text address or place name).
+const MAP_PLACES = [
+  { kind:'start', op:'Mike', label:'Mike \u00b7 start', q:'80 Florence Road, Parkstone, Poole, UK' },
+  { kind:'start', op:'Adam', label:'Adam \u00b7 start', q:'3 Rushton Crescent, Bournemouth, UK' },
+  { kind:'tip', label:'Poole recycling centre', q:'Poole Household Waste Recycling Centre, Poole, UK' },
+  { kind:'tip', label:'Bournemouth recycling centre', q:'Millhams Household Waste Recycling Centre, Bournemouth, UK' },
+  { kind:'tip', label:'Eco Sustainable Solutions', q:'Eco Sustainable Solutions, Parley, UK' },
+  { kind:'supplier', label:'Plants for Trade', q:'Plants for Trade, Poole, UK' },
+  { kind:'supplier', label:'Baskets and Blooms', q:'Baskets and Blooms, Poole, UK' },
+  { kind:'supplier', label:'Eco Landscaping', q:'Eco Landscaping, Poole, UK' }
+];
+const PLACE_STYLE = {
+  start:    { bg:'#1F2A24', sub:'Start point', glyph:'<path d="M3 11.5 12 3l9 8.5h-2.4V21h-5.1v-6h-3V21H5.4v-9.5z"/>' },
+  tip:      { bg:'#2E7D32', sub:'Tip / recycling', glyph:'<path d="M9 3h6l1 2h4v2H4V5h4zM6 9h12l-1.1 11.2H7.1z"/>' },
+  supplier: { bg:'#7A4FBF', sub:'Supplier', glyph:'<path d="M7 8a5 5 0 0 1 10 0h3l-1.2 12.5H5.2L4 8zm2 0h6a3 3 0 0 0-6 0z"/>' }
+};
+function placeIcon(kind, op){
+  const s = PLACE_STYLE[kind] || PLACE_STYLE.supplier;
+  const bg = kind==='start' ? (op==='Adam' ? '#15407F' : '#9A5410') : s.bg;
+  return L.divIcon({ className:'map-badge-wrap', iconSize:[30,30], iconAnchor:[15,15], popupAnchor:[0,-15],
+    html:'<div class="map-badge" style="background:'+bg+'"><svg viewBox="0 0 24 24">'+s.glyph+'</svg></div>' });
+}
+function sleepMs(ms){ return new Promise(r=>setTimeout(r,ms)); }
+// Geocode the named reference points via OpenStreetMap Nominatim, bounded to the local area, cached.
+async function geocodePlaces(list){
+  const VB='-2.12,50.86,-1.66,50.66';
+  for(let i=0;i<list.length;i++){
+    const q=list[i].q; if(!q || (q in placeGeo)) continue;
+    try{
+      const res=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&bounded=1&viewbox='+VB+'&q='+encodeURIComponent(q),{headers:{'Accept':'application/json'}});
+      const j=await res.json();
+      placeGeo[q] = (j && j.length) ? { lat:parseFloat(j[0].lat), lng:parseFloat(j[0].lon) } : null;
+    }catch(e){ /* try again next visit */ }
+    await sleepMs(700);
+  }
+  try{ localStorage.setItem('mtg_geo_places', JSON.stringify(placeGeo)); }catch(e){}
+}
+function renderPlaceMarkers(map){
+  if(!map || !window.L) return;
+  if(map._mtgPlaces){ try{ map.removeLayer(map._mtgPlaces); }catch(e){} }
+  const layer=L.layerGroup().addTo(map); map._mtgPlaces=layer;
+  MAP_PLACES.forEach(p=>{
+    if(p.kind==='start' && !(franchiseeView==='All' || franchiseeView===p.op)) return;
+    const g=placeGeo[p.q]; if(!g) return;
+    const s=PLACE_STYLE[p.kind]||PLACE_STYLE.supplier;
+    L.marker([g.lat,g.lng],{ icon:placeIcon(p.kind,p.op), zIndexOffset:1000 })
+      .bindPopup('<div style="font-family:DM Sans,sans-serif;min-width:140px"><div style="font-weight:700;font-size:13px">'+escAttr(p.label)+'</div><div style="font-size:12px;color:#5b665c;margin-top:2px">'+s.sub+(p.op?' \u00b7 '+p.op:'')+'</div></div>')
+      .addTo(layer);
+  });
+  updatePlaceNote();
+}
+function updatePlaceNote(){
+  const el=document.getElementById('placeNote'); if(!el) return;
+  const miss=MAP_PLACES.filter(p=>!placeGeo[p.q]);
+  el.innerHTML = miss.length ? 'Still to pin (needs a precise address): '+miss.map(p=>escAttr(p.label)).join(', ') : '';
+}
 function loadLeaflet(cb){
   if(window.L){ cb(); return; }
   if(!document.getElementById('leaflet-css')){ const lk=document.createElement('link'); lk.id='leaflet-css'; lk.rel='stylesheet'; lk.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(lk); }
@@ -1430,14 +1502,14 @@ function renderLiveMarkers(){
   pts.forEach(p=>{
     const g = geoCache[p.pc]; if(!g) return;
     const c = p.c, churned = c.s==='Churned', op = c.f;
-    const color = churned ? '#9AA59B' : (op==='Adam' ? '#1565C0' : '#E07B1A');
+    const color = churned ? '#D64545' : (op==='Adam' ? '#1565C0' : '#E07B1A');
     const sc = hasScore(c) ? scoreCompute(c.score.scores) : null, av = c.annual;
     const html = '<div style="font-family:DM Sans,sans-serif;min-width:150px"><div style="font-weight:700;font-size:13px;margin-bottom:2px">'+escAttr(c.n)+'</div>'
       + '<div style="font-size:12px;color:#5b665c">'+escAttr(op||'')+(churned?' \u00b7 churned':'')+'</div>'
       + (sc?'<div style="font-size:12px;margin-top:3px"><b>'+sc.grade+'</b> \u00b7 '+sc.pct+'%</div>':'')
       + (av?'<div style="font-size:12px;color:#5b665c">~'+fmt(av)+'/yr</div>':'')
       + '<div style="font-size:11px;color:#9aa59b;margin-top:3px">'+escAttr(p.pc)+'</div></div>';
-    const m = L.circleMarker([g.lat,g.lng], { radius: churned?6:8, color:'#fff', weight:2, fillColor:color, fillOpacity: churned?0.55:0.95 });
+    const m = L.circleMarker([g.lat,g.lng], { radius: churned?6.5:8, color:'#fff', weight:2.5, fillColor:color, fillOpacity: churned?0.92:0.96 });
     m.bindPopup(html); m.addTo(layer); latlngs.push([g.lat,g.lng]); placed++;
   });
   if(latlngs.length){ try{ liveMap.fitBounds(latlngs,{padding:[40,40],maxZoom:14}); }catch(e){} }
@@ -1448,12 +1520,15 @@ async function initLiveMap(){
   if(activeTab!=='Map') return;
   await geocodePostcodes(mapPoints().map(p=>p.pc));
   if(activeTab!=='Map') return;
-  loadLeaflet(function(){
+  loadLeaflet(async function(){
     const el=document.getElementById('liveMap'); if(!el || activeTab!=='Map') return;
     if(liveMap){ try{ liveMap.remove(); }catch(e){} liveMap=null; }
     liveMap = L.map(el, { scrollWheelZoom:true }).setView([50.74,-1.95], 11);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom:19, subdomains:'abcd', attribution:'&copy; OpenStreetMap, &copy; CARTO' }).addTo(liveMap);
     renderLiveMarkers();
+    renderPlaceMarkers(liveMap);             // draws any already-cached reference points at once
+    await geocodePlaces(MAP_PLACES);         // then resolves the rest in the background
+    if(liveMap && activeTab==='Map') renderPlaceMarkers(liveMap);
   });
 }
 async function toggleMapChurned(v){ mapShowChurned=v; if(!liveMap) return; await geocodePostcodes(mapPoints().map(p=>p.pc)); renderLiveMarkers(); }
@@ -1461,14 +1536,127 @@ function renderMapTab(){
   const regs = allCustomers.filter(c=>c.s==='Recurring');
   const noPc = regs.filter(c=>!c.postcode).sort((a,b)=>b.r-a.r);
   const dot = (col,lab) => '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink)"><span style="width:12px;height:12px;border-radius:50%;background:'+col+';border:2px solid #fff;box-shadow:0 0 0 1px '+col+'"></span>'+lab+'</span>';
-  const intro = '<div class="card" style="margin-bottom:20px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap"><div><div class="h" style="margin-bottom:6px">Map of regulars</div><div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:680px">Every regular with a postcode on file, placed from the live data, '+(franchiseeView==='All'?'Mike in orange and Adam in blue':'on '+franchiseeView+'\u2019s patch')+'. Pins follow the period and view filters at the top, so for the whole book pick All time.</div></div>'
+  const ic = (kind,op,lab) => { const s=PLACE_STYLE[kind]; const bg=kind==='start'?(op==='Adam'?'#15407F':'#9A5410'):s.bg; return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink)"><span style="width:18px;height:18px;border-radius:50%;background:'+bg+';border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3);display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" style="width:10px;height:10px;fill:#fff">'+s.glyph+'</svg></span>'+lab+'</span>'; };
+  const intro = '<div class="card" style="margin-bottom:20px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap"><div><div class="h" style="margin-bottom:6px">Map of regulars</div><div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:680px">Every regular with a postcode on file, placed from the live data, '+(franchiseeView==='All'?'Mike in orange and Adam in blue':'on '+franchiseeView+'\u2019s patch')+'. Start points, tips and suppliers are pinned too. Customer pins follow the period and view filters at the top, so for the whole book pick All time.</div></div>'
     + '<label style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);white-space:nowrap;cursor:pointer"><input type="checkbox" '+(mapShowChurned?'checked':'')+' onchange="toggleMapChurned(this.checked)"> Show churned</label></div>'
-    + '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:14px">'+dot('#E07B1A','Mike')+dot('#1565C0','Adam')+(mapShowChurned?dot('#9AA59B','Churned'):'')+'</div></div>';
-  const map = '<div class="card" style="margin-bottom:20px;padding:14px"><div id="liveMap" class="live-map"></div><div id="mapStatus" style="font-size:12px;color:var(--muted);margin-top:10px">Locating customers\u2026</div></div>';
+    + '<div style="display:flex;gap:16px 18px;flex-wrap:wrap;margin-top:14px;align-items:center">'+dot('#E07B1A','Mike')+dot('#1565C0','Adam')+(mapShowChurned?dot('#D64545','Churned'):'')+'<span style="width:1px;height:16px;background:var(--line)"></span>'+ic('start',franchiseeView==='Adam'?'Adam':'Mike','Start')+ic('tip',null,'Tip')+ic('supplier',null,'Supplier')+'</div></div>';
+  const map = '<div class="card" style="margin-bottom:20px;padding:14px"><div id="liveMap" class="live-map"></div><div style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:10px"><div id="mapStatus" style="font-size:12px;color:var(--muted)">Locating customers\u2026</div><div id="placeNote" style="font-size:12px;color:var(--muted);text-align:right"></div></div></div>';
   const missing = noPc.length ? '<div class="card"><div class="h">No postcode on file ('+noPc.length+')</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px">These regulars have no usable postcode in the data yet, so they cannot be placed. Adding a postcode to their record in the booking app will bring them onto the map automatically.</div><div style="display:flex;flex-wrap:wrap;gap:8px">'
     + noPc.map(c=>'<span class="sc-pill sc-pill-empty" style="cursor:default;font-weight:500">'+escAttr(c.n)+'</span>').join('')
     + '</div></div>' : '';
   return intro + map + missing;
+}
+// ---------- seasonal value planner ----------
+const PLAN_SEASON_WEEKS = 40, PLAN_OFF_WEEKS = 12, PLAN_TARGET = 1440;
+// In-season visits per 4 weeks, defaulted from the live cadence when the customer has no saved plan.
+function planDefaultV4(c){
+  const f = String(c.freq||'').toLowerCase(); let perYear = 26;
+  const m = f.match(/every\s+(\d+)\s+week/);
+  if(/every\s+week|weekly/.test(f)) perYear = 52;
+  else if(m) perYear = Math.max(1, Math.round(52/parseInt(m[1],10)));
+  else if(/month/.test(f)) perYear = 12;
+  return Math.round(perYear*4/52*100)/100;
+}
+// Effective plan fields: saved values where present, else sensible defaults from live data.
+function planFields(c){
+  const p = c.plan || {};
+  const num = (v) => (v!==undefined && v!=='' && v!==null) ? +v : '';
+  const pvDefault = Math.round(c.visit>0 ? c.visit : (c.j ? c.r/c.j : 0));
+  const v4 = num(p.v4)!=='' ? num(p.v4) : planDefaultV4(c);
+  const pv = num(p.pv)!=='' ? num(p.pv) : pvDefault;
+  const hv = num(p.hv);
+  const wOn = p.wOn !== undefined ? !!p.wOn : false;
+  const wV = num(p.wV);
+  const wPv = num(p.wPv)!=='' ? num(p.wPv) : (pv||'');
+  return { v4, hv, pv, wOn, wV, wPv, saved: !!c.plan };
+}
+function planMath(f){
+  const v4=+f.v4||0, hv=+f.hv||0, pv=+f.pv||0, wV=+f.wV||0, wPv=+f.wPv||0;
+  const valSeason = v4*pv*(PLAN_SEASON_WEEKS/4), hrsSeason = v4*hv*(PLAN_SEASON_WEEKS/4);
+  const valOff = f.wOn ? wV*wPv : 0, hrsOff = f.wOn ? wV*hv : 0;
+  return { valSeason, valOff, total: valSeason+valOff, hrsSeason, hrsOff };
+}
+function plannerRegs(){ return allCustomers.filter(c=>c.s==='Recurring'); }
+// Read the current values out of one table row.
+function planReadRow(row){
+  const g = f => { const el = row.querySelector('[data-f="'+f+'"]'); return el ? el.value : ''; };
+  const wOn = row.querySelector('[data-f="wOn"]').checked;
+  return { v4:g('v4'), hv:g('hv'), pv:g('pv'), wOn:wOn, wV:g('wV'), wPv:g('wPv') };
+}
+// Recompute every row's derived cells and the summary from the live inputs.
+function recalcPlanner(){
+  let vS=0,vO=0,hS=0,hO=0;
+  document.querySelectorAll('#planBody tr[data-cust]').forEach(row=>{
+    const f = planReadRow(row), m = planMath(f);
+    const set=(sel,val)=>{ const el=row.querySelector(sel); if(el) el.textContent=val; };
+    set('.pl-s', m.valSeason?fmt(Math.round(m.valSeason)):'\u2014');
+    set('.pl-o', f.wOn&&m.valOff?fmt(Math.round(m.valOff)):'\u2014');
+    set('.pl-t', m.total?fmt(Math.round(m.total)):'\u2014');
+    set('.pl-h', m.hrsSeason?(Math.round(m.hrsSeason)+'h'):'\u2014');
+    row.querySelectorAll('[data-f="wV"],[data-f="wPv"]').forEach(el=>{ el.disabled = !f.wOn; el.style.opacity = f.wOn?'1':'0.4'; });
+    vS+=m.valSeason; vO+=m.valOff; hS+=m.hrsSeason; hO+=m.hrsOff;
+  });
+  const target = (franchiseeView==='All'?2:1)*PLAN_TARGET;
+  const fill = target? hS/target*100 : 0, pph = hS? (vS+vO)/hS : 0;
+  const put=(id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+  put('plTotal', fmt(Math.round(vS+vO)));
+  put('plSeason', fmt(Math.round(vS)));
+  put('plOff', fmt(Math.round(vO)));
+  put('plHours', Math.round(hS)+'h of '+target+'h');
+  put('plFill', Math.round(fill)+'%');
+  put('plPph', pph?fmt(Math.round(pph)):'\u2014');
+  const barEl=document.getElementById('plBar'); if(barEl) barEl.style.width = Math.min(100,fill)+'%';
+}
+// One row changed: recompute live, then save just that customer's plan.
+function planChanged(row){
+  recalcPlanner();
+  const name = row.getAttribute('data-cust'); if(!name) return;
+  const f = planReadRow(row);
+  const obj = { v4:f.v4, hv:f.hv, pv:f.pv, wOn:f.wOn, wV:f.wV, wPv:f.wPv };
+  const k = normName(name);
+  plan[k] = obj; const c = allCustomers.find(x=>normName(x.n)===k); if(c) c.plan = obj;
+  const s=document.getElementById('plSaveMsg'); if(s){ s.textContent='Saving\u2026'; s.style.color='var(--muted)'; }
+  apiCall({ action:'savePlan', name:name, plan:JSON.stringify(obj) },
+    function(d){ const m=document.getElementById('plSaveMsg'); if(!m) return; if(!d||d.error){ m.textContent='Could not save, hit Refresh and check'; m.style.color='var(--red)'; } else { m.textContent='Saved'; m.style.color='var(--muted)'; } },
+    function(){ const m=document.getElementById('plSaveMsg'); if(m){ m.textContent='Could not reach the app to save'; m.style.color='var(--red)'; } });
+}
+function renderPlannerTab(){
+  const regs = plannerRegs();
+  const rows = regs.map(c=>{ const f=planFields(c); return { c, f, m:planMath(f) }; }).sort((a,b)=>b.m.total-a.m.total);
+  const target = (franchiseeView==='All'?2:1)*PLAN_TARGET;
+  let vS=0,vO=0,hS=0; rows.forEach(o=>{ vS+=o.m.valSeason; vO+=o.m.valOff; hS+=o.m.hrsSeason; });
+  const fill = target? hS/target*100 : 0, pph = hS? (vS+vO)/hS : 0;
+  const card = (lab,inner) => '<div class="card" style="padding:16px 18px"><div style="font-size:12px;color:var(--muted);margin-bottom:4px">'+lab+'</div><div style="font-size:22px;font-weight:700">'+inner+'</div></div>';
+  const intro = '<div class="card" style="margin-bottom:18px"><div class="h">Recurring value planner</div><div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:760px">Your seasonal projection of what the recurring round is worth, before extras. Core season is '+PLAN_SEASON_WEEKS+' weeks, off season '+PLAN_OFF_WEEKS+' weeks. Every active regular starts from their live cadence and price, edit anything and it saves as you go. Add hours per visit to see capacity against your '+PLAN_TARGET+' hour target'+(franchiseeView==='All'?' per operator':'')+'. <span id="plSaveMsg" style="color:var(--muted)"></span></div></div>';
+  const summary = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:18px">'
+    + card('Total annual value', '<span id="plTotal">'+fmt(Math.round(vS+vO))+'</span>')
+    + card('In season', '<span id="plSeason">'+fmt(Math.round(vS))+'</span>')
+    + card('Off season', '<span id="plOff">'+fmt(Math.round(vO))+'</span>')
+    + card('Hours filled', '<span id="plHours">'+Math.round(hS)+'h of '+target+'h</span>')
+    + card('Capacity', '<span id="plFill">'+Math.round(fill)+'%</span>')
+    + card('Per hour', '<span id="plPph">'+(pph?fmt(Math.round(pph)):'\u2014')+'</span>')
+    + '</div>';
+  const bar = '<div class="card" style="margin-bottom:18px;padding:16px 18px"><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:8px"><span>Capacity used</span><span>'+PLAN_TARGET+'h target'+(franchiseeView==='All'?' x2':'')+'</span></div><div style="height:12px;border-radius:6px;background:var(--line);overflow:hidden"><div id="plBar" style="height:100%;width:'+Math.min(100,fill)+'%;background:var(--green6);transition:width .2s"></div></div></div>';
+  const ni = (f,v,w,step) => '<input type="number" data-f="'+f+'" value="'+(v===''?'':v)+'" step="'+(step||'1')+'" min="0" style="width:'+(w||52)+'px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px;text-align:right" onchange="planChanged(this.closest(\'tr\'))">';
+  const body = rows.map(o=>{ const c=o.c, f=o.f, m=o.m;
+    return '<tr data-cust="'+escAttr(c.n)+'">'
+      + '<td style="font-weight:500">'+escAttr(c.n)+'</td>'
+      + '<td class="c">'+badge(c.f)+'</td>'
+      + '<td class="r">'+ni('v4',f.v4,52,'0.25')+'</td>'
+      + '<td class="r">'+ni('hv',f.hv,52,'0.25')+'</td>'
+      + '<td class="r">'+ni('pv',f.pv,58)+'</td>'
+      + '<td class="c"><input type="checkbox" data-f="wOn" '+(f.wOn?'checked':'')+' onchange="planChanged(this.closest(\'tr\'))"></td>'
+      + '<td class="r">'+ni('wV',f.wV,52)+'</td>'
+      + '<td class="r">'+ni('wPv',f.wPv,58)+'</td>'
+      + '<td class="r pl-s" style="font-weight:600">'+(m.valSeason?fmt(Math.round(m.valSeason)):'\u2014')+'</td>'
+      + '<td class="r pl-o">'+(f.wOn&&m.valOff?fmt(Math.round(m.valOff)):'\u2014')+'</td>'
+      + '<td class="r pl-t" style="font-weight:700">'+(m.total?fmt(Math.round(m.total)):'\u2014')+'</td>'
+      + '<td class="r pl-h" style="color:var(--muted)">'+(m.hrsSeason?(Math.round(m.hrsSeason)+'h'):'\u2014')+'</td>'
+      + '</tr>'; }).join('');
+  const table = '<div class="card"><div class="h">Per customer ('+rows.length+')</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px">Visits per 4 weeks, hours per visit and pound per visit set the core season. Tick winter and add the winter visit count and price for the off season. Everything recalculates and saves as you type.</div>'
+    + '<div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th class="r">V/4wk</th><th class="r">Hrs</th><th class="r">\u00a3/visit</th><th class="c">Winter</th><th class="r">W visits</th><th class="r">W \u00a3</th><th class="r">Season</th><th class="r">Off</th><th class="r">Total</th><th class="r">Hours</th></tr></thead><tbody id="planBody">'
+    + body + '</tbody></table></div></div>';
+  return intro + summary + bar + table;
 }
 function updateCallStatus(key, status) {
   if (!callsWho) callsWho = (auth && auth.name) ? auth.name : 'Unknown';
@@ -1806,7 +1994,7 @@ function stackedServiceSVG(top, colorOf) {
   return '<div class="svg-wrap"><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">' + grid + bars + xl + '</svg></div>' + legend;
 }
 
-const tabList = ["Overview","Leads","Calls","Revenue","Customers","Recurring","Map","Scorecard","Missing Prices"];
+const tabList = ["Overview","Leads","Calls","Revenue","Customers","Recurring","Planner","Map","Scorecard","Missing Prices"];
 function renderTabs() {
   document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+t+'</button>').join('');
 }
@@ -2381,6 +2569,11 @@ function renderContent() {
 
   else if (activeTab==='Scorecard') {
     el.innerHTML = renderScorecardTab();
+  }
+
+  else if (activeTab==='Planner') {
+    el.innerHTML = renderPlannerTab();
+    recalcPlanner();
   }
 
   else if (activeTab==='Map') {
