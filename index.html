@@ -516,6 +516,10 @@ const TRANSFERRED_TO_ADAM = new Set(
     .concat(MIKE_PASSED_EXTRA.map(p => p.n))
     .map(n => String(n).trim().toLowerCase())
 );
+// Wholesale owner reassignments: this customer, and all their visits and revenue, are reattributed
+// to the named operator, overriding the franchisee recorded on their jobs. For genuine misattributions
+// (e.g. always Mike's customer, but another operator covered the first few visits). Keys are lowercased names.
+const OWNER_REASSIGN = { "nicky waters": "Mike" };
 function monthKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 function monthOverlaps(k,b){ if(!b.from||!b.to) return true; const p=k.split('-'); const y=+p[0],m=+p[1]; const s=new Date(y,m-1,1), e=new Date(y,m,0,23,59,59); return e>=b.from && s<=b.to; }
 // Per-franchisee Zenbooker monthly revenue within bounds b (all franchisees, ignores the view toggle).
@@ -650,6 +654,7 @@ function handleData(data) {
     if (svc === 'Regular Garden Maintenance Visits' || svc === 'Regular Strim, Mow, & Blow' || svc === 'Strim, Mow, & Blow') svc = 'Regular Garden Maintenance';
     j._service = svc;
     j._franchisee = j['Franchisee'] || '';
+    { const rn = normName(j['Customer Name']); if (rn && OWNER_REASSIGN[rn]) j._franchisee = OWNER_REASSIGN[rn]; }
     j._postcode = String(j.postcode || '').toUpperCase();
   });
   // Adam's pre-franchise (subcontractor) jobs are not franchisee performance and aren't Mike's, so drop them.
@@ -671,6 +676,7 @@ function handleData(data) {
     r._status = (col(r,['Status']) || '').trim().toUpperCase();
     r._franchisee = (col(r,['Franchisee','Owner']) || '').trim();
     r._cust = col(r,['Customer Name','Customer','Name']);
+    { const rn = normName(r._cust); if (rn && OWNER_REASSIGN[rn]) r._franchisee = OWNER_REASSIGN[rn]; }
     r._svc = col(r,['Service']);
     r._freq = col(r,['Frequency','Recurring Frequency']);
     r._postcode = String(r.postcode || '').toUpperCase();
@@ -900,6 +906,9 @@ function processData() {
   allCustomers.forEach(c => { c.ltv = Math.round(Math.max(ltvRev[norm(c.n)] || 0, c.r) * 100) / 100; });
   allCustomers.forEach(c => { c.inherited = TRANSFERRED_TO_ADAM.has(norm(c.n)); }); // Adam's inherited book, for the tag
   allCustomers.forEach(c => { const cn = customerNotes[norm(c.n)]; c.disp = cn ? cn.disposition : ''; c.note = cn ? cn.note : ''; }); // saved churn reason + note
+  // A churned customer marked "Transferred to another franchisee" was kept within MTG, not lost,
+  // so move them out of the churn list into the Passed to Adam bucket (skip any wholesale-reassigned).
+  allCustomers.forEach(c => { if (c.s === 'Churned' && c.disp === 'Transferred to another franchisee' && !OWNER_REASSIGN[norm(c.n)]) c.s = 'Passed to Adam'; });
   allCustomers.forEach(c => { c.score = scorecards[norm(c.n)] || null; c.plan = plan[norm(c.n)] || null; }); // saved scorecard / saved season plan or null
   // Each customer's postcode for the map: prefer their active recurring booking, else their most recent job.
   const pcByCust = {};
