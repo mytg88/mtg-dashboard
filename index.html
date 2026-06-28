@@ -870,7 +870,7 @@ function processData() {
         ex.visit = ex.a;
         if (!ex.first || cf < ex.first) ex.first = cf;
         if (!ex.last || cl > ex.last) ex.last = cl;
-        if (passed && franchiseeView === 'Mike') ex.s = 'Passed to Adam'; // live customer: only Mike's view shows "passed"; All/Adam keep their true status (e.g. churned)
+        if (passed) ex.s = 'Passed to Adam'; // a customer Mike handed to Adam reads as "passed" in both Mike's view and the overall view (Adam's own view keeps them as his book)
         return;
       }
       const av = hc.j ? Math.round(hc.r/hc.j) : 0;
@@ -892,7 +892,7 @@ function processData() {
     allCustomers.forEach(c => {
       const fix = fixNorm[norm(c.n)];
       if (!fix) return;
-      if (fix === 'adam') { if (franchiseeView === 'Mike' || c.hist) c.s = 'Passed to Adam'; } // live customers keep their true status in the overall view, so churned reconciles
+      if (fix === 'adam') c.s = 'Passed to Adam'; // consistent across Mike's view and the overall view
       else if (fix === 'repeat') c.s = 'Repeat';
       else if (fix.startsWith('merge:')) {
         const tgt = byNorm[norm(fix.slice(6))];
