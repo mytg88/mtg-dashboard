@@ -633,6 +633,15 @@ function handleData(data) {
     try { const j = JSON.parse(p.Plan || p.plan || '{}'); if (j && typeof j === 'object') obj = j; } catch (e) {}
     plan[nm] = obj;
   });
+  // Editable reference points from the Map Places sheet (falls back to defaults pre-deploy).
+  if (data.places && data.places.length) {
+    mapPlaces = data.places.map(p => ({
+      kind: String(p.Kind || p.kind || '').trim().toLowerCase(),
+      op: String(p.Operator || p.operator || '').trim(),
+      label: String(p.Label || p.label || '').trim(),
+      q: String(p.Address || p.address || '').trim()
+    })).filter(p => p.kind && p.label);
+  }
 
   rawJobs.forEach(j => {
     j._amount = parseAmount(j['Amount (£)']);
@@ -1412,7 +1421,9 @@ try { geoCache = JSON.parse(localStorage.getItem('mtg_geo')||'{}') || {}; } catc
 try { placeGeo = JSON.parse(localStorage.getItem('mtg_geo_places')||'{}') || {}; } catch(e){ placeGeo={}; }
 // Fixed reference points on the map: where each operator starts, the tips we use, and trade suppliers.
 // Add more by extending this list (kind start|tip|supplier; q is a free-text address or place name).
-const MAP_PLACES = [
+// Reference points come from the editable Map Places sheet; this is only the fallback used
+// before the backend that serves them has been deployed.
+const DEFAULT_PLACES = [
   { kind:'start', op:'Mike', label:'Mike \u00b7 start', q:'80 Florence Road, Parkstone, Poole, UK' },
   { kind:'start', op:'Adam', label:'Adam \u00b7 start', q:'3 Rushton Crescent, Bournemouth, UK' },
   { kind:'tip', label:'Poole recycling centre', q:'Poole Household Waste Recycling Centre, Poole, UK' },
@@ -1422,6 +1433,7 @@ const MAP_PLACES = [
   { kind:'supplier', label:'Baskets and Blooms', q:'Baskets and Blooms, Poole, UK' },
   { kind:'supplier', label:'Eco Landscaping', q:'Eco Landscaping, Poole, UK' }
 ];
+let mapPlaces = DEFAULT_PLACES.slice();
 const PLACE_STYLE = {
   start:    { bg:'#1F2A24', sub:'Start point', glyph:'<path d="M3 11.5 12 3l9 8.5h-2.4V21h-5.1v-6h-3V21H5.4v-9.5z"/>' },
   tip:      { bg:'#2E7D32', sub:'Tip / recycling', glyph:'<path d="M9 3h6l1 2h4v2H4V5h4zM6 9h12l-1.1 11.2H7.1z"/>' },
@@ -1452,7 +1464,7 @@ function renderPlaceMarkers(map){
   if(!map || !window.L) return;
   if(map._mtgPlaces){ try{ map.removeLayer(map._mtgPlaces); }catch(e){} }
   const layer=L.layerGroup().addTo(map); map._mtgPlaces=layer;
-  MAP_PLACES.forEach(p=>{
+  mapPlaces.forEach(p=>{
     if(p.kind==='start' && !(franchiseeView==='All' || franchiseeView===p.op)) return;
     const g=placeGeo[p.q]; if(!g) return;
     const s=PLACE_STYLE[p.kind]||PLACE_STYLE.supplier;
@@ -1464,8 +1476,41 @@ function renderPlaceMarkers(map){
 }
 function updatePlaceNote(){
   const el=document.getElementById('placeNote'); if(!el) return;
-  const miss=MAP_PLACES.filter(p=>!placeGeo[p.q]);
+  const miss=mapPlaces.filter(p=>!placeGeo[p.q]);
   el.innerHTML = miss.length ? 'Still to pin (needs a precise address): '+miss.map(p=>escAttr(p.label)).join(', ') : '';
+}
+// The editable list of reference points shown under the map.
+function placesManageHTML(){
+  const arg = s => JSON.stringify(String(s)).replace(/"/g,'&quot;');
+  const order = { start:0, tip:1, supplier:2 };
+  const list = mapPlaces.slice().sort((a,b)=>(order[a.kind]??9)-(order[b.kind]??9));
+  if(!list.length) return '<div style="font-size:12px;color:var(--muted)">No places yet.</div>';
+  return list.map(p=>{ const s=PLACE_STYLE[p.kind]||PLACE_STYLE.supplier; const bg=p.kind==='start'?(p.op==='Adam'?'#15407F':'#9A5410'):s.bg;
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)">'
+      + '<span style="width:22px;height:22px;border-radius:50%;background:'+bg+';display:inline-flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:#fff">'+s.glyph+'</svg></span>'
+      + '<span style="flex:1;font-size:13px;color:var(--ink)">'+escAttr(p.label)+'<span style="color:var(--muted);font-size:11px"> \u00b7 '+s.sub+(p.op?' \u00b7 '+escAttr(p.op):'')+(placeGeo[p.q]?'':' \u00b7 not located')+'</span></span>'
+      + '<button onclick="removePlace('+arg(p.kind)+','+arg(p.label)+')" style="background:none;border:0;color:var(--muted);font-size:12px;cursor:pointer;padding:4px 6px">Remove</button></div>';
+  }).join('');
+}
+function addPlace(){
+  const kind=document.getElementById('npKind').value;
+  const label=(document.getElementById('npLabel').value||'').trim();
+  const address=(document.getElementById('npAddr').value||'').trim();
+  const operator=kind==='start'?(document.getElementById('npOp').value||''):'';
+  if(!label || !address){ alert('Add a name and an address or postcode.'); return; }
+  const place={kind,op:operator,label,q:address};
+  mapPlaces.push(place);
+  document.getElementById('npLabel').value=''; document.getElementById('npAddr').value='';
+  const lc=document.getElementById('placeList'); if(lc) lc.innerHTML=placesManageHTML();
+  apiCall({ action:'savePlace', op:'add', kind:kind, label:label, operator:operator, address:address }, function(){}, function(){});
+  (async function(){ await geocodePlaces([place]); if(liveMap) renderPlaceMarkers(liveMap); const lc2=document.getElementById('placeList'); if(lc2) lc2.innerHTML=placesManageHTML(); })();
+}
+function removePlace(kind,label){
+  if(!confirm('Remove '+label+' from the map?')) return;
+  mapPlaces=mapPlaces.filter(p=>!(p.kind===kind && p.label===label));
+  const lc=document.getElementById('placeList'); if(lc) lc.innerHTML=placesManageHTML();
+  if(liveMap) renderPlaceMarkers(liveMap);
+  apiCall({ action:'savePlace', op:'delete', kind:kind, label:label }, function(){}, function(){});
 }
 function loadLeaflet(cb){
   if(window.L){ cb(); return; }
@@ -1527,7 +1572,7 @@ async function initLiveMap(){
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom:19, subdomains:'abcd', attribution:'&copy; OpenStreetMap, &copy; CARTO' }).addTo(liveMap);
     renderLiveMarkers();
     renderPlaceMarkers(liveMap);             // draws any already-cached reference points at once
-    await geocodePlaces(MAP_PLACES);         // then resolves the rest in the background
+    await geocodePlaces(mapPlaces);         // then resolves the rest in the background
     if(liveMap && activeTab==='Map') renderPlaceMarkers(liveMap);
   });
 }
@@ -1544,9 +1589,16 @@ function renderMapTab(){
   const missing = noPc.length ? '<div class="card"><div class="h">No postcode on file ('+noPc.length+')</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px">These regulars have no usable postcode in the data yet, so they cannot be placed. Adding a postcode to their record in the booking app will bring them onto the map automatically.</div><div style="display:flex;flex-wrap:wrap;gap:8px">'
     + noPc.map(c=>'<span class="sc-pill sc-pill-empty" style="cursor:default;font-weight:500">'+escAttr(c.n)+'</span>').join('')
     + '</div></div>' : '';
-  return intro + map + missing;
+  const manage = '<div class="card" style="margin-bottom:20px"><div class="h">Places</div><div style="font-size:12px;color:var(--muted);margin-bottom:14px">Start points, tips and suppliers. Add your own and they save to the sheet, so the list is yours to edit.</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px">'
+    + '<select id="npKind" onchange="document.getElementById(\'npOpWrap\').style.display=this.value===\'start\'?\'inline-block\':\'none\'" style="padding:7px 8px;border:1px solid var(--line);border-radius:7px;font:inherit;font-size:13px"><option value="tip">Tip</option><option value="supplier">Supplier</option><option value="start">Start</option></select>'
+    + '<span id="npOpWrap" style="display:none"><select id="npOp" style="padding:7px 8px;border:1px solid var(--line);border-radius:7px;font:inherit;font-size:13px"><option>Mike</option><option>Adam</option></select></span>'
+    + '<input id="npLabel" placeholder="Name" style="padding:7px 9px;border:1px solid var(--line);border-radius:7px;font:inherit;font-size:13px;flex:1;min-width:140px">'
+    + '<input id="npAddr" placeholder="Address or postcode" style="padding:7px 9px;border:1px solid var(--line);border-radius:7px;font:inherit;font-size:13px;flex:2;min-width:180px">'
+    + '<button class="df-btn active" style="font-size:13px;padding:8px 16px" onclick="addPlace()">Add</button></div>'
+    + '<div id="placeList">'+placesManageHTML()+'</div></div>';
+  return intro + map + manage + missing;
 }
-// ---------- seasonal value planner ----------
 const PLAN_SEASON_WEEKS = 40, PLAN_OFF_WEEKS = 12, PLAN_TARGET = 1440;
 // In-season visits per 4 weeks, defaulted from the live cadence when the customer has no saved plan.
 function planDefaultV4(c){
@@ -2103,7 +2155,7 @@ function renderContent() {
     </div>
     ${cmpLabel && prevTotals && prevTotals.has ? '<div style="font-size:12px;color:var(--muted);margin:-14px 0 22px;display:flex;align-items:center;gap:6px"><span class="chip chip-up" style="pointer-events:none">\u25b2</span><span class="chip chip-down" style="pointer-events:none">\u25bc</span> compared with the same period last year ('+cmpLabel.replace(/^vs /,'')+'). Active recurring is a live snapshot, so it has no comparison.</div>' : ''}
     ${monthlyData.some(m=>m.m < '2024-10') ? '<div style="font-size:11px;color:var(--muted);margin:-14px 0 22px;line-height:1.5">Revenue, completed jobs and customers cover the full history back to 2021. Recurring status comes from live job records, so customers who left before October 2024 show as repeat, one-off or churned.</div>' : ''}
-    <div class="card" style="margin-bottom:28px"><div class="h">Revenue trend</div>${areaChartSVG(monthlyData,'#2E7D32')}</div>
+    <div class="card" style="margin-bottom:28px;cursor:pointer" onclick="setTab('Revenue')" title="Open the Revenue tab"><div class="h">Revenue trend</div>${areaChartSVG(monthlyData,'#2E7D32')}</div>
     <div class="card" style="margin-bottom:28px"><div class="h">Customer mix</div>
       <div style="display:flex;gap:14px;flex-wrap:wrap">
         ${mix.map(m=>'<div onclick="goSeg(\''+m.seg+'\')" style="flex:1;min-width:130px;cursor:pointer;border:1px solid var(--line);border-radius:10px;padding:14px 16px;border-left:4px solid '+m.color+'"><div class="serif" style="font-size:26px;font-weight:600;color:var(--ink);line-height:1">'+m.n+'</div><div style="font-size:12px;color:var(--muted);margin-top:5px">'+m.label+'</div></div>').join('')}
