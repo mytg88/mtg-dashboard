@@ -139,6 +139,9 @@ tr:hover td{background:#FAFBF9}
 .sc-pill-empty:hover{background:#E8F5E9}
 .sc-badge{display:inline-flex;align-items:center;justify-content:center;min-width:30px;padding:2px 8px;border-radius:20px;color:#fff;font-weight:700;font-size:11px}
 @media (max-width:680px){.sc-opts{grid-template-columns:1fr}}
+.live-map{height:560px;border-radius:11px;overflow:hidden;border:1px solid var(--line);background:#EAEFEA}
+.live-map .leaflet-popup-content{margin:11px 13px}
+@media (max-width:680px){.live-map{height:440px}}
 .df-bar{background:var(--card);border-bottom:1px solid var(--line);padding:14px 36px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .df-label{font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.6px;margin-right:4px}
 .df-btn{padding:6px 14px;border:1px solid #CFE0CB;background:var(--card);color:var(--green);border-radius:20px;font-size:12px;font-family:inherit;cursor:pointer;transition:all .15s}
@@ -624,6 +627,7 @@ function handleData(data) {
     if (svc === 'Regular Garden Maintenance Visits' || svc === 'Regular Strim, Mow, & Blow' || svc === 'Strim, Mow, & Blow') svc = 'Regular Garden Maintenance';
     j._service = svc;
     j._franchisee = j['Franchisee'] || '';
+    j._postcode = String(j.postcode || '').toUpperCase();
   });
   // Adam's pre-franchise (subcontractor) jobs are not franchisee performance and aren't Mike's, so drop them.
   rawJobs = rawJobs.filter(j => !(j._franchisee === 'Adam' && j._date && j._date < ADAM_FRANCHISE_START));
@@ -646,6 +650,7 @@ function handleData(data) {
     r._cust = col(r,['Customer Name','Customer','Name']);
     r._svc = col(r,['Service']);
     r._freq = col(r,['Frequency','Recurring Frequency']);
+    r._postcode = String(r.postcode || '').toUpperCase();
   });
   rawCalls.forEach(c => {
     c._date = parseDate(col(c,['Logged At','Logged','Date']));
@@ -873,6 +878,12 @@ function processData() {
   allCustomers.forEach(c => { c.inherited = TRANSFERRED_TO_ADAM.has(norm(c.n)); }); // Adam's inherited book, for the tag
   allCustomers.forEach(c => { const cn = customerNotes[norm(c.n)]; c.disp = cn ? cn.disposition : ''; c.note = cn ? cn.note : ''; }); // saved churn reason + note
   allCustomers.forEach(c => { c.score = scorecards[norm(c.n)] || null; }); // saved scorecard {scores,by,at} or null
+  // Each customer's postcode for the map: prefer their active recurring booking, else their most recent job.
+  const pcByCust = {};
+  rawRecurring.forEach(r => { if (r._postcode && r._cust) { const k = norm(r._cust); if (!pcByCust[k]) pcByCust[k] = r._postcode; } });
+  const jobPc = {};
+  histJobs.forEach(j => { const nm = NAME_ALIAS[j['Customer Name']] || j['Customer Name']; if (!nm || !j._postcode) return; const k = norm(nm); const d = j._date ? j._date.getTime() : 0; if (!jobPc[k] || d >= jobPc[k].d) jobPc[k] = { pc: j._postcode, d }; });
+  allCustomers.forEach(c => { const k = norm(c.n); c.postcode = pcByCust[k] || (jobPc[k] ? jobPc[k].pc : '') || ''; });
   churnedList = allCustomers.filter(c => c.s === 'Churned').sort((a,b) => b.r - a.r);
 
   // Number -> customer map for the Calls tab. Phone lives on the source rows (leads/recurring/jobs)
@@ -1356,6 +1367,84 @@ function renderScorecardTab(){
   }
   return intro + quad + weakest + table + todo;
 }
+// ---------- regulars map (Leaflet, lazy-loaded) ----------
+let liveMap=null, mapShowChurned=false, geoCache={};
+try { geoCache = JSON.parse(localStorage.getItem('mtg_geo')||'{}') || {}; } catch(e){ geoCache={}; }
+function loadLeaflet(cb){
+  if(window.L){ cb(); return; }
+  if(!document.getElementById('leaflet-css')){ const lk=document.createElement('link'); lk.id='leaflet-css'; lk.rel='stylesheet'; lk.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(lk); }
+  const existing=document.getElementById('leaflet-js');
+  if(existing){ existing.addEventListener('load', cb); return; }
+  const sc=document.createElement('script'); sc.id='leaflet-js'; sc.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+  sc.onload=cb; sc.onerror=function(){ const s=document.getElementById('mapStatus'); if(s){ s.textContent='Could not load the map library. Check your connection and refresh.'; } };
+  document.head.appendChild(sc);
+}
+// Geocode UK postcodes to lat/lng via postcodes.io (free, no key), cached so each postcode is looked up once.
+async function geocodePostcodes(pcs){
+  const need = Array.from(new Set(pcs.filter(p=>p && !(p in geoCache))));
+  for(let i=0;i<need.length;i+=100){
+    const chunk=need.slice(i,i+100);
+    try{
+      const res=await fetch('https://api.postcodes.io/postcodes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({postcodes:chunk})});
+      const j=await res.json();
+      (j.result||[]).forEach(item=>{ const q=(item.query||'').toUpperCase(); geoCache[q]= item.result ? {lat:item.result.latitude,lng:item.result.longitude} : null; });
+    }catch(e){ /* leave uncached, try again next time */ }
+  }
+  try{ localStorage.setItem('mtg_geo', JSON.stringify(geoCache)); }catch(e){}
+}
+// The regulars (and optionally churned) in the current view that carry a postcode.
+function mapPoints(){
+  const segs = mapShowChurned ? ['Recurring','Churned'] : ['Recurring'];
+  return allCustomers.filter(c=>segs.indexOf(c.s)!==-1 && c.postcode).map(c=>({ c:c, pc:c.postcode }));
+}
+function renderLiveMarkers(){
+  if(!liveMap || !window.L) return;
+  if(liveMap._mtgLayer){ try{ liveMap.removeLayer(liveMap._mtgLayer); }catch(e){} }
+  const layer = L.layerGroup().addTo(liveMap); liveMap._mtgLayer = layer;
+  const pts = mapPoints(); const latlngs=[]; let placed=0;
+  pts.forEach(p=>{
+    const g = geoCache[p.pc]; if(!g) return;
+    const c = p.c, churned = c.s==='Churned', op = c.f;
+    const color = churned ? '#9AA59B' : (op==='Adam' ? '#1565C0' : '#E07B1A');
+    const sc = hasScore(c) ? scoreCompute(c.score.scores) : null, av = annualValue(c);
+    const html = '<div style="font-family:DM Sans,sans-serif;min-width:150px"><div style="font-weight:700;font-size:13px;margin-bottom:2px">'+escAttr(c.n)+'</div>'
+      + '<div style="font-size:12px;color:#5b665c">'+escAttr(op||'')+(churned?' \u00b7 churned':'')+'</div>'
+      + (sc?'<div style="font-size:12px;margin-top:3px"><b>'+sc.grade+'</b> \u00b7 '+sc.pct+'%</div>':'')
+      + (av?'<div style="font-size:12px;color:#5b665c">~'+fmt(av)+'/yr</div>':'')
+      + '<div style="font-size:11px;color:#9aa59b;margin-top:3px">'+escAttr(p.pc)+'</div></div>';
+    const m = L.circleMarker([g.lat,g.lng], { radius: churned?6:8, color:'#fff', weight:2, fillColor:color, fillOpacity: churned?0.55:0.95 });
+    m.bindPopup(html); m.addTo(layer); latlngs.push([g.lat,g.lng]); placed++;
+  });
+  if(latlngs.length){ try{ liveMap.fitBounds(latlngs,{padding:[40,40],maxZoom:14}); }catch(e){} }
+  const st=document.getElementById('mapStatus');
+  if(st){ const total=pts.length, missing=total-placed; st.textContent = placed+' of '+total+' placed'+(missing>0?' \u00b7 '+missing+' postcode'+(missing===1?'':'s')+' could not be located':''); }
+}
+async function initLiveMap(){
+  if(activeTab!=='Map') return;
+  await geocodePostcodes(mapPoints().map(p=>p.pc));
+  if(activeTab!=='Map') return;
+  loadLeaflet(function(){
+    const el=document.getElementById('liveMap'); if(!el || activeTab!=='Map') return;
+    if(liveMap){ try{ liveMap.remove(); }catch(e){} liveMap=null; }
+    liveMap = L.map(el, { scrollWheelZoom:true }).setView([50.74,-1.95], 11);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom:19, subdomains:'abcd', attribution:'&copy; OpenStreetMap, &copy; CARTO' }).addTo(liveMap);
+    renderLiveMarkers();
+  });
+}
+async function toggleMapChurned(v){ mapShowChurned=v; if(!liveMap) return; await geocodePostcodes(mapPoints().map(p=>p.pc)); renderLiveMarkers(); }
+function renderMapTab(){
+  const regs = allCustomers.filter(c=>c.s==='Recurring');
+  const noPc = regs.filter(c=>!c.postcode).sort((a,b)=>b.r-a.r);
+  const dot = (col,lab) => '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink)"><span style="width:12px;height:12px;border-radius:50%;background:'+col+';border:2px solid #fff;box-shadow:0 0 0 1px '+col+'"></span>'+lab+'</span>';
+  const intro = '<div class="card" style="margin-bottom:20px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap"><div><div class="h" style="margin-bottom:6px">Map of regulars</div><div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:680px">Every regular with a postcode on file, placed from the live data, '+(franchiseeView==='All'?'Mike in orange and Adam in blue':'on '+franchiseeView+'\u2019s patch')+'. Pins follow the period and view filters at the top, so for the whole book pick All time.</div></div>'
+    + '<label style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);white-space:nowrap;cursor:pointer"><input type="checkbox" '+(mapShowChurned?'checked':'')+' onchange="toggleMapChurned(this.checked)"> Show churned</label></div>'
+    + '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:14px">'+dot('#E07B1A','Mike')+dot('#1565C0','Adam')+(mapShowChurned?dot('#9AA59B','Churned'):'')+'</div></div>';
+  const map = '<div class="card" style="margin-bottom:20px;padding:14px"><div id="liveMap" class="live-map"></div><div id="mapStatus" style="font-size:12px;color:var(--muted);margin-top:10px">Locating customers\u2026</div></div>';
+  const missing = noPc.length ? '<div class="card"><div class="h">No postcode on file ('+noPc.length+')</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px">These regulars have no usable postcode in the data yet, so they cannot be placed. Adding a postcode to their record in the booking app will bring them onto the map automatically.</div><div style="display:flex;flex-wrap:wrap;gap:8px">'
+    + noPc.map(c=>'<span class="sc-pill sc-pill-empty" style="cursor:default;font-weight:500">'+escAttr(c.n)+'</span>').join('')
+    + '</div></div>' : '';
+  return intro + map + missing;
+}
 function updateCallStatus(key, status) {
   if (!callsWho) callsWho = (auth && auth.name) ? auth.name : 'Unknown';
   const rec = rawCalls.find(c => c._key === key);
@@ -1692,7 +1781,7 @@ function stackedServiceSVG(top, colorOf) {
   return '<div class="svg-wrap"><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">' + grid + bars + xl + '</svg></div>' + legend;
 }
 
-const tabList = ["Overview","Leads","Calls","Revenue","Customers","Recurring","Scorecard","Missing Prices"];
+const tabList = ["Overview","Leads","Calls","Revenue","Customers","Recurring","Map","Scorecard","Missing Prices"];
 function renderTabs() {
   document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+t+'</button>').join('');
 }
@@ -2267,6 +2356,11 @@ function renderContent() {
 
   else if (activeTab==='Scorecard') {
     el.innerHTML = renderScorecardTab();
+  }
+
+  else if (activeTab==='Map') {
+    el.innerHTML = renderMapTab();
+    initLiveMap();
   }
 
   else if (activeTab==='Missing Prices') {
