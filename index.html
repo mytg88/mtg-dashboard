@@ -300,8 +300,8 @@ let custSort={k:'r',d:'desc'}, recSort={k:'r',d:'desc'}, churnSort={k:'r',d:'des
 let dfRange="all", dfFrom=null, dfTo=null, franchiseeView="All";
 
 // Fold the many free-text Service Type values into the canonical service lines shown on the
-// website, so the Services tab is a short, readable list instead of every one-off description.
-// Ordered: first pattern to match wins, anything unmatched lands in "Other".
+// website, so the "Revenue by service" breakdown is a short, readable list instead of every
+// one-off description. Ordered: first pattern to match wins, anything unmatched lands in "Other".
 const SERVICE_GROUPS = [
   ['Assessment visits',                   /assessment/i],
   ['Regular Garden Maintenance',          /regular garden maintenance|garden maintenance|grounds maintenance|strim.*mow.*blow|regular maintenance/i],
@@ -1191,7 +1191,130 @@ function funnelSVG(stages, total) {
   return out;
 }
 
-const tabList = ["Overview","Leads","Calls","Revenue","Customers","Recurring","Churned","Missing Prices","Services"];
+// ---------- revenue helpers (period-aware, override-safe) ----------
+// A labelled comparison: "vs May  ▲ 12%  (£3,120)". prev is the comparison figure.
+function cmpRow(cur, prev, text) {
+  if (!prev || prev === 0) return '';
+  const d = Math.round((cur - prev) / prev * 100);
+  const cls = d > 0 ? 'chip-up' : (d < 0 ? 'chip-down' : 'chip-flat');
+  const arrow = d > 0 ? '\u25b2 ' : (d < 0 ? '\u25bc ' : '');
+  return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">'
+    + text + ' <span class="chip ' + cls + '" style="margin-left:0">' + arrow + Math.abs(d) + '%</span>'
+    + ' <span style="color:var(--muted)">(' + fmt(prev) + ')</span></span>';
+}
+// True when the selected period sits inside a single calendar month.
+function isSingleMonthPeriod(b) {
+  return !!(b.from && b.to && b.from.getFullYear() === b.to.getFullYear() && b.from.getMonth() === b.to.getMonth());
+}
+// The previous calendar month, capped to the same day so an in-progress month compares like-for-like.
+function prevMonthBounds(b) {
+  const y = b.from.getFullYear(), m = b.from.getMonth();
+  const lastPrev = new Date(y, m, 0).getDate();          // last day of the previous month
+  const cap = Math.min(b.to.getDate(), lastPrev);
+  return { from: new Date(y, m - 1, 1), to: new Date(y, m - 1, cap, 23, 59, 59) };
+}
+// Override-aware revenue for one whole calendar month ("YYYY-MM"), honouring the view.
+function monthRevFor(key, view) {
+  const p = key.split('-'), y = +p[0], mm = +p[1];
+  return revTotalFor({ from: new Date(y, mm - 1, 1), to: new Date(y, mm, 0, 23, 59, 59) }, view);
+}
+// n month keys ending at endKey (inclusive), oldest first.
+function recentMonthKeys(endKey, n) {
+  const p = endKey.split('-'), y = +p[0], m = +p[1], out = [];
+  for (let i = n - 1; i >= 0; i--) out.push(monthKey(new Date(y, m - 1 - i, 1)));
+  return out;
+}
+// Weekly revenue for a single live month, from the period+view-filtered jobs in scope.
+function weeklyRevenue(b) {
+  const r = [0, 0, 0, 0, 0], j = [0, 0, 0, 0, 0];
+  jobs.forEach(job => {
+    if (!job._date || job._date < b.from || job._date > b.to) return;
+    const wi = Math.min(4, Math.floor((job._date.getDate() - 1) / 7));
+    r[wi] += job._amount; j[wi]++;
+  });
+  const last = b.to.getDate(), ranges = [[1, 7], [8, 14], [15, 21], [22, 28], [29, 31]], out = [];
+  for (let i = 0; i < 5; i++) {
+    if (ranges[i][0] > last) break;
+    out.push({ label: ranges[i][0] + '\u2013' + Math.min(ranges[i][1], last), r: Math.round(r[i]), j: j[i] });
+  }
+  return out;
+}
+// Horizontal revenue bars. rows: [{label, r, sub, hi}]. hi rows use the solid green gradient.
+function hbarList(rows) {
+  const max = Math.max(1, ...rows.map(x => x.r));
+  return rows.map(x => {
+    const w = Math.round(x.r / max * 100);
+    const bg = x.hi ? 'linear-gradient(90deg,var(--green6),var(--green4))' : 'linear-gradient(90deg,#A9CDAC,#C8E2CA)';
+    return '<div class="bar-row"><span class="bar-l">' + x.label + '</span><div class="bar-c">'
+      + '<div class="bar" style="width:' + w + '%;background:' + bg + '"></div>'
+      + '<span class="bar-v">' + fmt(x.r) + '</span>'
+      + (x.sub ? '<span class="bar-s">' + x.sub + '</span>' : '') + '</div></div>';
+  }).join('');
+}
+const SVC_COLORS = ['#2E7D32', '#66BB6A', '#1565C0', '#D98A2B', '#7E57C2', '#26A69A'];
+// Service colour map: top groups by period revenue get distinct colours, the rest share grey.
+function serviceColorMap() {
+  const ranked = serviceData.slice().sort((a, b) => b.r - a.r);
+  const top = ranked.slice(0, 6).map(s => s.n);
+  const colorOf = { Other: '#9aa89c', Invoiced: '#C7D2C9' };
+  top.forEach((n, i) => colorOf[n] = SVC_COLORS[i]);
+  return { top, colorOf };
+}
+// Stacked monthly columns split by service group. Live months (post cutoff) are split from job
+// records; pre-2026 invoiced months can't be split honestly, so they show as one neutral block.
+function stackedServiceSVG(top, colorOf) {
+  const months = monthlyData;
+  if (!months.length) return '<div style="color:var(--muted);text-align:center;padding:36px">No data in this period.</div>';
+  const byMonth = {}; months.forEach(m => byMonth[m.m] = {});
+  jobs.forEach(j => {
+    if (!j._date) return;
+    const k = monthKey(j._date);
+    if (!(k in byMonth) || k <= HIST_CUTOFF) return;
+    const grp = serviceGroup(j._service);
+    const g = top.indexOf(grp) >= 0 ? grp : 'Other';
+    byMonth[k][g] = (byMonth[k][g] || 0) + j._amount;
+  });
+  const maxTot = Math.max(1, ...months.map(m => m.r));
+  const W = 720, H = 240, padL = 46, padR = 14, padT = 14, padB = 46, n = months.length;
+  const colW = (W - padL - padR) / n, bw = Math.min(46, colW * 0.62);
+  const ys = v => padT + (1 - v / maxTot) * (H - padT - padB);
+  const groups = top.concat(['Other']);
+  let bars = '';
+  months.forEach((m, i) => {
+    const x = padL + colW * i + colW / 2 - bw / 2;
+    let yTop = H - padB;
+    if (m.m <= HIST_CUTOFF) {
+      const h = (m.r / maxTot) * (H - padT - padB); yTop -= h;
+      bars += '<rect x="' + x.toFixed(1) + '" y="' + yTop.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(0, h).toFixed(1) + '" fill="' + colorOf.Invoiced + '" rx="2"><title>' + shortMonth(m.m) + ' \u00b7 ' + fmt(m.r) + ' invoiced</title></rect>';
+    } else {
+      const segs = byMonth[m.m] || {};
+      groups.forEach(g => {
+        const v = segs[g] || 0; if (v <= 0) return;
+        const h = (v / maxTot) * (H - padT - padB); yTop -= h;
+        bars += '<rect x="' + x.toFixed(1) + '" y="' + yTop.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + h.toFixed(1) + '" fill="' + (colorOf[g] || '#9aa89c') + '"><title>' + shortMonth(m.m) + ' \u00b7 ' + g + ' \u00b7 ' + fmt(v) + '</title></rect>';
+      });
+    }
+  });
+  let grid = '';
+  [0, 0.5, 1].forEach(f => {
+    const gy = ys(maxTot * f);
+    grid += '<line x1="' + padL + '" y1="' + gy.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + gy.toFixed(1) + '" stroke="#E5EAE3"/>';
+    grid += '<text x="' + (padL - 8) + '" y="' + (gy + 4).toFixed(1) + '" font-size="10" text-anchor="end" fill="#9aa89c">' + fmt(maxTot * f) + '</text>';
+  });
+  let xl = ''; const step = n <= 12 ? 1 : Math.ceil(n / 12);
+  months.forEach((m, i) => {
+    if (i % step !== 0 && i !== n - 1) return;
+    const cx = padL + colW * i + colW / 2;
+    xl += '<text x="' + cx.toFixed(1) + '" y="' + (H - padB + 16) + '" font-size="10" text-anchor="middle" fill="#9aa89c">' + shortMonth(m.m) + '</text>';
+  });
+  const anyHist = months.some(m => m.m <= HIST_CUTOFF);
+  const legendItems = groups.concat(anyHist ? ['Invoiced'] : []);
+  const legend = '<div style="display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:12px;font-size:12px;color:var(--muted)">'
+    + legendItems.map(g => '<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:11px;height:11px;border-radius:3px;background:' + (colorOf[g] || '#9aa89c') + ';display:inline-block"></span>' + (g === 'Invoiced' ? 'Invoiced (pre-2026, not split)' : g) + '</span>').join('') + '</div>';
+  return '<div class="svg-wrap"><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">' + grid + bars + xl + '</svg></div>' + legend;
+}
+
+const tabList = ["Overview","Leads","Calls","Revenue","Customers","Recurring","Churned","Missing Prices"];
 function renderTabs() {
   document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+t+'</button>').join('');
 }
@@ -1563,13 +1686,107 @@ function renderContent() {
   }
 
   else if (activeTab==='Revenue') {
-    const maxR = monthlyData.length ? Math.max(...monthlyData.map(m=>m.r)) : 1;
-    el.innerHTML = `<div class="card" style="margin-bottom:24px"><div class="h">Monthly revenue</div>${areaChartSVG(monthlyData,'#2E7D32')}</div>
-      <div class="card"><div class="h">Month by month</div>
-      ${monthlyData.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No jobs in this period.</div>':
-        monthlyData.map(m=>'<div class="bar-row"><span class="bar-l">'+shortMonth(m.m)+'</span><div class="bar-c"><div class="bar" style="width:'+(maxR>0?Math.round(m.r/maxR*100):0)+'%"></div><span class="bar-v">'+fmt(m.r)+'</span><span class="bar-s">'+(m.j==null?'invoiced':m.j+' jobs \u2022 '+m.c+' customers')+'</span></div></div>').join('')}
-      <div class="ib ig"><b>Seasonal pattern:</b> peak May to October, winter dip December to February, spring bounce in March. Average job value has trended upward over time.</div>
+    const b = dfBounds();
+    const single = isSingleMonthPeriod(b);
+    const curRev = totalRev;                                  // override-aware period total
+    const avgJob = totalJobs ? Math.round(curRev/totalJobs) : 0;
+
+    // --- headline: period total + adaptive comparisons ---
+    const periodNames = {'this-month':'this month','last-month':'last month','ytd':'this year so far','tax-year':'this tax year','last-tax-year':'last tax year','last-12mo':'the last 12 months','all':'all time','custom':'the selected period'};
+    const periodLabel = single ? shortMonth(monthKey(b.from)).replace(/(\d\d)$/,'20$1') : (periodNames[dfRange] || 'the selected period');
+    let cmps = '';
+    if (single) {
+      const pm = prevMonthBounds(b);
+      cmps += cmpRow(curRev, revTotalFor(pm, franchiseeView), 'vs ' + pm.from.toLocaleDateString('en-GB',{month:'long'}));
+      const yo = prevBounds(b);
+      if (yo.from) cmps += cmpRow(curRev, revTotalFor(yo, franchiseeView), 'vs ' + yo.from.toLocaleDateString('en-GB',{month:'short',year:'numeric'}));
+    } else if (prevTotals && prevTotals.has) {
+      cmps += cmpRow(curRev, prevTotals.rev, comparisonLabel());
+    }
+    const headline = `<div class="card" style="margin-bottom:24px">
+      <div class="kpi-l">Revenue \u00b7 ${periodLabel}${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}</div>
+      <div style="font-family:'Fraunces',serif;font-size:46px;font-weight:600;color:var(--ink);line-height:1;letter-spacing:-1px;margin-top:8px">${fmt(curRev)}</div>
+      ${cmps?'<div style="display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:16px">'+cmps+'</div>':''}
+      <div style="font-size:12px;color:var(--muted);margin-top:14px">${totalJobs.toLocaleString()} jobs \u00b7 ${totalCusts} customers \u00b7 avg ${fmt(avgJob)} per job</div>
     </div>`;
+
+    // --- single month: weekly shape + recent-month context ---
+    let trend = '';
+    if (single) {
+      const key = monthKey(b.from), live = key > HIST_CUTOFF;
+      let weekly;
+      if (live) {
+        const wk = weeklyRevenue(b);
+        weekly = '<div class="card" style="margin-bottom:24px"><div class="h">Revenue by week</div>'
+          + (wk.length ? hbarList(wk.map(w=>({label:w.label, r:w.r, sub:w.j+' job'+(w.j===1?'':'s'), hi:true})))
+                       : '<div style="color:var(--muted);text-align:center;padding:30px">No jobs yet this month.</div>')
+          + '<div style="font-size:11px;color:var(--muted);margin-top:10px">Weeks run 1\u20137, 8\u201314 and so on within the month.</div></div>';
+      } else {
+        weekly = '<div class="card" style="margin-bottom:24px"><div class="h">Revenue by week</div><div class="ib ig" style="margin-top:0">This is an invoiced historical month, recorded as one monthly figure rather than week by week.</div></div>';
+      }
+      const rows = recentMonthKeys(key, 6).map(k => ({ label: shortMonth(k), r: monthRevFor(k, franchiseeView), hi: k === key }));
+      const context = '<div class="card" style="margin-bottom:24px"><div class="h">Last 6 months</div>' + hbarList(rows)
+        + '<div style="font-size:11px;color:var(--muted);margin-top:10px">The selected month is highlighted; earlier months are shown in full for context.</div></div>';
+      trend = weekly + context;
+    } else {
+      // --- multi month: composition over time + per-month detail ---
+      const { top, colorOf } = serviceColorMap();
+      const maxR = monthlyData.length ? Math.max(...monthlyData.map(m=>m.r)) : 1;
+      trend = `<div class="card" style="margin-bottom:24px"><div class="h">Revenue by service, month by month</div>${stackedServiceSVG(top, colorOf)}
+        ${monthlyData.some(m=>m.m<=HIST_CUTOFF)?'<div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5">Months from 2026 are split by service from job records. Earlier invoiced months are shown as a single total, since a reliable service split isn\'t held for them.</div>':''}</div>
+        <div class="card" style="margin-bottom:24px"><div class="h">Month by month</div>
+        ${monthlyData.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No jobs in this period.</div>':
+          monthlyData.map(m=>'<div class="bar-row"><span class="bar-l">'+shortMonth(m.m)+'</span><div class="bar-c"><div class="bar" style="width:'+(maxR>0?Math.round(m.r/maxR*100):0)+'%"></div><span class="bar-v">'+fmt(m.r)+'</span><span class="bar-s">'+(m.j==null?'invoiced':m.j+' jobs \u2022 '+m.c+' customers')+'</span></div></div>').join('')}
+        <div class="ib ig"><b>Seasonal pattern:</b> peak May to October, winter dip December to February, spring bounce in March. Average job value has trended upward over time.</div>
+      </div>`;
+    }
+
+    // --- revenue by service (folded in from the old Services tab) ---
+    const { colorOf: svcColors } = serviceColorMap();
+    const svcRanked = serviceData.slice().sort((a,b2)=>b2.r-a.r);
+    const svcTotal = svcRanked.reduce((s,x)=>s+x.r,0) || 1;
+    const svcMax = svcRanked.length ? svcRanked[0].r : 1;
+    const serviceCard = `<div class="card" style="margin-bottom:24px"><div class="h">Revenue by service</div>
+      ${svcRanked.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No services in this period.</div>':
+        svcRanked.map(s=>'<div class="sb"><div class="sb-h"><span class="sb-n">'+s.n+'</span><span class="sb-s">'+fmt(s.r)+' \u00b7 '+Math.round(s.r/svcTotal*100)+'% \u00b7 '+s.j+' jobs \u00b7 avg '+fmt(s.a)+'</span></div><div class="sb-t"><div class="sb-f" style="background:'+(svcColors[s.n]||'#9aa89c')+';width:'+Math.round(s.r/svcMax*100)+'%"></div></div></div>').join('')}
+      <div class="ib ig"><b>Read it as:</b> the bar is each service\u2019s share of the period\u2019s revenue. Regular maintenance leads on volume; one-off jobs like tidy-ups, hedge cutting and clearances earn more per visit.</div>
+    </div>`;
+
+    // --- recurring maintenance vs one-off work ---
+    const RECURRING_GROUPS = {'Regular Garden Maintenance':1,'Grass Cutting & Lawn Edging':1};
+    let recR=0,recJ=0,oneR=0,oneJ=0;
+    serviceData.forEach(s=>{ if(RECURRING_GROUPS[s.n]){recR+=s.r;recJ+=s.j;}else{oneR+=s.r;oneJ+=s.j;} });
+    const splitTot = recR+oneR || 1;
+    const recAvg = recJ?Math.round(recR/recJ):0, oneAvg = oneJ?Math.round(oneR/oneJ):0;
+    const recPct = Math.round(recR/splitTot*100), onePct = 100-recPct;
+    const splitCard = `<div class="card" style="margin-bottom:24px"><div class="h">Recurring maintenance vs one-off work</div>
+      <div style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px"><b>Recurring maintenance</b><span style="color:var(--muted)">${recPct}% of revenue</span></div>
+        <div style="display:flex;gap:18px;font-size:13px"><span><b>${fmt(recR)}</b></span><span>${recJ} jobs</span><span>avg <b>${fmt(recAvg)}</b></span></div>
+        <div class="pb"><div class="pf" style="background:var(--green4);width:${recPct}%"></div></div></div>
+      <div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px"><b>One-off and project work</b><span style="color:var(--muted)">${onePct}% of revenue</span></div>
+        <div style="display:flex;gap:18px;font-size:13px"><span><b>${fmt(oneR)}</b></span><span>${oneJ} jobs</span><span>avg <b>${fmt(oneAvg)}</b></span></div>
+        <div class="pb"><div class="pf" style="background:var(--accent);width:${onePct}%"></div></div></div>
+      <div class="ib ig"><b>Why it matters:</b> recurring maintenance is the steady base by volume. One-off work earns far more per visit, so a handful of those jobs lifts the period total noticeably.</div>
+    </div>`;
+
+    // --- revenue by operator (only in the All view, framed as contribution not a contest) ---
+    let operatorCard = '';
+    if (franchiseeView === 'All') {
+      const opMike = revTotalFor(b,'Mike'), opAdam = revTotalFor(b,'Adam'), opTot = opMike+opAdam || 1;
+      const mPct = Math.round(opMike/opTot*100), aPct = 100-mPct;
+      operatorCard = `<div class="card"><div class="h">Revenue by operator</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:16px">How the period\u2019s revenue splits across the team.</div>
+        <div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;margin-bottom:6px">${badge('Mike')}<span style="font-size:13px"><b>${fmt(opMike)}</b> <span style="color:var(--muted)">\u00b7 ${mPct}%</span></span></div>
+          <div class="pb"><div class="pf" style="background:var(--green4);width:${mPct}%"></div></div></div>
+        <div><div style="display:flex;justify-content:space-between;margin-bottom:6px">${badge('Adam')}<span style="font-size:13px"><b>${fmt(opAdam)}</b> <span style="color:var(--muted)">\u00b7 ${aPct}%</span></span></div>
+          <div class="pb"><div class="pf" style="background:var(--blue4);width:${aPct}%"></div></div></div>
+        ${monthlyData.some(m=>m.m<'2024-10')?'<div style="font-size:11px;color:var(--muted);margin-top:14px;line-height:1.5">Mike\'s figure is his full invoiced history back to 2021. Adam\'s covers his franchisee period from April 2025, so the two spans differ.</div>':''}
+      </div>`;
+    }
+
+    el.innerHTML = headline + trend + serviceCard + splitCard + operatorCard;
   }
 
   else if (activeTab==='Customers') {
@@ -1642,15 +1859,6 @@ function renderContent() {
       '<div class="table-wrap"><table><thead><tr>'+sortTh('Missing Prices','n','Customer')+sortTh('Missing Prices','z','\u00a30 Jobs','r')+sortTh('Missing Prices','a','Avg When Priced','r')+sortTh('Missing Prices','est','Est. Missing','r')+'<th>Service</th></tr></thead>'+
       '<tbody>'+sortRows(missingPriceData,missSort.k,missSort.d).map(c=>{const e=c.est;return'<tr><td style="font-weight:500">'+c.n+'</td><td class="r" style="font-weight:600;color:var(--amber)">'+c.z+'</td><td class="r">'+(c.a>0?fmt(c.a):'Never priced')+'</td><td class="r" style="font-weight:600;color:'+(e>0?'var(--green6)':'#ccc')+'">'+(e>0?'~'+fmt(e):'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+(c.svc||'\u2014')+'</td></tr>'}).join('')+'</tbody></table></div>'+
       '<div class="ib io"><b>Action:</b> update recurring booking prices in the MTG app for customers showing "Never priced". These are active regulars with no pricing set.</div>'}
-    </div>`;
-  }
-
-  else if (activeTab==='Services') {
-    const mx = serviceData.length ? serviceData[0].j : 1;
-    el.innerHTML = `<div class="card"><div class="h">Service performance</div>
-      ${serviceData.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No services in this period.</div>':
-        serviceData.map(s=>'<div class="sb"><div class="sb-h"><span class="sb-n">'+s.n+'</span><span class="sb-s">'+s.j+' jobs \u2022 '+fmt(s.r)+' \u2022 avg '+fmt(s.a)+'</span></div><div class="sb-t"><div class="sb-f" style="background:'+(s.a>100?'#FF9800':s.a>50?'#4CAF50':'#81C784')+';width:'+Math.round(s.j/mx*100)+'%"></div></div></div>').join('')}
-      <div class="ib ig"><b>Key insight:</b> one-off services like tidy-ups, hedge cutting and clearances are high-margin. Regular maintenance is the bread and butter by volume, but tidy-ups generate significant revenue from fewer jobs.</div>
     </div>`;
   }
 }
