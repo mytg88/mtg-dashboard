@@ -1812,6 +1812,37 @@ function renderContent() {
     const netColor = w.net>0?'var(--green6)':(w.net<0?'var(--red)':'var(--muted)');
     const netSign = w.net>0?'+':'';
     const moves = w.list.filter(x=>x._cust || x._status);
+    // Operator split: only show operators that belong to the current view (no "Adam 0" on Mike's view).
+    const opParts = [];
+    if (franchiseeView !== 'Adam') opParts.push('<span>'+badge('Mike')+' <b>'+recMike+'</b> active</span>');
+    if (franchiseeView !== 'Mike') opParts.push('<span>'+badge('Adam')+' <b>'+recAdam+'</b> active</span>');
+    const opSplit = opParts.join('');
+    // The value-of-recurring stats, computed from the customer book so the case is made with real numbers.
+    const recAll = allCustomers.filter(c=>c.s==='Recurring');
+    const oneAll = allCustomers.filter(c=>c.s==='One-Off');
+    const totRev = allCustomers.reduce((s,c)=>s+c.r,0) || 1;
+    const recRev = recAll.reduce((s,c)=>s+c.r,0);
+    const recShare = Math.round(recRev/totRev*100);
+    const recLtv = recAll.length ? Math.round(recRev/recAll.length) : 0;
+    const oneLtv = oneAll.length ? Math.round(oneAll.reduce((s,c)=>s+c.r,0)/oneAll.length) : 0;
+    const ltvMult = oneLtv ? Math.round(recLtv/oneLtv) : 0;
+    const recAvgJobs = recAll.length ? Math.round(recAll.reduce((s,c)=>s+c.j,0)/recAll.length) : 0;
+    const statTile = (v,l) => '<div style="flex:1;min-width:118px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;border-left:4px solid var(--green4)"><div class="serif" style="font-size:26px;font-weight:600;color:var(--ink);line-height:1">'+v+'</div><div style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.4">'+l+'</div></div>';
+    const valueCard = recAll.length ? `<div class="card"><div class="h">Why recurring is worth most</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">
+          ${statTile(recShare+'%','of revenue comes from your regulars')}
+          ${ltvMult>1?statTile(ltvMult+'\u00d7','what a one-off is worth, '+fmt(recLtv)+' vs '+fmt(oneLtv)+' on average'):''}
+          ${recAvgJobs?statTile(recAvgJobs,'visits from the average regular, against one for a typical one-off'):''}
+        </div>
+        <ul style="margin:0;padding-left:18px;font-size:13px;color:#4a554c;line-height:1.75">
+          <li>Income you can count on. The diary is booked in advance, so less time is spent chasing the next job.</li>
+          <li>Steady through winter, when one-off work dries up and gets more competitive.</li>
+          <li>Tighter rounds. Regulars cluster by area and day, so there is less driving and the week plans itself.</li>
+          <li>Easy upsells on top of the visit: pressure washing, hedge cutting, clearances and seasonal work.</li>
+          <li>Better customers. Trusted clients who pay on time and are relaxed about the odd reschedule.</li>
+          <li>A stronger business. Recurring income holds up in a downturn and is worth far more if you ever sell or take on staff.</li>
+        </ul>
+      </div>` : '<div class="card"><div class="h">Why recurring is worth most</div><div style="color:var(--muted);font-size:13px">No recurring customers in this view yet.</div></div>';
     el.innerHTML = `
       <div class="grid grid-4">
         <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Active Recurring</div><div class="kpi-v">${recCusts.length}</div><div class="kpi-s">customers on a schedule</div></div>
@@ -1824,14 +1855,12 @@ function renderContent() {
         <div class="card"><div class="h">Net movement</div>
           <div class="serif" style="font-size:40px;font-weight:600;color:${netColor};line-height:1">${netSign}${w.net}</div>
           <div style="font-size:13px;color:var(--muted);margin-top:6px">${w.gained} gained \u2212 ${w.lost} lost in the selected period</div>
-          <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);display:flex;gap:24px;font-size:13px;align-items:center">
-            <span>${badge('Mike')} <b>${recMike}</b> active</span><span>${badge('Adam')} <b>${recAdam}</b> active</span>
-          </div>
+          ${opSplit?`<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);display:flex;gap:24px;font-size:13px;align-items:center">${opSplit}</div>`:''}
+          <div style="font-size:11px;color:var(--muted);margin-top:16px;line-height:1.55"><b>How this works:</b> a regular is anyone on a repeating schedule. Someone counts as gained when their first ever visit lands in this period, and as lost once 90 days pass with no visit. The figures look at your whole job history, so they are right back to the start.</div>
         </div>
-        <div class="card"><div class="h">How this is worked out</div>
-          <div class="ib ig" style="margin-top:0">All of these come from your full job history, so they\u2019re accurate right back to the start, not just since the app began tracking. A customer\u2019s <b>first visit</b> counts as gained; <b>90+ days</b> without a visit counts as lost (the same rule as the Churned tab). Over all time, gained minus lost equals your active book. The app\u2019s live log feeds the recent changes below as a precise running record going forward.</div>
-        </div>
+        ${valueCard}
       </div>
+
       <div class="card" style="margin-bottom:24px"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${recCusts.length} active recurring customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, from job history</div>
         <div class="table-wrap"><table><thead><tr>${sortTh('Recurring','n','Customer')}<th class="c">Owner</th><th>Frequency</th>${sortTh('Recurring','visit','Avg/visit','r')}${sortTh('Recurring','j','Jobs','r')}${sortTh('Recurring','r','Lifetime','r')}${sortTh('Recurring','last','Last visit')}</tr></thead>
         <tbody>${sortRows(recCusts,recSort.k,recSort.d).map(c=>'<tr><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.freq||'\u2014')+'</td><td class="r">'+(c.visit>0?fmt(c.visit):'\u2014')+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div>
