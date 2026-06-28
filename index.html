@@ -87,6 +87,7 @@ tr:hover td{background:#FAFBF9}
 .pf{border-radius:5px;height:9px}
 .ib{margin-top:18px;padding:16px 18px;border-radius:10px;font-size:13px;color:#4a554c;line-height:1.55}
 .ig{background:#F1F4EE}.ia{background:#FFF8E1}.io{background:#FFF3E0}.ib-blue{background:#E8F0FE}
+.qd-dot{cursor:pointer;transition:stroke .12s,stroke-width .12s}.qd-dot:hover{stroke:#2b3a2e;stroke-width:3.5}
 .svc-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #F4F6F2;font-size:13px}
 .svc-n{color:#3c463d;flex:1}.svc-s{width:84px;text-align:right}.svc-g{font-weight:700;color:var(--green)}
 .sb{margin-bottom:14px}.sb-h{display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px}
@@ -870,7 +871,7 @@ function processData() {
         ex.visit = ex.a;
         if (!ex.first || cf < ex.first) ex.first = cf;
         if (!ex.last || cl > ex.last) ex.last = cl;
-        if (passed) ex.s = 'Passed to Adam'; // a customer Mike handed to Adam reads as "passed" in both Mike's view and the overall view (Adam's own view keeps them as his book)
+        if (passed && franchiseeView === 'Mike') ex.s = 'Passed to Adam'; // a live handover reads as "passed" only in Mike's view; the overall and Adam views keep their live status
         return;
       }
       const av = hc.j ? Math.round(hc.r/hc.j) : 0;
@@ -892,7 +893,7 @@ function processData() {
     allCustomers.forEach(c => {
       const fix = fixNorm[norm(c.n)];
       if (!fix) return;
-      if (fix === 'adam') c.s = 'Passed to Adam'; // consistent across Mike's view and the overall view
+      if (fix === 'adam') { if (franchiseeView === 'Mike' || c.hist) c.s = 'Passed to Adam'; } // live handovers keep their live status in the overall view; only Mike's view and historical-only customers read as "passed"
       else if (fix === 'repeat') c.s = 'Repeat';
       else if (fix.startsWith('merge:')) {
         const tgt = byNorm[norm(fix.slice(6))];
@@ -1380,9 +1381,10 @@ function scorecardQuadrantSVG(scored){
   s+='<text x="15" y="'+(padT+plotH/2)+'" text-anchor="middle" font-size="11" fill="var(--muted)" transform="rotate(-90 15 '+(padT+plotH/2)+')">Estimated annual value \u2192</text>';
   [30,65,100].forEach(t=>{ s+='<text x="'+xs(t)+'" y="'+(padT+plotH+18)+'" text-anchor="middle" font-size="9.5" fill="var(--muted)">'+t+'%</text>'; });
   (split?[0,medV,maxV]:[0,maxV]).forEach(v=>{ s+='<text x="'+(padL-8)+'" y="'+(ys(v)+3)+'" text-anchor="end" font-size="9.5" fill="var(--muted)">'+fmt(v)+'</text>'; });
+  const arg=n=>JSON.stringify(String(n)).replace(/"/g,'&quot;');
   scored.forEach(o=>{ const cx=xs(o.r.pct), cy=ys(o.av), c=scoreGradeColor(o.r.grade);
-    const tip=o.c.n+' \u00b7 '+o.r.grade+' '+o.r.pct+'% \u00b7 ~'+fmt(o.av)+'/yr'+(o.r.complete?'':' (in progress)');
-    s+='<circle cx="'+cx+'" cy="'+cy+'" r="7" fill="'+c+'" stroke="#fff" stroke-width="2.5"><title>'+escAttr(tip)+'</title></circle>'; });
+    const tip=o.c.n+' \u00b7 '+o.r.grade+' '+o.r.pct+'% \u00b7 ~'+fmt(o.av)+'/yr'+(o.r.complete?'':' (in progress)')+' \u00b7 click to open';
+    s+='<circle class="qd-dot" cx="'+cx+'" cy="'+cy+'" r="7" fill="'+c+'" stroke="#fff" stroke-width="2.5" onclick="openScorecard('+arg(o.c.n)+')"><title>'+escAttr(tip)+'</title></circle>'; });
   return s+'</svg>';
 }
 // The Scorecard tab: results view (default) or the form when a customer is open.
@@ -1396,7 +1398,7 @@ function renderScorecardTab(){
   const startBtn = regs.length ? '<div style="margin-top:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap"><button class="df-btn active" style="font-size:13px;padding:9px 18px" onclick="startScoring()">'+startLabel+' \u2192</button><span style="font-size:12px;color:var(--muted)">'+scored.length+' of '+regs.length+' scored</span></div>' : '';
   const intro='<div class="card" style="margin-bottom:20px"><div class="h">Regular customer scorecard</div><div style="font-size:13px;color:var(--muted);line-height:1.6">Every active regular is already loaded, so there is nothing to set up. Score each one against 20 questions covering money, reliability, the relationship, access and the work itself. The seven most important questions count double. You get a percentage and a grade (A from 80, B from 65, C from 50, anything lower flagged for review), plus a map of who is worth keeping and who costs more than they return. Scores save as you go, and you can move straight on to the next customer.</div>'+startBtn+'</div>';
   const quad='<div class="card" style="margin-bottom:20px"><div class="h">Value against quality</div>'
-    + (scored.length?scorecardQuadrantSVG(scored)+'<div style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.5">Each dot is a scored regular. Further right is a stronger relationship, higher up is more annual value. Top-right are your anchors; top-left earn their keep on value but need fixing or repricing; bottom-left cost more than they return.</div>':'<div style="color:var(--muted);text-align:center;padding:30px">Score a few regulars to see the value and quality map.</div>')
+    + (scored.length?scorecardQuadrantSVG(scored)+'<div style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.5">Each dot is a scored regular. Further right is a stronger relationship, higher up is more annual value. Top-right are your anchors; top-left earn their keep on value but need fixing or repricing; bottom-left cost more than they return. Click any dot to open that customer.</div>':'<div style="color:var(--muted);text-align:center;padding:30px">Score a few regulars to see the value and quality map.</div>')
     + '</div>';
   let weakest='';
   if(scored.length){
@@ -1925,7 +1927,7 @@ function badge(t) {
 // Customer name with an "inherited" tag when this is one of Adam's transferred customers.
 // Skipped when the row is shown as "Passed to Adam" (Mike's view), since that already says it.
 function custName(c) {
-  return c.n + ((c.inherited && c.s !== 'Passed to Adam')
+  return c.n + ((c.inherited && c.s !== 'Passed to Adam' && franchiseeView !== 'All')
     ? ' <span class="badge b-inherited" title="Customer handed to Adam when he became a franchisee">inherited</span>'
     : '');
 }
@@ -2755,7 +2757,7 @@ function renderContent() {
     </div>`;
 
     // --- single month: weekly shape + recent-month context ---
-    let trend = '';
+    let compositionCard = '', timeDetail = '';
     if (single) {
       const key = monthKey(b.from), live = key > HIST_CUTOFF;
       let weekly;
@@ -2772,13 +2774,14 @@ function renderContent() {
       const context = '<div class="card" style="margin-bottom:24px"><div class="h">Last 6 months</div>' + hbarList(rows)
         + '<div style="font-size:11px;color:var(--muted);margin-top:10px">The selected month is highlighted; earlier months are shown in full for context.</div></div>';
       trend = weekly + context;
+      timeDetail = trend;
     } else {
       // --- multi month: composition over time + per-month detail ---
       const { top, colorOf } = serviceColorMap();
       const maxR = monthlyData.length ? Math.max(...monthlyData.map(m=>m.r)) : 1;
-      trend = `<div class="card" style="margin-bottom:24px"><div class="h">Revenue by service, month by month</div>${stackedServiceSVG(top, colorOf)}
-        ${monthlyData.some(m=>m.m<=HIST_CUTOFF)?'<div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5">Months from 2026 are split by service from job records. Earlier invoiced months are shown as a single total, since a reliable service split isn\'t held for them.</div>':''}</div>
-        <div class="card" style="margin-bottom:24px"><div class="h">Month by month</div>
+      compositionCard = `<div class="card" style="margin-bottom:24px"><div class="h">Revenue by service, month by month</div>${stackedServiceSVG(top, colorOf)}
+        ${monthlyData.some(m=>m.m<=HIST_CUTOFF)?'<div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5">Months from 2026 are split by service from job records. Earlier invoiced months are shown as a single total, since a reliable service split isn\'t held for them.</div>':''}</div>`;
+      timeDetail = `<div class="card" style="margin-bottom:24px"><div class="h">Month by month</div>
         ${monthlyData.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No jobs in this period.</div>':
           monthlyData.map(m=>'<div class="bar-row"><span class="bar-l">'+shortMonth(m.m)+'</span><div class="bar-c"><div class="bar" style="width:'+(maxR>0?Math.round(m.r/maxR*100):0)+'%"></div><span class="bar-v">'+fmt(m.r)+'</span><span class="bar-s">'+(m.j==null?'invoiced':m.j+' jobs \u2022 '+m.c+' customers')+'</span></div></div>').join('')}
         <div class="ib ig"><b>Seasonal pattern:</b> peak May to October, winter dip December to February, spring bounce in March. Average job value has trended upward over time.</div>
@@ -2830,7 +2833,7 @@ function renderContent() {
       </div>`;
     }
 
-    el.innerHTML = headline + trend + serviceCard + splitCard + operatorCard;
+    el.innerHTML = headline + compositionCard + splitCard + serviceCard + timeDetail + operatorCard;
   }
 
   else if (activeTab==='Customers') {
