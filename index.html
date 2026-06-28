@@ -1254,7 +1254,7 @@ function scorePill(c){
   const lab = r.complete ? (r.grade+' \u00b7 '+r.pct+'%') : (r.pct+'% \u00b7 '+r.ans+'/'+r.total);
   return '<button class="sc-pill" style="background:'+scoreGradeColor(r.grade)+'" onclick="openScorecard(this.closest(\'tr\').dataset.cust)">'+escAttr(lab)+'</button>';
 }
-function openScorecard(name){ scoreEditFor=name; activeTab='Scorecard'; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
+function openScorecard(name){ scoreEditFor=name; activeTab='Customers'; custSegFilter='Scorecard'; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 function closeScorecard(){ scoreEditFor=null; renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 // The running order for scoring: every active regular, biggest first. Used by next/previous and "start scoring".
 function scoreQueue(){ return allCustomers.filter(c=>c.s==='Recurring').sort((a,b)=>b.r-a.r).map(c=>c.n); }
@@ -1416,7 +1416,15 @@ function renderScorecardTab(){
   return intro + quad + weakest + table + todo;
 }
 // ---------- regulars map (Leaflet, lazy-loaded) ----------
-let liveMap=null, mapShowChurned=false, geoCache={}, placeGeo={};
+let liveMap=null, mapShowChurned=false, mapShowRepeat=false, mapShowOneOff=false, geoCache={}, placeGeo={};
+// The map now lives inside the Customers tab as the "Map" view.
+function mapIsOpen(){ return activeTab==='Customers' && custSegFilter==='Map'; }
+function segColor(c){
+  if(c.s==='Churned') return '#D64545';
+  if(c.s==='Repeat') return '#0D9488';
+  if(c.s==='One-Off') return '#7C3AED';
+  return c.f==='Adam' ? '#1565C0' : '#E07B1A';
+}
 try { geoCache = JSON.parse(localStorage.getItem('mtg_geo')||'{}') || {}; } catch(e){ geoCache={}; }
 try { placeGeo = JSON.parse(localStorage.getItem('mtg_geo_places')||'{}') || {}; } catch(e){ placeGeo={}; }
 // Fixed reference points on the map: where each operator starts, the tips we use, and trade suppliers.
@@ -1556,9 +1564,12 @@ async function geocodePostcodes(pcs){
   }
   try{ localStorage.setItem('mtg_geo', JSON.stringify(geoCache)); }catch(e){}
 }
-// The regulars (and optionally churned) in the current view that carry a postcode.
+// The regulars (plus any optional layers) in the current view that carry a postcode.
 function mapPoints(){
-  const segs = mapShowChurned ? ['Recurring','Churned'] : ['Recurring'];
+  const segs = ['Recurring'];
+  if(mapShowChurned) segs.push('Churned');
+  if(mapShowRepeat) segs.push('Repeat');
+  if(mapShowOneOff) segs.push('One-Off');
   return allCustomers.filter(c=>segs.indexOf(c.s)!==-1 && c.postcode).map(c=>({ c:c, pc:c.postcode }));
 }
 function renderLiveMarkers(){
@@ -1568,16 +1579,16 @@ function renderLiveMarkers(){
   const pts = mapPoints(); const latlngs=[]; let placed=0;
   pts.forEach(p=>{
     const g = geoCache[p.pc]; if(!g) return;
-    const c = p.c, churned = c.s==='Churned', op = c.f;
-    const color = churned ? '#D64545' : (op==='Adam' ? '#1565C0' : '#E07B1A');
+    const c = p.c, primary = c.s==='Recurring', op = c.f, color = segColor(c);
+    const segLab = primary ? '' : ' \u00b7 '+c.s.toLowerCase();
     const sc = hasScore(c) ? scoreCompute(c.score.scores) : null, proj = Math.round(planMath(planFields(c)).total);
     const html = '<div style="font-family:DM Sans,sans-serif;min-width:150px"><div style="font-weight:700;font-size:13px;margin-bottom:2px">'+escAttr(c.n)+'</div>'
-      + '<div style="font-size:12px;color:#5b665c">'+escAttr(op||'')+(churned?' \u00b7 churned':'')+'</div>'
+      + '<div style="font-size:12px;color:#5b665c">'+escAttr(op||'')+segLab+'</div>'
       + (sc?'<div style="font-size:12px;margin-top:3px"><b>'+sc.grade+'</b> \u00b7 '+sc.pct+'%</div>':'')
       + (proj?'<div style="font-size:12px;color:#5b665c;margin-top:3px">~'+fmt(proj)+'/yr projected</div>':'')
       + (c.ltv?'<div style="font-size:12px;color:#5b665c">'+fmt(Math.round(c.ltv))+' lifetime</div>':'')
       + '<div style="font-size:11px;color:#9aa59b;margin-top:3px">'+escAttr(p.pc)+'</div></div>';
-    const m = L.circleMarker([g.lat,g.lng], { radius: churned?6.5:8, color:'#fff', weight:2.5, fillColor:color, fillOpacity: churned?0.92:0.96 });
+    const m = L.circleMarker([g.lat,g.lng], { radius: primary?8:6.5, color:'#fff', weight:2.5, fillColor:color, fillOpacity: primary?0.96:0.92 });
     m.bindPopup(html); m.addTo(layer); latlngs.push([g.lat,g.lng]); placed++;
   });
   if(latlngs.length){ try{ liveMap.fitBounds(latlngs,{padding:[40,40],maxZoom:14}); }catch(e){} }
@@ -1585,29 +1596,46 @@ function renderLiveMarkers(){
   if(st){ const total=pts.length, missing=total-placed; st.textContent = placed+' of '+total+' placed'+(missing>0?' \u00b7 '+missing+' postcode'+(missing===1?'':'s')+' could not be located':''); }
 }
 async function initLiveMap(){
-  if(activeTab!=='Map') return;
+  if(!mapIsOpen()) return;
   await geocodePostcodes(mapPoints().map(p=>p.pc));
-  if(activeTab!=='Map') return;
+  if(!mapIsOpen()) return;
   loadLeaflet(async function(){
-    const el=document.getElementById('liveMap'); if(!el || activeTab!=='Map') return;
+    const el=document.getElementById('liveMap'); if(!el || !mapIsOpen()) return;
     if(liveMap){ try{ liveMap.remove(); }catch(e){} liveMap=null; }
     liveMap = L.map(el, { scrollWheelZoom:true }).setView([50.74,-1.95], 11);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { maxZoom:19, subdomains:'abcd', attribution:'&copy; OpenStreetMap, &copy; CARTO' }).addTo(liveMap);
     renderLiveMarkers();
     renderPlaceMarkers(liveMap);             // draws any already-cached reference points at once
     await geocodePlaces(mapPlaces);         // then resolves the rest in the background
-    if(liveMap && activeTab==='Map') renderPlaceMarkers(liveMap);
+    if(liveMap && mapIsOpen()) renderPlaceMarkers(liveMap);
   });
 }
-async function toggleMapChurned(v){ mapShowChurned=v; if(!liveMap) return; await geocodePostcodes(mapPoints().map(p=>p.pc)); renderLiveMarkers(); }
+async function toggleMapLayer(seg,v){
+  if(seg==='churned') mapShowChurned=v; else if(seg==='repeat') mapShowRepeat=v; else if(seg==='oneoff') mapShowOneOff=v;
+  const lg=document.getElementById('mapLegend'); if(lg) lg.innerHTML=mapLegendHTML();
+  if(!liveMap) return; await geocodePostcodes(mapPoints().map(p=>p.pc)); renderLiveMarkers();
+}
+function mapLegendHTML(){
+  const dot = (col,lab) => '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink)"><span style="width:12px;height:12px;border-radius:50%;background:'+col+';border:2px solid #fff;box-shadow:0 0 0 1px '+col+'"></span>'+lab+'</span>';
+  const ic = (kind,op,lab) => { const s=PLACE_STYLE[kind]; const bg=kind==='start'?(op==='Adam'?'#15407F':'#9A5410'):s.bg; return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink)"><span style="width:18px;height:18px;border-radius:50%;background:'+bg+';border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3);display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" style="width:10px;height:10px;fill:#fff">'+s.glyph+'</svg></span>'+lab+'</span>'; };
+  let h='';
+  if(franchiseeView!=='Adam') h+=dot('#E07B1A','Mike');
+  if(franchiseeView!=='Mike') h+=dot('#1565C0','Adam');
+  if(mapShowRepeat) h+=dot('#0D9488','Repeat');
+  if(mapShowOneOff) h+=dot('#7C3AED','One-off');
+  if(mapShowChurned) h+=dot('#D64545','Churned');
+  h+='<span style="width:1px;height:16px;background:var(--line)"></span>'+ic('start',franchiseeView==='Adam'?'Adam':'Mike','Start')+ic('tip',null,'Tip')+ic('supplier',null,'Supplier');
+  return h;
+}
 function renderMapTab(){
   const regs = allCustomers.filter(c=>c.s==='Recurring');
   const noPc = regs.filter(c=>!c.postcode).sort((a,b)=>b.r-a.r);
   const dot = (col,lab) => '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink)"><span style="width:12px;height:12px;border-radius:50%;background:'+col+';border:2px solid #fff;box-shadow:0 0 0 1px '+col+'"></span>'+lab+'</span>';
   const ic = (kind,op,lab) => { const s=PLACE_STYLE[kind]; const bg=kind==='start'?(op==='Adam'?'#15407F':'#9A5410'):s.bg; return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink)"><span style="width:18px;height:18px;border-radius:50%;background:'+bg+';border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3);display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" style="width:10px;height:10px;fill:#fff">'+s.glyph+'</svg></span>'+lab+'</span>'; };
-  const intro = '<div class="card" style="margin-bottom:20px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap"><div><div class="h" style="margin-bottom:6px">Map of regulars</div><div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:680px">Every regular with a postcode on file, placed from the live data, '+(franchiseeView==='All'?'Mike in orange and Adam in blue':'on '+franchiseeView+'\u2019s patch')+'. Start points, tips and suppliers are pinned too. Customer pins follow the period and view filters at the top, so for the whole book pick All time.</div></div>'
-    + '<label style="display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);white-space:nowrap;cursor:pointer"><input type="checkbox" '+(mapShowChurned?'checked':'')+' onchange="toggleMapChurned(this.checked)"> Show churned</label></div>'
-    + '<div style="display:flex;gap:16px 18px;flex-wrap:wrap;margin-top:14px;align-items:center">'+dot('#E07B1A','Mike')+dot('#1565C0','Adam')+(mapShowChurned?dot('#D64545','Churned'):'')+'<span style="width:1px;height:16px;background:var(--line)"></span>'+ic('start',franchiseeView==='Adam'?'Adam':'Mike','Start')+ic('tip',null,'Tip')+ic('supplier',null,'Supplier')+'</div></div>';
+  const toggle = (seg,checked,lab) => '<label style="display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--ink);white-space:nowrap;cursor:pointer"><input type="checkbox" '+(checked?'checked':'')+' onchange="toggleMapLayer(\''+seg+'\',this.checked)"> '+lab+'</label>';
+  const intro = '<div class="card" style="margin-bottom:20px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap"><div><div class="h" style="margin-bottom:6px">Map of regulars</div><div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:680px">Every regular with a postcode on file, placed from the live data, '+(franchiseeView==='All'?'Mike in orange and Adam in blue':'on '+franchiseeView+'\u2019s patch')+'. Start points, tips and suppliers are pinned too. Turn on repeat, one-off or churned to see them too. Customer pins follow the period and view filters at the top, so for the whole book pick All time.</div></div>'
+    + '<div style="display:flex;flex-direction:column;gap:7px;align-items:flex-start">'+toggle('repeat',mapShowRepeat,'Show repeat')+toggle('oneoff',mapShowOneOff,'Show one-off')+toggle('churned',mapShowChurned,'Show churned')+'</div></div>'
+    + '<div id="mapLegend" style="display:flex;gap:16px 18px;flex-wrap:wrap;margin-top:14px;align-items:center">'+mapLegendHTML()+'</div></div>';
   const map = '<div class="card" style="margin-bottom:20px;padding:14px"><div id="liveMap" class="live-map"></div><div style="display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-top:10px"><div id="mapStatus" style="font-size:12px;color:var(--muted)">Locating customers\u2026</div><div id="placeNote" style="font-size:12px;color:var(--muted);text-align:right"></div></div></div>';
   const missing = noPc.length ? '<div class="card"><div class="h">No postcode on file ('+noPc.length+')</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px">These regulars have no usable postcode in the data yet, so they cannot be placed. Adding a postcode to their record in the booking app will bring them onto the map automatically.</div><div style="display:flex;flex-wrap:wrap;gap:8px">'
     + noPc.map(c=>'<span class="sc-pill sc-pill-empty" style="cursor:default;font-weight:500">'+escAttr(c.n)+'</span>').join('')
@@ -2091,7 +2119,7 @@ function stackedServiceSVG(top, colorOf) {
   return '<div class="svg-wrap"><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">' + grid + bars + xl + '</svg></div>' + legend;
 }
 
-const tabList = ["Overview","Leads","Calls","Revenue","Customers","Planner","Map","Scorecard","Missing Prices"];
+const tabList = ["Overview","Leads","Calls","Revenue","Customers","Planner","Missing Prices"];
 function renderTabs() {
   document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+t+'</button>').join('');
 }
@@ -2287,6 +2315,15 @@ function renderOneOffHub(){
     <tbody>${ones.map(c=>{const ds=dsOf(c);return '<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.ltv!=null?c.ltv:c.r)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.svc||'\u2014')+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+(ds!=null?ds:'\u2014')+'</td><td><input class="note-in" placeholder="Worth a follow-up? Mention maintenance?" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>';}).join('')}</tbody></table></div></div>`
     : '<div class="card"><div style="color:var(--muted);text-align:center;padding:40px">No one-off customers'+(custSearch?' match your search':' in this period')+'.</div></div>';
   return head + search + table;
+}
+function customerToolsRow(){
+  const scored = allCustomers.filter(c=>c.s==='Recurring' && hasScore(c)).length;
+  const mapped = allCustomers.filter(c=>c.s==='Recurring' && c.postcode).length;
+  const card=(seg,title,desc,color)=>'<div onclick="custSegFilter=\''+seg+'\';scoreEditFor=null;renderContent();window.scrollTo({top:0,behavior:\'smooth\'})" style="flex:1;min-width:220px;cursor:pointer;border:1px solid var(--line);border-radius:10px;padding:16px 18px;border-left:4px solid '+color+'"><div style="font-weight:600;font-size:14px;color:var(--ink);margin-bottom:4px">'+title+' \u2192</div><div style="font-size:12px;color:var(--muted);line-height:1.5">'+desc+'</div></div>';
+  return '<div class="card" style="margin-bottom:24px"><div class="h">Customer tools</div><div style="display:flex;gap:14px;flex-wrap:wrap">'
+    + card('Map','Map','See your regulars across the patch, with repeat, one-off and churned as optional layers, plus your tips and suppliers. '+mapped+' regulars have a postcode on file.','#1565C0')
+    + card('Scorecard','Scorecard','Grade your regulars on what matters and see value against quality at a glance. '+scored+' scored so far.','var(--green4)')
+    + '</div></div>';
 }
 function renderContent() {
   const el = document.getElementById('content');
@@ -2715,17 +2752,22 @@ function renderContent() {
 
   else if (activeTab==='Customers') {
     const segs = ["All","Recurring","Repeat","One-Off","Churned"].concat(franchiseeView==='Adam' ? [] : ["Passed to Adam"]);
-    const chips = `<div class="filter-row">${segs.map(s=>'<button class="filter-btn '+(custSegFilter===s?'active':'')+'" onclick="custSegFilter=\''+s+'\';custSearch=\'\';renderContent();window.scrollTo({top:0,behavior:\'smooth\'})">'+s+' ('+(s==='All'?allCustomers.length:allCustomers.filter(c=>c.s===s).length)+')</button>').join('')}</div>`;
-    let body;
+    const chipBtn = (v,label) => '<button class="filter-btn '+(custSegFilter===v?'active':'')+'" onclick="custSegFilter=\''+v+'\';custSearch=\'\';scoreEditFor=null;renderContent();window.scrollTo({top:0,behavior:\'smooth\'})">'+label+'</button>';
+    const segChips = segs.map(s=>chipBtn(s, s+' ('+(s==='All'?allCustomers.length:allCustomers.filter(c=>c.s===s).length)+')')).join('');
+    const toolChips = chipBtn('Map','Map') + chipBtn('Scorecard','Scorecard');
+    const chips = `<div class="filter-row">${segChips}<span style="width:1px;align-self:stretch;min-height:20px;background:var(--line);margin:0 4px"></span>${toolChips}</div>`;
+    let body, isMap=false;
     if (custSegFilter === 'Recurring') body = renderRecurringHub();
     else if (custSegFilter === 'Churned') body = renderChurnedHub();
     else if (custSegFilter === 'Repeat') body = renderRepeatHub();
     else if (custSegFilter === 'One-Off') body = renderOneOffHub();
+    else if (custSegFilter === 'Map') { body = renderMapTab(); isMap = true; }
+    else if (custSegFilter === 'Scorecard') body = renderScorecardTab();
     else {
       let filtered = allCustomers;
       if (custSegFilter !== 'All') filtered = filtered.filter(c => c.s === custSegFilter);
       if (custSearch) filtered = filtered.filter(c => c.n.toLowerCase().includes(custSearch.toLowerCase()));
-      const intro = custSegFilter==='All' ? customerMixCard()
+      const intro = custSegFilter==='All' ? (customerMixCard() + customerToolsRow())
         : custSegFilter==='Passed to Adam' ? '<div class="ib ib-blue" style="margin-bottom:16px"><b>Handed to Adam.</b> These were your customers, now serviced by Adam as part of his round. They count as kept within My Tidy Garden.</div>'
         : '';
       const searchBox = `<input id="custSearchBox" class="search" placeholder="Search customers..." value="${custSearch}" oninput="onCustSearch(this.value, this.selectionStart)">`;
@@ -2735,21 +2777,13 @@ function renderContent() {
         <tbody>${sortRows(filtered,custSort.k,custSort.d).map(c=>'<tr><td style="font-weight:500">'+custName(c)+'</td><td>'+badge(c.s)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td class="r">'+fmt(c.a)+'</td><td class="c">'+badge(c.f)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div></div>`;
     }
     el.innerHTML = chips + body;
+    if (isMap) initLiveMap();
   }
 
-
-  else if (activeTab==='Scorecard') {
-    el.innerHTML = renderScorecardTab();
-  }
 
   else if (activeTab==='Planner') {
     el.innerHTML = renderPlannerTab();
     recalcPlanner();
-  }
-
-  else if (activeTab==='Map') {
-    el.innerHTML = renderMapTab();
-    initLiveMap();
   }
 
   else if (activeTab==='Missing Prices') {
