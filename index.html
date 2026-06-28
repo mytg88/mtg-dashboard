@@ -2173,6 +2173,20 @@ document.getElementById('dfApply').addEventListener('click', () => {
 });
 
 // ---------- render ----------
+// Shared header for every Customers segment, so each view opens the same way:
+// a serif title, a row of stat tiles, a framing note and optional coaching bullets.
+function segTile(v,l,color){
+  return '<div style="flex:1;min-width:118px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;border-left:4px solid '+(color||'var(--green4)')+'"><div class="serif" style="font-size:26px;font-weight:600;color:var(--ink);line-height:1">'+v+'</div><div style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.4">'+l+'</div></div>';
+}
+function segHeader(o){
+  const color = o.tileColor || 'var(--green4)';
+  const tiles = (o.tiles||[]).filter(Boolean).map(t=>segTile(t[0],t[1],color)).join('');
+  const framing = o.framing ? '<div class="ib '+(o.framingClass||'ig')+'" style="margin-top:0">'+o.framing+'</div>' : '';
+  const bullets = (o.bullets&&o.bullets.length) ? '<ul style="margin:14px 0 0;padding-left:18px;font-size:13px;color:#4a554c;line-height:1.75">'+o.bullets.map(b=>'<li>'+b+'</li>').join('')+'</ul>' : '';
+  return '<div class="card" style="margin-bottom:16px"><div class="h"'+(o.titleColor?' style="color:'+o.titleColor+'"':'')+'>'+o.title+'</div>'
+    + (tiles?'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:'+((framing||bullets)?'18px':'0')+'">'+tiles+'</div>':'')
+    + framing + bullets + '</div>';
+}
 function customerMixCard(){
   const seg = s => allCustomers.filter(c=>c.s===s).length;
   const mix = [
@@ -2212,23 +2226,23 @@ function renderRecurringHub(){
   const oneLtv = oneAll.length ? Math.round(oneAll.reduce((s,c)=>s+(c.ltv!=null?c.ltv:c.r),0)/oneAll.length) : 0;
   const ltvMult = oneLtv ? Math.round(recLtv/oneLtv) : 0;
   const recAvgJobs = recAll.length ? Math.round(recAll.reduce((s,c)=>s+c.j,0)/recAll.length) : 0;
-  const statTile = (v,l) => '<div style="flex:1;min-width:118px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;border-left:4px solid var(--green4)"><div class="serif" style="font-size:26px;font-weight:600;color:var(--ink);line-height:1">'+v+'</div><div style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.4">'+l+'</div></div>';
-  const valueCard = recAll.length ? `<div class="card"><div class="h">Why recurring is worth most</div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">
-        ${statTile(recShare+'%','of revenue comes from your regulars')}
-        ${ltvMult>1?statTile(ltvMult+'\u00d7','what a one-off is worth, '+fmt(recLtv)+' vs '+fmt(oneLtv)+' on average'):''}
-        ${recAvgJobs?statTile(recAvgJobs,'visits from the average regular, against one for a typical one-off'):''}
-      </div>
-      <ul style="margin:0;padding-left:18px;font-size:13px;color:#4a554c;line-height:1.75">
-        <li>Income you can count on. The diary is booked in advance, so less time is spent chasing the next job.</li>
-        <li>Steady through winter, when one-off work dries up and gets more competitive.</li>
-        <li>Tighter rounds. Regulars cluster by area and day, so there is less driving and the week plans itself.</li>
-        <li>Easy upsells on top of the visit: pressure washing, hedge cutting, clearances and seasonal work.</li>
-        <li>Better customers. Trusted clients who pay on time and are relaxed about the odd reschedule.</li>
-        <li>A stronger business. Recurring income holds up in a downturn and is worth far more if you ever sell or take on staff.</li>
-      </ul>
-    </div>` : '<div class="card"><div class="h">Why recurring is worth most</div><div style="color:var(--muted);font-size:13px">No recurring customers in this view yet.</div></div>';
-  return `
+  const header = recAll.length ? segHeader({
+      title:'Recurring customers, your foundation', tileColor:'var(--green4)',
+      tiles:[ [recShare+'%','of revenue comes from your regulars'],
+              ltvMult>1?[ltvMult+'\u00d7','what a one-off is worth, '+fmt(recLtv)+' vs '+fmt(oneLtv)+' on average']:null,
+              recAvgJobs?[recAvgJobs,'visits from the average regular, against one for a typical one-off']:null ],
+      framingClass:'ig',
+      framing:'<b>Your regulars are the backbone of the business.</b> Booked-in income you can count on, tighter rounds that plan themselves, and the part of the book worth most if you ever sell or take on staff.',
+      bullets:[
+        'Income you can count on. The diary is booked in advance, so less time is spent chasing the next job.',
+        'Steady through winter, when one-off work dries up and gets more competitive.',
+        'Tighter rounds. Regulars cluster by area and day, so there is less driving and the week plans itself.',
+        'Easy upsells on top of the visit: pressure washing, hedge cutting, clearances and seasonal work.',
+        'Better customers. Trusted clients who pay on time and are relaxed about the odd reschedule.',
+        'A stronger business. Recurring income holds up in a downturn and is worth far more if you ever sell or take on staff.'
+      ]
+    }) : segHeader({ title:'Recurring customers, your foundation', framing:'No recurring customers in this view yet.' });
+  return header + `
     <div class="grid grid-4">
       <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Active Recurring</div><div class="kpi-v">${recCusts.length}</div><div class="kpi-s">customers on a schedule</div></div>
       <div class="card accent-top"><div class="kpi-l">Avg per Visit</div><div class="kpi-v">${fmt(recVisitAvg)}</div><div class="kpi-s">${fmt(recRound)} for one round of all</div></div>
@@ -2236,14 +2250,11 @@ function renderRecurringHub(){
       <div class="card accent-top"><div class="kpi-l">Regulars Gained</div><div class="kpi-v">${w.gained}</div><div class="kpi-s">first visit in period</div></div>
       <div class="card accent-top" style="border-top-color:var(--red)"><div class="kpi-l">Regulars Lost</div><div class="kpi-v" style="color:var(--red)">${w.lost}</div><div class="kpi-s">churned in period</div></div>
     </div>
-    <div class="grid grid-2">
-      <div class="card"><div class="h">Net movement</div>
-        <div class="serif" style="font-size:40px;font-weight:600;color:${netColor};line-height:1">${netSign}${w.net}</div>
-        <div style="font-size:13px;color:var(--muted);margin-top:6px">${w.gained} gained \u2212 ${w.lost} lost in the selected period</div>
-        ${opSplit?`<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);display:flex;gap:24px;font-size:13px;align-items:center">${opSplit}</div>`:''}
-        <div style="font-size:11px;color:var(--muted);margin-top:16px;line-height:1.55"><b>How this works:</b> a regular is anyone on a repeating schedule. Someone counts as gained when their first ever visit lands in this period, and as lost once 90 days pass with no visit. The figures look at your whole job history, so they are right back to the start.</div>
-      </div>
-      ${valueCard}
+    <div class="card" style="margin-bottom:24px"><div class="h">Net movement</div>
+      <div class="serif" style="font-size:40px;font-weight:600;color:${netColor};line-height:1">${netSign}${w.net}</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:6px">${w.gained} gained \u2212 ${w.lost} lost in the selected period</div>
+      ${opSplit?`<div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);display:flex;gap:24px;font-size:13px;align-items:center">${opSplit}</div>`:''}
+      <div style="font-size:11px;color:var(--muted);margin-top:16px;line-height:1.55"><b>How this works:</b> a regular is anyone on a repeating schedule. Someone counts as gained when their first ever visit lands in this period, and as lost once 90 days pass with no visit. The figures look at your whole job history, so they are right back to the start.</div>
     </div>
     <div class="card" style="margin-bottom:24px"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${recCusts.length} active recurring customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, from job history</div>
       <div class="table-wrap"><table><thead><tr>${sortTh('Recurring','n','Customer')}<th class="c">Owner</th><th>Frequency</th>${sortTh('Recurring','visit','Avg/visit','r')}${sortTh('Recurring','j','Jobs','r')}${sortTh('Recurring','ltv','Lifetime','r')}${sortTh('Recurring','first','First')}${sortTh('Recurring','last','Last visit')}<th>Score</th><th>Note</th></tr></thead>
@@ -2256,9 +2267,16 @@ function renderChurnedHub(){
   const chTotal = churnedList.reduce((s,c)=>s+(c.ltv!=null?c.ltv:c.r),0);
   const chMike = churnedList.filter(c=>c.f==='Mike').length, chAdam = churnedList.filter(c=>c.f==='Adam').length;
   const chWho = franchiseeView==='All' ? (chMike+' on Mike\u2019s patch, '+chAdam+' on Adam\u2019s') : ('all on '+franchiseeView+'\u2019s patch');
-  return `<div class="card" style="margin-bottom:24px">
-      <div class="h" style="color:var(--red)">Churned regulars</div>
-      <div class="ib ia" style="margin-top:0;margin-bottom:18px"><b>Why churn matters:</b> losing the odd customer is normal, a bit of two steps forward and one back. People move, circumstances change and some gardens come to a natural end, so this will never be zero. What matters is the rate. A slow trickle is healthy; a sudden jump usually means something to put right, whether that is work slipping below standard, slow or unclear communication, or visits being missed or rushed. Treat a rising number as an early warning, not just a tally.</div>
+  const chAvg = churnedList.length ? Math.round(chTotal/churnedList.length) : 0;
+  const header = segHeader({
+    title:'Churned regulars', titleColor:'var(--red)', tileColor:'var(--red)',
+    tiles:[ [churnedList.length,'regulars lost, no visit for 90+ days'],
+            [fmt(chTotal),'lifetime value now at risk'],
+            churnedList.length?[fmt(chAvg),'average lifetime of a lost regular']:null ],
+    framingClass:'ia',
+    framing:'<b>Why churn matters:</b> losing the odd customer is normal, a bit of two steps forward and one back. People move, circumstances change and some gardens come to a natural end, so this will never be zero. What matters is the rate. A slow trickle is healthy; a sudden jump usually means something to put right, whether that is work slipping below standard, slow or unclear communication, or visits being missed or rushed. Treat a rising number as an early warning, not just a tally.'
+  });
+  const body = `<div class="card" style="margin-bottom:24px">
       <div style="font-size:13px;color:var(--muted);margin-bottom:12px">${churnedList.length} churned${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}. Was recurring or had 5+ jobs, then no visit for 90+ days.</div>
       ${churnedList.length ? churnReasonBreakdownHTML(churnedList) : ''}
       ${churnedList.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No churned customers in this period.</div>':
@@ -2266,6 +2284,7 @@ function renderChurnedHub(){
         '<tbody>'+sortRows(churnedList,churnSort.k,churnSort.d).map(c=>'<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--red)">'+fmt(c.ltv!=null?c.ltv:c.r)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td class="r">'+c.daysSince+'</td><td><select class="disp-sel'+(c.disp?'':' unset')+'" onchange="setCustomerDisp(this.closest(\'tr\').dataset.cust, this.value)">'+dispOptions(c.disp)+'</select><input class="note-in" style="margin-top:5px" placeholder="Add a note" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>').join('')+'</tbody></table></div>'+
         '<div class="ib ig"><b>Total lifetime value lost:</b> '+fmt(chTotal)+'. '+chWho+'. A re-engagement push targeting the biggest names could win back recurring revenue.</div>'}
     </div>`;
+  return header + body;
 }
 function renderRepeatHub(){
   const dsOf = c => { if(!c.last) return null; const t=c.last.getTime?c.last.getTime():new Date(c.last).getTime(); return isNaN(t)?null:Math.floor((Date.now()-t)/864e5); };
@@ -2275,19 +2294,19 @@ function renderRepeatHub(){
   reps.sort((a,b)=>(b.ltv!=null?b.ltv:b.r)-(a.ltv!=null?a.ltv:a.r));
   const tot = allReps.reduce((s,c)=>s+(c.ltv!=null?c.ltv:c.r),0);
   const avgJobs = allReps.length ? Math.round(allReps.reduce((s,c)=>s+c.j,0)/allReps.length) : 0;
-  const tile = (v,l) => '<div style="flex:1;min-width:118px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;border-left:4px solid var(--blue4)"><div class="serif" style="font-size:26px;font-weight:600;color:var(--ink);line-height:1">'+v+'</div><div style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.4">'+l+'</div></div>';
-  const head = `<div class="card" style="margin-bottom:16px"><div class="h">Repeat customers, your warmest leads</div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">
-      ${tile(allReps.length,'customers who have come back at least once')}
-      ${tile(fmt(tot),'combined lifetime value, already earned')}
-      ${avgJobs?tile(avgJobs,'visits from the average repeat customer'):''}
-    </div>
-    <div class="ib ib-blue" style="margin-top:0"><b>Treat these as a priority over a new enquiry.</b> They have already chosen you once, so they are far more likely to book again than a cold lead.</div>
-    <ul style="margin:14px 0 0;padding-left:18px;font-size:13px;color:#4a554c;line-height:1.75">
-      <li>Upsell to a maintenance plan where it fits, but you do not need weekly or monthly to keep them regular. Offer a set general visit each season, a half or full day, to keep the garden in shape and fill quieter weeks.</li>
-      <li>On the visit, agree the next one there and then, or flag roughly when you expect they will need you again, so the relationship does not go cold.</li>
-      <li>A booked repeat is worth more than time spent chasing new work, so reach out before the diary gets quiet.</li>
-    </ul></div>`;
+  const head = segHeader({
+    title:'Repeat customers, your warmest leads', tileColor:'var(--blue4)',
+    tiles:[ [allReps.length,'customers who have come back at least once'],
+            [fmt(tot),'combined lifetime value, already earned'],
+            avgJobs?[avgJobs,'visits from the average repeat customer']:null ],
+    framingClass:'ib-blue',
+    framing:'<b>Treat these as a priority over a new enquiry.</b> They have already chosen you once, so they are far more likely to book again than a cold lead.',
+    bullets:[
+      'Upsell to a maintenance plan where it fits, but you do not need weekly or monthly to keep them regular. Offer a set general visit each season, a half or full day, to keep the garden in shape and fill quieter weeks.',
+      'On the visit, agree the next one there and then, or flag roughly when you expect they will need you again, so the relationship does not go cold.',
+      'A booked repeat is worth more than time spent chasing new work, so reach out before the diary gets quiet.'
+    ]
+  });
   const search = `<input id="custSearchBox" class="search" placeholder="Search customers..." value="${custSearch}" oninput="onCustSearch(this.value, this.selectionStart)">`;
   const table = reps.length ? `<div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${reps.length} repeat customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, most valuable first</div>
     <div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th class="r">Jobs</th><th class="r">Lifetime</th><th>First</th><th>Last visit</th><th class="r">Days since</th><th>Note</th></tr></thead>
@@ -2303,26 +2322,53 @@ function renderOneOffHub(){
   ones.sort((a,b)=>(b.ltv!=null?b.ltv:b.r)-(a.ltv!=null?a.ltv:a.r));
   const tot = allOne.reduce((s,c)=>s+(c.ltv!=null?c.ltv:c.r),0);
   const avgVal = allOne.length ? Math.round(tot/allOne.length) : 0;
-  const tile = (v,l) => '<div style="flex:1;min-width:118px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;border-left:4px solid var(--accent)"><div class="serif" style="font-size:26px;font-weight:600;color:var(--ink);line-height:1">'+v+'</div><div style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.4">'+l+'</div></div>';
-  const head = `<div class="card" style="margin-bottom:16px"><div class="h">One-off customers, room to grow</div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">
-      ${tile(allOne.length,'customers with a single visit so far')}
-      ${tile(fmt(tot),'combined lifetime value')}
-      ${avgVal?tile(fmt(avgVal),'average value of a one-off visit'):''}
-    </div>
-    <div class="ib io" style="margin-top:0"><b>A single visit is fine, but most can become more.</b> Run a quick eye over each one, then a friendly follow-up. The questions worth asking yourself:</div>
-    <ul style="margin:14px 0 0;padding-left:18px;font-size:13px;color:#4a554c;line-height:1.75">
-      <li>Did they have a good experience, are you happy with the work, and did they get good value?</li>
-      <li>Would they use you again if you asked? Often the answer is yes and nobody asked.</li>
-      <li>Was there more you could have done to make it a bigger, higher-value visit?</li>
-      <li>Did you mention future work or a maintenance visit while you were there?</li>
-      <li>A follow-up can turn a one-off into a repeat, and a repeat into a regular, so it is worth the message.</li>
-    </ul></div>`;
+  const head = segHeader({
+    title:'One-off customers, room to grow', tileColor:'var(--accent)',
+    tiles:[ [allOne.length,'customers with a single visit so far'],
+            [fmt(tot),'combined lifetime value'],
+            avgVal?[fmt(avgVal),'average value of a one-off visit']:null ],
+    framingClass:'io',
+    framing:'<b>A single visit is fine, but most can become more.</b> Run a quick eye over each one, then a friendly follow-up. The questions worth asking yourself:',
+    bullets:[
+      'Did they have a good experience, are you happy with the work, and did they get good value?',
+      'Would they use you again if you asked? Often the answer is yes and nobody asked.',
+      'Was there more you could have done to make it a bigger, higher-value visit?',
+      'Did you mention future work or a maintenance visit while you were there?',
+      'A follow-up can turn a one-off into a repeat, and a repeat into a regular, so it is worth the message.'
+    ]
+  });
   const search = `<input id="custSearchBox" class="search" placeholder="Search customers..." value="${custSearch}" oninput="onCustSearch(this.value, this.selectionStart)">`;
   const table = ones.length ? `<div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${ones.length} one-off customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, most valuable first</div>
     <div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th class="r">Value</th><th>Service</th><th>Visit date</th><th class="r">Days since</th><th>Note</th></tr></thead>
     <tbody>${ones.map(c=>{const ds=dsOf(c);return '<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.ltv!=null?c.ltv:c.r)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.svc||'\u2014')+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+(ds!=null?ds:'\u2014')+'</td><td><input class="note-in" placeholder="Worth a follow-up? Mention maintenance?" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>';}).join('')}</tbody></table></div></div>`
     : '<div class="card"><div style="color:var(--muted);text-align:center;padding:40px">No one-off customers'+(custSearch?' match your search':' in this period')+'.</div></div>';
+  return head + search + table;
+}
+function renderPassedHub(){
+  const allP = allCustomers.filter(c=>c.s==='Passed to Adam');
+  let ps = allP.slice();
+  if (custSearch) ps = ps.filter(c=>c.n.toLowerCase().includes(custSearch.toLowerCase()));
+  ps.sort((a,b)=>(b.ltv!=null?b.ltv:b.r)-(a.ltv!=null?a.ltv:a.r));
+  const tot = allP.reduce((s,c)=>s+(c.ltv!=null?c.ltv:c.r),0);
+  const avg = allP.length ? Math.round(tot/allP.length) : 0;
+  const head = segHeader({
+    title:'Passed to Adam', tileColor:'#3949AB',
+    tiles:[ [allP.length,'customers handed to a franchisee'],
+            [fmt(tot),'lifetime value kept within My Tidy Garden'],
+            avg?[fmt(avg),'average lifetime per customer passed']:null ],
+    framingClass:'ib-blue',
+    framing:'<b>A smart way to keep value you would otherwise let go.</b> Handing on customers outside your best area, or ones you no longer have the time to manage, lets My Tidy Garden keep earning from them through the franchise while you hand over the day-to-day running.',
+    bullets:[
+      'They stay inside the network, so the relationship and the revenue are kept rather than lost to a competitor.',
+      'A good fit for customers on the edge of your patch, awkward to reach, or that no longer suit your round.',
+      'You stop managing the work but still benefit from a customer you built, through the franchise.'
+    ]
+  });
+  const search = '<input id="custSearchBox" class="search" placeholder="Search customers..." value="'+escAttr(custSearch)+'" oninput="onCustSearch(this.value, this.selectionStart)">';
+  const table = ps.length ? '<div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">'+ps.length+' customers'+(franchiseeView!=='All'?' \u00b7 '+franchiseeView:'')+', most valuable first</div>'
+    + '<div class="table-wrap"><table><thead><tr><th>Customer</th><th>Segment</th><th class="r">Jobs</th><th class="r">Revenue</th><th class="r">Avg</th><th class="c">Territory</th><th>First</th><th>Last</th></tr></thead>'
+    + '<tbody>'+ps.map(c=>'<tr><td style="font-weight:500">'+custName(c)+'</td><td>'+badge(c.s)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td class="r">'+fmt(c.a)+'</td><td class="c">'+badge(c.f)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')+'</tbody></table></div></div>'
+    : '<div class="card"><div style="color:var(--muted);text-align:center;padding:40px">No customers'+(custSearch?' match your search':' here yet')+'.</div></div>';
   return head + search + table;
 }
 function customerToolsRow(){
@@ -2772,13 +2818,12 @@ function renderContent() {
     else if (custSegFilter === 'One-Off') body = renderOneOffHub();
     else if (custSegFilter === 'Map') { body = renderMapTab(); isMap = true; }
     else if (custSegFilter === 'Scorecard') body = renderScorecardTab();
+    else if (custSegFilter === 'Passed to Adam') body = renderPassedHub();
     else {
       let filtered = allCustomers;
       if (custSegFilter !== 'All') filtered = filtered.filter(c => c.s === custSegFilter);
       if (custSearch) filtered = filtered.filter(c => c.n.toLowerCase().includes(custSearch.toLowerCase()));
-      const intro = custSegFilter==='All' ? (customerMixCard() + customerToolsRow())
-        : custSegFilter==='Passed to Adam' ? '<div class="ib ib-blue" style="margin-bottom:16px"><b>Handed to Adam.</b> These were your customers, now serviced by Adam as part of his round. They count as kept within My Tidy Garden.</div>'
-        : '';
+      const intro = custSegFilter==='All' ? (customerMixCard() + customerToolsRow()) : '';
       const searchBox = `<input id="custSearchBox" class="search" placeholder="Search customers..." value="${custSearch}" oninput="onCustSearch(this.value, this.selectionStart)">`;
       body = intro + searchBox +
         `<div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">Showing ${filtered.length} customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView+' only':''}</div>
