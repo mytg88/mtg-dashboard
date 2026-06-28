@@ -2230,6 +2230,64 @@ function renderChurnedHub(){
         '<div class="ib ig"><b>Total lifetime value lost:</b> '+fmt(chTotal)+'. '+chWho+'. A re-engagement push targeting the biggest names could win back recurring revenue.</div>'}
     </div>`;
 }
+function renderRepeatHub(){
+  const dsOf = c => { if(!c.last) return null; const t=c.last.getTime?c.last.getTime():new Date(c.last).getTime(); return isNaN(t)?null:Math.floor((Date.now()-t)/864e5); };
+  const allReps = allCustomers.filter(c=>c.s==='Repeat');
+  let reps = allReps.slice();
+  if (custSearch) reps = reps.filter(c=>c.n.toLowerCase().includes(custSearch.toLowerCase()));
+  reps.sort((a,b)=>(b.ltv!=null?b.ltv:b.r)-(a.ltv!=null?a.ltv:a.r));
+  const tot = allReps.reduce((s,c)=>s+(c.ltv!=null?c.ltv:c.r),0);
+  const avgJobs = allReps.length ? Math.round(allReps.reduce((s,c)=>s+c.j,0)/allReps.length) : 0;
+  const tile = (v,l) => '<div style="flex:1;min-width:118px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;border-left:4px solid var(--blue4)"><div class="serif" style="font-size:26px;font-weight:600;color:var(--ink);line-height:1">'+v+'</div><div style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.4">'+l+'</div></div>';
+  const head = `<div class="card" style="margin-bottom:16px"><div class="h">Repeat customers, your warmest leads</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">
+      ${tile(allReps.length,'customers who have come back at least once')}
+      ${tile(fmt(tot),'combined lifetime value, already earned')}
+      ${avgJobs?tile(avgJobs,'visits from the average repeat customer'):''}
+    </div>
+    <div class="ib ib-blue" style="margin-top:0"><b>Treat these as a priority over a new enquiry.</b> They have already chosen you once, so they are far more likely to book again than a cold lead.</div>
+    <ul style="margin:14px 0 0;padding-left:18px;font-size:13px;color:#4a554c;line-height:1.75">
+      <li>Upsell to a maintenance plan where it fits, but you do not need weekly or monthly to keep them regular. Offer a set general visit each season, a half or full day, to keep the garden in shape and fill quieter weeks.</li>
+      <li>On the visit, agree the next one there and then, or flag roughly when you expect they will need you again, so the relationship does not go cold.</li>
+      <li>A booked repeat is worth more than time spent chasing new work, so reach out before the diary gets quiet.</li>
+    </ul></div>`;
+  const search = `<input id="custSearchBox" class="search" placeholder="Search customers..." value="${custSearch}" oninput="onCustSearch(this.value, this.selectionStart)">`;
+  const table = reps.length ? `<div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${reps.length} repeat customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, most valuable first</div>
+    <div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th class="r">Jobs</th><th class="r">Lifetime</th><th>First</th><th>Last visit</th><th class="r">Days since</th><th>Note</th></tr></thead>
+    <tbody>${reps.map(c=>{const ds=dsOf(c);return '<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.ltv!=null?c.ltv:c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+(ds!=null?ds:'\u2014')+'</td><td><input class="note-in" placeholder="Plan the next visit, follow-up..." value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>';}).join('')}</tbody></table></div></div>`
+    : '<div class="card"><div style="color:var(--muted);text-align:center;padding:40px">No repeat customers'+(custSearch?' match your search':' in this period')+'.</div></div>';
+  return head + search + table;
+}
+function renderOneOffHub(){
+  const dsOf = c => { if(!c.last) return null; const t=c.last.getTime?c.last.getTime():new Date(c.last).getTime(); return isNaN(t)?null:Math.floor((Date.now()-t)/864e5); };
+  const allOne = allCustomers.filter(c=>c.s==='One-Off');
+  let ones = allOne.slice();
+  if (custSearch) ones = ones.filter(c=>c.n.toLowerCase().includes(custSearch.toLowerCase()));
+  ones.sort((a,b)=>(b.ltv!=null?b.ltv:b.r)-(a.ltv!=null?a.ltv:a.r));
+  const tot = allOne.reduce((s,c)=>s+(c.ltv!=null?c.ltv:c.r),0);
+  const avgVal = allOne.length ? Math.round(tot/allOne.length) : 0;
+  const tile = (v,l) => '<div style="flex:1;min-width:118px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;border-left:4px solid var(--accent)"><div class="serif" style="font-size:26px;font-weight:600;color:var(--ink);line-height:1">'+v+'</div><div style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.4">'+l+'</div></div>';
+  const head = `<div class="card" style="margin-bottom:16px"><div class="h">One-off customers, room to grow</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px">
+      ${tile(allOne.length,'customers with a single visit so far')}
+      ${tile(fmt(tot),'combined lifetime value')}
+      ${avgVal?tile(fmt(avgVal),'average value of a one-off visit'):''}
+    </div>
+    <div class="ib io" style="margin-top:0"><b>A single visit is fine, but most can become more.</b> Run a quick eye over each one, then a friendly follow-up. The questions worth asking yourself:</div>
+    <ul style="margin:14px 0 0;padding-left:18px;font-size:13px;color:#4a554c;line-height:1.75">
+      <li>Did they have a good experience, are you happy with the work, and did they get good value?</li>
+      <li>Would they use you again if you asked? Often the answer is yes and nobody asked.</li>
+      <li>Was there more you could have done to make it a bigger, higher-value visit?</li>
+      <li>Did you mention future work or a maintenance visit while you were there?</li>
+      <li>A follow-up can turn a one-off into a repeat, and a repeat into a regular, so it is worth the message.</li>
+    </ul></div>`;
+  const search = `<input id="custSearchBox" class="search" placeholder="Search customers..." value="${custSearch}" oninput="onCustSearch(this.value, this.selectionStart)">`;
+  const table = ones.length ? `<div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${ones.length} one-off customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, most valuable first</div>
+    <div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th class="r">Value</th><th>Service</th><th>Visit date</th><th class="r">Days since</th><th>Note</th></tr></thead>
+    <tbody>${ones.map(c=>{const ds=dsOf(c);return '<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.ltv!=null?c.ltv:c.r)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.svc||'\u2014')+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+(ds!=null?ds:'\u2014')+'</td><td><input class="note-in" placeholder="Worth a follow-up? Mention maintenance?" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>';}).join('')}</tbody></table></div></div>`
+    : '<div class="card"><div style="color:var(--muted);text-align:center;padding:40px">No one-off customers'+(custSearch?' match your search':' in this period')+'.</div></div>';
+  return head + search + table;
+}
 function renderContent() {
   const el = document.getElementById('content');
   const histJobs = monthlyData.reduce((s,m)=>s+(m.hist&&m.j?m.j:0),0); // invoiced jobs pre-Oct-2024, in current period
@@ -2661,13 +2719,14 @@ function renderContent() {
     let body;
     if (custSegFilter === 'Recurring') body = renderRecurringHub();
     else if (custSegFilter === 'Churned') body = renderChurnedHub();
+    else if (custSegFilter === 'Repeat') body = renderRepeatHub();
+    else if (custSegFilter === 'One-Off') body = renderOneOffHub();
     else {
       let filtered = allCustomers;
       if (custSegFilter !== 'All') filtered = filtered.filter(c => c.s === custSegFilter);
       if (custSearch) filtered = filtered.filter(c => c.n.toLowerCase().includes(custSearch.toLowerCase()));
       const intro = custSegFilter==='All' ? customerMixCard()
-        : custSegFilter==='Repeat' ? '<div class="ib ib-blue" style="margin-bottom:16px"><b>Nearly regulars.</b> A few visits but no set schedule. These are your best candidates to move onto a round, a quick word can turn them into recurring income.</div>'
-        : custSegFilter==='One-Off' ? '<div class="ib io" style="margin-bottom:16px"><b>One visit so far.</b> Worth a follow-up or an upsell, and the strongest source of new regulars if the first job went well.</div>'
+        : custSegFilter==='Passed to Adam' ? '<div class="ib ib-blue" style="margin-bottom:16px"><b>Handed to Adam.</b> These were your customers, now serviced by Adam as part of his round. They count as kept within My Tidy Garden.</div>'
         : '';
       const searchBox = `<input id="custSearchBox" class="search" placeholder="Search customers..." value="${custSearch}" oninput="onCustSearch(this.value, this.selectionStart)">`;
       body = intro + searchBox +
