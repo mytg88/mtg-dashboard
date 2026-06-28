@@ -105,18 +105,32 @@ tr:hover td{background:#FAFBF9}
 .note-in::placeholder{color:#b3bdb4}
 .disp-sel{font-family:'DM Sans',sans-serif;font-size:12px;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 7px;background:#fff;max-width:210px}
 .disp-sel.unset{color:var(--muted)}
-.sc-q{padding:15px 0;border-bottom:1px solid #F0F3EE}
+.sc-q{padding:14px 0;border-bottom:1px solid #EEF1EC}
 .sc-q:last-child{border-bottom:none}
-.sc-qh{font-size:14px;font-weight:600;color:var(--ink);margin-bottom:10px;line-height:1.4}
-.sc-w{font-size:10px;font-weight:700;color:var(--accent);background:#FBEEDD;padding:2px 8px;border-radius:20px;margin-left:8px;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
-.sc-opts{display:flex;gap:10px}
-.sc-opt{flex:1;text-align:left;background:#fff;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:border-color .12s,background .12s}
-.sc-opt:hover{border-color:#BCCBBE}
-.sc-opt.on{border-color:var(--green4);background:#F1F8F1;box-shadow:inset 0 0 0 1px var(--green4)}
-.sc-opt-l{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:5px}
-.sc-opt.on .sc-opt-l{color:var(--green6)}
-.sc-opt-d{display:block;font-size:12px;color:#46514A;line-height:1.4}
-.sc-grade{display:inline-flex;align-items:center;justify-content:center;min-width:48px;height:48px;padding:0 8px;border-radius:12px;color:#fff;font-family:'Fraunces',serif;font-size:21px;font-weight:600}
+.sc-qh{font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:11px;line-height:1.45;display:flex;align-items:flex-start;gap:9px;flex-wrap:wrap}
+.sc-w{font-size:9px;font-weight:800;color:var(--accent);background:#FBEEDD;padding:2px 8px;border-radius:20px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;margin-top:1px}
+.sc-opts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.sc-opt{position:relative;text-align:left;background:#fff;border:1.5px solid var(--line);border-radius:11px;padding:12px 13px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:transform .08s,border-color .12s,background .12s,box-shadow .12s}
+.sc-opt:hover{border-color:#C2CFBE;box-shadow:0 3px 10px rgba(20,40,30,.08);transform:translateY(-1px)}
+.sc-opt-l{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;padding:3px 10px;border-radius:20px;margin-bottom:9px}
+.sc-opt-d{display:block;font-size:12px;color:#56615a;line-height:1.42}
+.sc-opt[data-s="1"] .sc-opt-l{background:#FBE3E0;color:#C0392B}
+.sc-opt[data-s="2"] .sc-opt-l{background:#FAEFDC;color:#B26A00}
+.sc-opt[data-s="3"] .sc-opt-l{background:#E4F2E5;color:var(--green6)}
+.sc-opt[data-s="1"].on{border-color:#D98B82;background:#FDF2F0;box-shadow:inset 0 0 0 1px #D98B82}
+.sc-opt[data-s="2"].on{border-color:#E0B470;background:#FCF7EE;box-shadow:inset 0 0 0 1px #E0B470}
+.sc-opt[data-s="3"].on{border-color:var(--green4);background:#F1F8F1;box-shadow:inset 0 0 0 1px var(--green4)}
+.sc-opt.on .sc-opt-l{color:#fff}
+.sc-opt[data-s="1"].on .sc-opt-l{background:#C0392B}
+.sc-opt[data-s="2"].on .sc-opt-l{background:#C17D1A}
+.sc-opt[data-s="3"].on .sc-opt-l{background:var(--green6)}
+.sc-opt.on .sc-opt-d{color:var(--ink)}
+.sc-done{display:flex;align-items:center;gap:12px;padding:11px 14px;background:#F7F9F5;border:1px solid #E2E9DE;border-radius:11px}
+.sc-done-q{flex:1;font-size:12.5px;color:#56615a;line-height:1.4}
+.sc-done-pill{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;padding:4px 11px;border-radius:20px;color:#fff;white-space:nowrap}
+.sc-change{font-size:12px;font-weight:600;color:var(--green6);background:none;border:none;cursor:pointer;font-family:inherit;white-space:nowrap;padding:2px 4px}
+.sc-change:hover{text-decoration:underline}
+.sc-grade{display:inline-flex;align-items:center;justify-content:center;min-width:48px;height:48px;padding:0 10px;border-radius:12px;color:#fff;font-family:'Fraunces',serif;font-size:21px;font-weight:600;white-space:nowrap}
 .sc-track{height:10px;border-radius:6px;background:#EEF1ED;overflow:hidden;margin-top:14px}
 .sc-fill{height:10px;border-radius:6px;transition:width .2s,background .2s}
 .sc-bar{position:sticky;top:0;z-index:20;box-shadow:0 2px 12px rgba(20,40,30,.08)}
@@ -124,7 +138,7 @@ tr:hover td{background:#FAFBF9}
 .sc-pill-empty{background:#fff;color:var(--green6);border:1px solid #CFE0CB}
 .sc-pill-empty:hover{background:#E8F5E9}
 .sc-badge{display:inline-flex;align-items:center;justify-content:center;min-width:30px;padding:2px 8px;border-radius:20px;color:#fff;font-weight:700;font-size:11px}
-@media (max-width:680px){.sc-opts{flex-direction:column}}
+@media (max-width:680px){.sc-opts{grid-template-columns:1fr}}
 .df-bar{background:var(--card);border-bottom:1px solid var(--line);padding:14px 36px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .df-label{font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.6px;margin-right:4px}
 .df-btn{padding:6px 14px;border:1px solid #CFE0CB;background:var(--card);color:var(--green);border-radius:20px;font-size:12px;font-family:inherit;cursor:pointer;transition:all .15s}
@@ -1170,7 +1184,28 @@ function scorePill(c){
 }
 function openScorecard(name){ scoreEditFor=name; activeTab='Scorecard'; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 function closeScorecard(){ scoreEditFor=null; renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
+// The running order for scoring: every active regular, biggest first. Used by next/previous and "start scoring".
+function scoreQueue(){ return allCustomers.filter(c=>c.s==='Recurring').sort((a,b)=>b.r-a.r).map(c=>c.n); }
+function scoreStep(dir){ if(!scoreEditFor) return; const q=scoreQueue(), i=q.findIndex(n=>normName(n)===normName(scoreEditFor)); if(i===-1) return; const j=i+dir; if(j<0||j>=q.length) return; openScorecard(q[j]); }
+// Jump straight into scoring: the first regular without a score, else the first one.
+function startScoring(){ const q=scoreQueue(); if(!q.length) return; const next=q.find(n=>{ const c=allCustomers.find(x=>normName(x.n)===normName(n)); return !hasScore(c); }); openScorecard(next||q[0]); }
 // Pick a score for one question. Surgical DOM update so the long form does not re-render or jump.
+// Grade shown in the running bar: neutral dash until something is answered, so 0% never reads as a red fail.
+function scoreGradeDisplay(r){ return r.ans ? { t:r.grade, c:scoreGradeColor(r.grade) } : { t:'\u2013', c:'#AEB8AC' }; }
+const SCORE_LABELS = ['Poor','Okay','Good'], SCORE_LAB_COL = ['#C0392B','#C17D1A','var(--green6)'];
+// Inner markup for one question: a tidy answered summary, or the three colour-coded options.
+function scoreQInner(qid, expand){
+  const q = SCORE_QUESTIONS.find(x=>x.id===qid);
+  const k = normName(scoreEditFor), sc = scorecards[k] ? scorecards[k].scores : {}, cur = sc[qid];
+  if(cur && !expand){
+    return '<div class="sc-done"><span class="sc-done-q">'+q.q+'</span><span class="sc-done-pill" style="background:'+SCORE_LAB_COL[cur-1]+'">'+SCORE_LABELS[cur-1]+'</span><button class="sc-change" onclick="changeScore('+qid+')">Change</button></div>';
+  }
+  let h = '<div class="sc-qh">'+q.q+(q.m>1?'<span class="sc-w">counts double</span>':'')+'</div><div class="sc-opts">';
+  [1,2,3].forEach(sv=>{ h+='<button class="sc-opt'+(cur===sv?' on':'')+'" data-s="'+sv+'" onclick="pickScore('+qid+','+sv+')"><span class="sc-opt-l">'+SCORE_LABELS[sv-1]+'</span><span class="sc-opt-d">'+escAttr(q.o[sv-1])+'</span></button>'; });
+  return h + '</div>';
+}
+function changeScore(qid){ const el=document.getElementById('q'+qid); if(el) el.innerHTML = scoreQInner(qid, true); }
+// Pick a score: collapse that question to a clean summary, no full re-render so the page never jumps.
 function pickScore(qid, score){
   if(!scoreEditFor) return;
   const k = normName(scoreEditFor), who = (auth && auth.name) ? auth.name : 'Unknown';
@@ -1179,17 +1214,17 @@ function pickScore(qid, score){
   scorecards[k].by = who;
   allCustomers.forEach(c => { if(normName(c.n)===k) c.score = scorecards[k]; });
   const wrap = document.getElementById('q'+qid);
-  if(wrap){ wrap.querySelectorAll('.sc-opt').forEach(el=>el.classList.remove('on')); const pick=wrap.querySelector('.sc-opt[data-s="'+score+'"]'); if(pick) pick.classList.add('on'); }
+  if(wrap) wrap.innerHTML = scoreQInner(qid, false);
   updateScoreBar();
   saveScorecardNow(scoreEditFor);
 }
 function updateScoreBar(){
   if(!scoreEditFor) return;
   const k = normName(scoreEditFor), sc = scorecards[k] ? scorecards[k].scores : {};
-  const r = scoreCompute(sc), col = scoreGradeColor(r.grade);
-  const fill = document.getElementById('scBarFill'); if(fill){ fill.style.width = r.pct+'%'; fill.style.background = col; }
+  const r = scoreCompute(sc), gd = scoreGradeDisplay(r);
+  const fill = document.getElementById('scBarFill'); if(fill){ fill.style.width = r.pct+'%'; fill.style.background = r.ans ? scoreGradeColor(r.grade) : '#CBD5C8'; }
   const pctEl = document.getElementById('scBarPct'); if(pctEl) pctEl.textContent = r.pct+'%';
-  const gEl = document.getElementById('scBarGrade'); if(gEl){ gEl.textContent = r.grade; gEl.style.background = col; }
+  const gEl = document.getElementById('scBarGrade'); if(gEl){ gEl.textContent = gd.t; gEl.style.background = gd.c; }
   const cEl = document.getElementById('scBarCount'); if(cEl) cEl.textContent = r.ans+' of '+r.total+' answered';
 }
 function _scoreOk(d){ const m=document.getElementById('scSaveMsg'); if(m){ if(!d||d.error){ m.textContent='Could not save, check connection.'; m.style.color='var(--red)'; } else { m.textContent='Saved.'; m.style.color='var(--muted)'; } } }
@@ -1207,26 +1242,27 @@ function scorecardFormHTML(name){
   let body='';
   SCORE_THEMES.forEach(theme=>{
     const qs=SCORE_QUESTIONS.filter(q=>q.t===theme);
-    body+='<div class="card" style="margin-bottom:16px"><div class="h" style="margin-bottom:4px">'+theme+'</div>';
-    qs.forEach(q=>{
-      const cur=sc[q.id];
-      body+='<div class="sc-q" id="q'+q.id+'"><div class="sc-qh">'+q.q+(q.m>1?'<span class="sc-w">counts double</span>':'')+'</div><div class="sc-opts">';
-      [1,2,3].forEach(sv=>{ const lab=['Poor','Okay','Good'][sv-1];
-        body+='<button class="sc-opt'+(cur===sv?' on':'')+'" data-s="'+sv+'" onclick="pickScore('+q.id+','+sv+')"><span class="sc-opt-l">'+lab+'</span><span class="sc-opt-d">'+escAttr(q.o[sv-1])+'</span></button>'; });
-      body+='</div></div>';
-    });
+    const done=qs.filter(q=>sc[q.id]).length;
+    body+='<div class="card" style="margin-bottom:16px"><div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px"><div class="h" style="margin-bottom:0">'+theme+'</div><span style="font-size:11px;color:var(--muted)">'+done+' of '+qs.length+'</span></div>';
+    qs.forEach(q=>{ body+='<div class="sc-q" id="q'+q.id+'">'+scoreQInner(q.id,false)+'</div>'; });
     body+='</div>';
   });
-  const col=scoreGradeColor(r.grade);
+  const gd=scoreGradeDisplay(r);
   const meta=(who||at)?'<div style="font-size:11px;color:var(--muted);margin-top:3px">last scored'+(who?' by '+escAttr(who):'')+(at?' \u00b7 '+escAttr(at):'')+'</div>':'';
-  return '<div style="margin-bottom:14px"><button class="df-btn" onclick="closeScorecard()">\u2190 All scorecards</button></div>'
+  // running order so you can move through every regular without coming back to the list
+  const q=scoreQueue(), idx=q.findIndex(n=>normName(n)===k), total=q.length, pos=idx>=0?idx+1:1;
+  const prevBtn = idx>0 ? '<button class="df-btn" onclick="scoreStep(-1)">\u2190 Previous</button>' : '<button class="df-btn" disabled style="opacity:.4;cursor:default">\u2190 Previous</button>';
+  const nextBtn = (idx>=0&&idx<total-1) ? '<button class="df-btn active" onclick="scoreStep(1)">Next \u2192</button>' : '<button class="df-btn active" onclick="closeScorecard()">Done \u2192</button>';
+  const counter = total ? '<span style="font-size:12px;color:var(--muted);white-space:nowrap">'+pos+' of '+total+'</span>' : '';
+  const navRow = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><button class="df-btn" onclick="closeScorecard()">\u2190 All scorecards</button><div style="display:flex;align-items:center;gap:10px">'+prevBtn+counter+nextBtn+'</div></div>';
+  return '<div style="margin-bottom:14px">'+navRow+'</div>'
     + '<div class="card sc-bar" style="margin-bottom:18px"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px">'
     +   '<div><div style="font-family:\'Fraunces\',serif;font-size:20px;font-weight:600;color:var(--ink)">'+escAttr(cust?cust.n:name)+'</div><div style="font-size:12px;color:var(--muted)" id="scBarCount">'+r.ans+' of '+r.total+' answered</div>'+meta+'</div>'
-    +   '<div style="display:flex;align-items:center;gap:14px"><div style="text-align:right"><div style="font-family:\'Fraunces\',serif;font-size:30px;font-weight:600;line-height:1" id="scBarPct">'+r.pct+'%</div><div style="font-size:11px;color:var(--muted)">'+(av?'~'+fmt(av)+'/yr est.':'')+'</div></div><span class="sc-grade" id="scBarGrade" style="background:'+col+'">'+r.grade+'</span></div>'
-    + '</div><div class="sc-track"><div class="sc-fill" id="scBarFill" style="width:'+r.pct+'%;background:'+col+'"></div></div>'
+    +   '<div style="display:flex;align-items:center;gap:14px"><div style="text-align:right"><div style="font-family:\'Fraunces\',serif;font-size:30px;font-weight:600;line-height:1" id="scBarPct">'+r.pct+'%</div><div style="font-size:11px;color:var(--muted)">'+(av?'~'+fmt(av)+'/yr est.':'')+'</div></div><span class="sc-grade" id="scBarGrade" style="background:'+gd.c+'">'+gd.t+'</span></div>'
+    + '</div><div class="sc-track"><div class="sc-fill" id="scBarFill" style="width:'+r.pct+'%;background:'+(r.ans?scoreGradeColor(r.grade):'#CBD5C8')+'"></div></div>'
     + '<div style="font-size:11px;color:var(--muted);margin-top:8px" id="scSaveMsg">Each answer saves automatically.</div></div>'
     + body
-    + '<div style="margin:6px 0 30px"><button class="df-btn" onclick="closeScorecard()">\u2190 Back to all scorecards</button></div>';
+    + '<div style="margin:6px 0 30px">'+navRow+'</div>';
 }
 // Value-against-quality scatter. scored = [{c, r, av}].
 function scorecardQuadrantSVG(scored){
@@ -1271,7 +1307,9 @@ function renderScorecardTab(){
   const scored=regs.filter(hasScore).map(c=>({c, r:scoreCompute(c.score.scores), av:annualValue(c)})).sort((a,b)=>a.r.pct-b.r.pct);
   const unscored=regs.filter(c=>!hasScore(c)).sort((a,b)=>b.r-a.r);
   const arg=n=>JSON.stringify(n).replace(/"/g,'&quot;');
-  const intro='<div class="card" style="margin-bottom:20px"><div class="h">Regular customer scorecard</div><div style="font-size:13px;color:var(--muted);line-height:1.6">Score each regular against 20 questions covering money, reliability, the relationship, access and the work itself. The seven most important questions count double. You get a percentage and a grade (A from 80, B from 65, C from 50, anything lower flagged for review), plus a map of who is worth keeping and who costs more than they return. Scores save as you go.</div></div>';
+  const startLabel = unscored.length ? ('Start scoring \u00b7 '+unscored.length+' to go') : 'Step through to review';
+  const startBtn = regs.length ? '<div style="margin-top:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap"><button class="df-btn active" style="font-size:13px;padding:9px 18px" onclick="startScoring()">'+startLabel+' \u2192</button><span style="font-size:12px;color:var(--muted)">'+scored.length+' of '+regs.length+' scored</span></div>' : '';
+  const intro='<div class="card" style="margin-bottom:20px"><div class="h">Regular customer scorecard</div><div style="font-size:13px;color:var(--muted);line-height:1.6">Every active regular is already loaded, so there is nothing to set up. Score each one against 20 questions covering money, reliability, the relationship, access and the work itself. The seven most important questions count double. You get a percentage and a grade (A from 80, B from 65, C from 50, anything lower flagged for review), plus a map of who is worth keeping and who costs more than they return. Scores save as you go, and you can move straight on to the next customer.</div>'+startBtn+'</div>';
   const quad='<div class="card" style="margin-bottom:20px"><div class="h">Value against quality</div>'
     + (scored.length?scorecardQuadrantSVG(scored)+'<div style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.5">Each dot is a scored regular. Further right is a stronger relationship, higher up is more annual value. Top-right are your anchors; top-left earn their keep on value but need fixing or repricing; bottom-left cost more than they return.</div>':'<div style="color:var(--muted);text-align:center;padding:30px">Score a few regulars to see the value and quality map.</div>')
     + '</div>';
@@ -1294,8 +1332,8 @@ function renderScorecardTab(){
   }
   let todo='';
   if(unscored.length){
-    todo='<div class="card" style="margin-bottom:20px"><div class="h">Not yet scored ('+unscored.length+')</div><div style="display:flex;flex-wrap:wrap;gap:8px">'
-      + unscored.map(c=>'<button class="sc-pill sc-pill-empty" style="font-weight:500" onclick="openScorecard('+arg(c.n)+')">'+escAttr(c.n)+' +</button>').join('')
+    todo='<div class="card" style="margin-bottom:20px"><div class="h">Still to score ('+unscored.length+')</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px">Every active regular is already here, biggest first. Tap a name to score it, or use Start scoring above to work through them in order.</div><div style="display:flex;flex-wrap:wrap;gap:8px">'
+      + unscored.map(c=>'<button class="sc-pill sc-pill-empty" style="font-weight:500" onclick="openScorecard('+arg(c.n)+')">'+escAttr(c.n)+' \u203a</button>').join('')
       + '</div></div>';
   }
   return intro + quad + weakest + table + todo;
