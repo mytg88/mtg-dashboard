@@ -98,7 +98,13 @@ tr:hover td{background:#FAFBF9}
 .filter-btn{padding:6px 14px;border:1px solid var(--line);border-radius:20px;background:var(--card);cursor:pointer;font-size:12px;font-family:inherit;transition:all .15s}
 .filter-btn.active{background:var(--green);color:#fff;border-color:var(--green)}
 .filter-btn:hover{border-color:var(--green)}
-.table-wrap{max-height:620px;overflow-y:auto;border-radius:10px;border:1px solid var(--line)}
+.table-wrap{max-height:620px;overflow:auto;border-radius:10px;border:1px solid var(--line)}
+.note-in{width:100%;min-width:130px;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--ink);border:1px solid transparent;background:transparent;border-radius:6px;padding:4px 7px;box-sizing:border-box}
+.note-in:hover{border-color:var(--line)}
+.note-in:focus{border-color:var(--green4);background:#fff;outline:none}
+.note-in::placeholder{color:#b3bdb4}
+.disp-sel{font-family:'DM Sans',sans-serif;font-size:12px;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 7px;background:#fff;max-width:210px}
+.disp-sel.unset{color:var(--muted)}
 .df-bar{background:var(--card);border-bottom:1px solid var(--line);padding:14px 36px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .df-label{font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.6px;margin-right:4px}
 .df-btn{padding:6px 14px;border:1px solid #CFE0CB;background:var(--card);color:var(--green);border-radius:20px;font-size:12px;font-family:inherit;cursor:pointer;transition:all .15s}
@@ -272,7 +278,7 @@ const API_URL   = 'https://script.google.com/macros/s/AKfycbxN137wCPVA5IVaHseSxC
 let auth = null; // {user, pass, role, name} once logged in. No password is stored in this file.
 // ==============================================================
 
-let rawJobs=[], customers=[], rawLeads=[], rawRecurring=[], numToCust={}, manualNames={};
+let rawJobs=[], customers=[], rawLeads=[], rawRecurring=[], numToCust={}, manualNames={}, customerNotes={};
 let jobsPeriod=[], jobs=[], prevJobs=[], allCustomers=[], churnedList=[], monthlyData=[], serviceData=[], missingPriceData=[];
 let leadStats=null, recurringStats=null, prevTotals=null;
 let rawCalls=[], callsStats=null, callsFilter='open', callsWho='', callSearch='', callType='all';
@@ -557,6 +563,14 @@ function handleData(data) {
     if (num && nm) manualNames[num] = { name: nm, by: String(ct['Updated By'] || '').trim() };
   });
 
+  // Customer churn reasons + free notes, keyed by normalised customer name.
+  customerNotes = {};
+  (data.customerNotes || []).forEach(cn => {
+    const nm = normName(cn.Customer || cn.customer);
+    if (!nm) return;
+    customerNotes[nm] = { disposition: String(cn.Disposition || '').trim(), note: String(cn.Note || ''), by: String(cn['Updated By'] || '').trim() };
+  });
+
   rawJobs.forEach(j => {
     j._amount = parseAmount(j['Amount (£)']);
     j._date = parseDate(j['Date Completed']);
@@ -797,6 +811,7 @@ function processData() {
     if (drop.size) allCustomers = allCustomers.filter(c => !drop.has(c));
   }
   allCustomers.forEach(c => { c.inherited = TRANSFERRED_TO_ADAM.has(norm(c.n)); }); // Adam's inherited book, for the tag
+  allCustomers.forEach(c => { const cn = customerNotes[norm(c.n)]; c.disp = cn ? cn.disposition : ''; c.note = cn ? cn.note : ''; }); // saved churn reason + note
   churnedList = allCustomers.filter(c => c.s === 'Churned').sort((a,b) => b.r - a.r);
 
   // Number -> customer map for the Calls tab. Phone lives on the source rows (leads/recurring/jobs)
@@ -976,6 +991,45 @@ function apiCall(extra, onOk, onErr) {
   let url = API_URL + (API_URL.indexOf('?')===-1?'?':'&') + 'user=' + encodeURIComponent(auth.user) + '&pass=' + encodeURIComponent(auth.pass) + '&callback=' + cb;
   for (const k in extra) url += '&' + k + '=' + encodeURIComponent(extra[k]);
   s.src = url; document.head.appendChild(s);
+}
+// ---------- customer notes + churn reasons ----------
+function normName(s){ return String(s==null?'':s).trim().toLowerCase(); }
+function escAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+// Churn reasons, grouped so the reason type is obvious. Values must match the backend list exactly.
+const DISP_GROUPS = [
+  ['Out of your hands', ['Moved or sold the property','Bereavement or ill health','No longer needs it (DIY or family)','Seasonal pause, expected back']],
+  ['Lost to a problem', ['Unhappy with the work or service','Price','Went to another gardener']],
+  ['You ended it', ['We ended it: payment problems','We ended it: garden or access','We ended it: out of area']],
+  ['Moved within MTG', ['Transferred to another franchisee']],
+  ['', ['Other']]
+];
+function dispOptions(cur){
+  let o = '<option value=""'+(!cur?' selected':'')+'>Set reason\u2026</option>';
+  DISP_GROUPS.forEach(g=>{
+    const opts = g[1].map(v=>'<option value="'+escAttr(v)+'"'+(v===cur?' selected':'')+'>'+v+'</option>').join('');
+    o += g[0] ? '<optgroup label="'+g[0]+'">'+opts+'</optgroup>' : opts;
+  });
+  return o;
+}
+function _custNoteOk(d){ if(!d || d.error) alert('Could not save that. Hit Refresh and check it saved.'); }
+function _custNoteErr(){ alert('Could not reach the app to save. Hit Refresh and try again.'); }
+// Set or clear a customer's churn reason. Keeps any existing note. Re-renders so the row updates.
+function setCustomerDisp(name, disp){
+  const who = (auth && auth.name) ? auth.name : 'Unknown';
+  const k = normName(name), cur = customerNotes[k] || {}, note = cur.note || '';
+  if(!disp && !note) delete customerNotes[k]; else customerNotes[k] = { disposition:disp, note:note, by:who };
+  allCustomers.forEach(c => { if(normName(c.n)===k){ c.disp = disp; c.note = note; } });
+  renderContent();
+  apiCall({ action:'saveCustomerNote', name:name, disposition:disp, note:note, by:who }, _custNoteOk, _custNoteErr);
+}
+// Save a customer's free note (on blur). Keeps any existing reason. No re-render, so the caret stays put.
+function saveCustomerNoteText(name, note){
+  const who = (auth && auth.name) ? auth.name : 'Unknown';
+  const k = normName(name), cur = customerNotes[k] || {}, disp = cur.disposition || '';
+  note = String(note||'');
+  if(!disp && !note) delete customerNotes[k]; else customerNotes[k] = { disposition:disp, note:note, by:who };
+  allCustomers.forEach(c => { if(normName(c.n)===k){ c.disp = disp; c.note = note; } });
+  apiCall({ action:'saveCustomerNote', name:name, disposition:disp, note:note, by:who }, _custNoteOk, _custNoteErr);
 }
 function setCallsWho(v) { callsWho = v; try { localStorage.setItem('mtg_calls_who', v); } catch(_) {} }
 function updateCallStatus(key, status) {
@@ -1314,7 +1368,7 @@ function stackedServiceSVG(top, colorOf) {
   return '<div class="svg-wrap"><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">' + grid + bars + xl + '</svg></div>' + legend;
 }
 
-const tabList = ["Overview","Leads","Calls","Revenue","Customers","Recurring","Churned","Missing Prices"];
+const tabList = ["Overview","Leads","Calls","Revenue","Customers","Recurring","Missing Prices"];
 function renderTabs() {
   document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+t+'</button>').join('');
 }
@@ -1843,6 +1897,19 @@ function renderContent() {
           <li>A stronger business. Recurring income holds up in a downturn and is worth far more if you ever sell or take on staff.</li>
         </ul>
       </div>` : '<div class="card"><div class="h">Why recurring is worth most</div><div style="color:var(--muted);font-size:13px">No recurring customers in this view yet.</div></div>';
+    // Churned regulars, folded in from the old Churned tab (the other side of the recurring book).
+    const chTotal = churnedList.reduce((s,c)=>s+c.r,0);
+    const chMike = churnedList.filter(c=>c.f==='Mike').length, chAdam = churnedList.filter(c=>c.f==='Adam').length;
+    const chWho = franchiseeView==='All' ? (chMike+' on Mike\u2019s patch, '+chAdam+' on Adam\u2019s') : ('all on '+franchiseeView+'\u2019s patch');
+    const churnedSection = `<div class="card" style="margin-bottom:24px">
+        <div class="h" style="color:var(--red)">Churned regulars</div>
+        <div class="ib ia" style="margin-top:0;margin-bottom:18px"><b>Why churn matters:</b> losing the odd customer is normal, a bit of two steps forward and one back. People move, circumstances change and some gardens come to a natural end, so this will never be zero. What matters is the rate. A slow trickle is healthy; a sudden jump usually means something to put right, whether that is work slipping below standard, slow or unclear communication, or visits being missed or rushed. Treat a rising number as an early warning, not just a tally.</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:12px">${churnedList.length} churned${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}. Was recurring or had 5+ jobs, then no visit for 90+ days.</div>
+        ${churnedList.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No churned customers in this period.</div>':
+          '<div class="table-wrap"><table><thead><tr>'+sortTh('Churned','n','Customer')+'<th class="c">Owner</th>'+sortTh('Churned','j','Jobs','r')+sortTh('Churned','r','Lifetime','r')+sortTh('Churned','first','First','r')+sortTh('Churned','last','Last visit','r')+sortTh('Churned','daysSince','Days','r')+'<th>Reason &amp; note</th></tr></thead>'+
+          '<tbody>'+sortRows(churnedList,churnSort.k,churnSort.d).map(c=>'<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--red)">'+fmt(c.r)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td class="r">'+c.daysSince+'</td><td><select class="disp-sel'+(c.disp?'':' unset')+'" onchange="setCustomerDisp(this.closest(\'tr\').dataset.cust, this.value)">'+dispOptions(c.disp)+'</select><input class="note-in" style="margin-top:5px" placeholder="Add a note" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>').join('')+'</tbody></table></div>'+
+          '<div class="ib ig"><b>Total lifetime value lost:</b> '+fmt(chTotal)+'. '+chWho+'. A re-engagement push targeting the biggest names could win back recurring revenue.</div>'}
+      </div>`;
     el.innerHTML = `
       <div class="grid grid-4">
         <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Active Recurring</div><div class="kpi-v">${recCusts.length}</div><div class="kpi-s">customers on a schedule</div></div>
@@ -1862,23 +1929,12 @@ function renderContent() {
       </div>
 
       <div class="card" style="margin-bottom:24px"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${recCusts.length} active recurring customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, from job history</div>
-        <div class="table-wrap"><table><thead><tr>${sortTh('Recurring','n','Customer')}<th class="c">Owner</th><th>Frequency</th>${sortTh('Recurring','visit','Avg/visit','r')}${sortTh('Recurring','j','Jobs','r')}${sortTh('Recurring','r','Lifetime','r')}${sortTh('Recurring','last','Last visit')}</tr></thead>
-        <tbody>${sortRows(recCusts,recSort.k,recSort.d).map(c=>'<tr><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.freq||'\u2014')+'</td><td class="r">'+(c.visit>0?fmt(c.visit):'\u2014')+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div>
+        <div class="table-wrap"><table><thead><tr>${sortTh('Recurring','n','Customer')}<th class="c">Owner</th><th>Frequency</th>${sortTh('Recurring','visit','Avg/visit','r')}${sortTh('Recurring','j','Jobs','r')}${sortTh('Recurring','r','Lifetime','r')}${sortTh('Recurring','first','First')}${sortTh('Recurring','last','Last visit')}<th>Note</th></tr></thead>
+        <tbody>${sortRows(recCusts,recSort.k,recSort.d).map(c=>'<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.freq||'\u2014')+'</td><td class="r">'+(c.visit>0?fmt(c.visit):'\u2014')+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td><input class="note-in" placeholder="Add a note" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>').join('')}</tbody></table></div>
       </div>
+      ${churnedSection}
       ${moves.length ? '<div class="card"><div class="h">Recent schedule changes (live app log)</div><div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th>Service</th><th>Frequency</th><th class="r">Value</th><th class="c">Status</th><th>Created</th><th>Cancelled</th></tr></thead><tbody>'+moves.map(x=>'<tr><td style="font-weight:500">'+(x._cust||'\u2014')+'</td><td class="c">'+(x._franchisee?badge(x._franchisee):'\u2014')+'</td><td style="font-size:12px">'+(x._svc||'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+(x._freq||'\u2014')+'</td><td class="r">'+(x._value>0?fmt(x._value):'\u2014')+'</td><td class="c">'+statusBadge(x._status)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(x._created)+'</td><td style="color:var(--muted);font-size:12px">'+(x._canceled?fmtDate(x._canceled):'\u2014')+'</td></tr>').join('')+'</tbody></table></div></div>' : ''}
     `;
-  }
-
-  else if (activeTab==='Churned') {
-    const total = churnedList.reduce((s,c)=>s+c.r,0);
-    const adamCh = churnedList.filter(c=>c.f==='Adam').length, mikeCh = churnedList.filter(c=>c.f==='Mike').length;
-    el.innerHTML = `<div class="card"><div class="h" style="color:var(--red)">All ${churnedList.length} churned customers</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Was recurring or 5+ jobs, no visit in 90+ days.</div>
-      ${churnedList.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No churned customers in this period.</div>':
-      '<div class="table-wrap"><table><thead><tr>'+sortTh('Churned','n','Customer')+sortTh('Churned','j','Jobs','r')+sortTh('Churned','r','Lifetime','r')+sortTh('Churned','last','Last Visit','r')+sortTh('Churned','daysSince','Days','r')+'<th class="c">Territory</th><th>Services</th></tr></thead>'+
-      '<tbody>'+sortRows(churnedList,churnSort.k,churnSort.d).map(c=>'<tr><td style="font-weight:500">'+custName(c)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--red)">'+fmt(c.r)+'</td><td class="r" style="color:var(--muted)">'+fmtDate(c.last)+'</td><td class="r">'+c.daysSince+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+c.svc+'</td></tr>').join('')+'</tbody></table></div>'+
-      '<div class="ib ia"><b>Total lifetime value:</b> '+fmt(total)+'. '+adamCh+' on Adam\'s patch, '+mikeCh+' on Mike\'s. A re-engagement push targeting the top 10 could recover recurring revenue.</div>'}
-    </div>`;
   }
 
   else if (activeTab==='Missing Prices') {
