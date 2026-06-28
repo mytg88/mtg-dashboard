@@ -1044,6 +1044,53 @@ function dispOptions(cur){
   });
   return o;
 }
+// Each reason mapped to a sentiment bucket and a colour. Reds for problems you could
+// influence, soft tones for your own calls, gentle greens for benign exits.
+const DISP_META = {
+  'Unhappy with the work or service':   {b:'problem',  c:'#B71C1C'},
+  'Went to another gardener':           {b:'problem',  c:'#D84315'},
+  'Price':                              {b:'problem',  c:'#EF6C00'},
+  'We ended it: payment problems':      {b:'ended',    c:'#4E7D74'},
+  'We ended it: garden or access':      {b:'ended',    c:'#6E9E92'},
+  'We ended it: out of area':           {b:'ended',    c:'#8FB3AB'},
+  'Moved or sold the property':         {b:'external', c:'#689F38'},
+  'Bereavement or ill health':          {b:'external', c:'#7CB342'},
+  'No longer needs it (DIY or family)': {b:'external', c:'#9CCC65'},
+  'Seasonal pause, expected back':      {b:'external', c:'#C5E1A5'},
+  'Transferred to another franchisee':  {b:'within',   c:'#1E88E5'},
+  'Other':                              {b:'other',    c:'#90A4AE'}
+};
+const DISP_BUCKETS = [
+  ['problem','A problem to put right','var(--red)'],
+  ['ended','You ended it','#5F8F84'],
+  ['external','Out of your hands','#7CB342'],
+  ['within','Kept within MTG','var(--blue)'],
+  ['other','Other','#90A4AE']
+];
+// "Why they left" breakdown for a churned list. Returns a card, or a gentle nudge if nothing is set yet.
+function churnReasonBreakdownHTML(list){
+  const withReason = list.filter(c=>c.disp);
+  const unset = list.length - withReason.length;
+  if(!withReason.length) return '<div class="ib ig" style="margin-top:0;margin-bottom:18px;color:var(--muted)">Set a reason against your churned customers and a colour-coded breakdown of why they left will appear here.</div>';
+  const n = withReason.length, counts = {}, bucketCounts = {};
+  withReason.forEach(c=>{ counts[c.disp]=(counts[c.disp]||0)+1; const b=DISP_META[c.disp]?DISP_META[c.disp].b:'other'; bucketCounts[b]=(bucketCounts[b]||0)+1; });
+  const order = [];
+  DISP_BUCKETS.forEach(bk=>{ Object.keys(counts).filter(r=>(DISP_META[r]?DISP_META[r].b:'other')===bk[0]).sort((a,b)=>counts[b]-counts[a]).forEach(r=>order.push(r)); });
+  const seg = order.map(r=>{ const pct=counts[r]/n*100, col=DISP_META[r]?DISP_META[r].c:'#90A4AE'; return '<div title="'+escAttr(r+': '+counts[r]+' ('+Math.round(pct)+'%)')+'" style="width:'+pct+'%;background:'+col+'"></div>'; }).join('');
+  const chips = DISP_BUCKETS.filter(bk=>bucketCounts[bk[0]]).map(bk=>{ const pct=Math.round(bucketCounts[bk[0]]/n*100); return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink)"><span style="width:11px;height:11px;border-radius:3px;background:'+bk[2]+'"></span>'+pct+'% '+bk[1]+'</span>'; }).join('<span style="color:var(--line)">\u00b7</span>');
+  const rows = order.map(r=>{ const pct=Math.round(counts[r]/n*100), col=DISP_META[r]?DISP_META[r].c:'#90A4AE'; return '<div style="display:flex;align-items:center;gap:9px;font-size:12.5px"><span style="width:11px;height:11px;border-radius:3px;background:'+col+';flex:none"></span><span style="flex:1;color:var(--ink)">'+r+'</span><span style="color:var(--muted)">'+counts[r]+'</span><span style="width:40px;text-align:right;font-weight:700;color:var(--ink)">'+pct+'%</span></div>'; }).join('');
+  const problemPct = Math.round((bucketCounts['problem']||0)/n*100);
+  const insight = problemPct>0 ? '<b>'+problemPct+'%</b> were a problem you could influence, the part worth learning from. ' : 'None of these came down to the service itself, which is a good sign. ';
+  const unsetNote = unset>0 ? '<span style="color:var(--muted)">'+unset+' still '+(unset===1?'needs':'need')+' a reason.</span>' : '';
+  return '<div class="card" style="margin-bottom:18px;background:#FCFDFB">'
+    + '<div style="font-family:\'Fraunces\',serif;font-weight:600;font-size:15px;margin-bottom:3px">Why they left</div>'
+    + '<div style="font-size:12px;color:var(--muted);margin-bottom:14px">Across '+n+' churned customer'+(n===1?'':'s')+' with a reason set. Softer colours mean it was out of your hands or your own call; reds are problems to put right.</div>'
+    + '<div style="display:flex;height:22px;border-radius:6px;overflow:hidden;margin-bottom:12px">'+seg+'</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px">'+chips+'</div>'
+    + '<div style="display:flex;flex-direction:column;gap:8px;max-width:560px">'+rows+'</div>'
+    + '<div style="font-size:12px;color:var(--muted);margin-top:14px;line-height:1.5">'+insight+unsetNote+'</div>'
+    + '</div>';
+}
 function _custNoteOk(d){ if(!d || d.error) alert('Could not save that. Hit Refresh and check it saved.'); }
 function _custNoteErr(){ alert('Could not reach the app to save. Hit Refresh and try again.'); }
 // Set or clear a customer's churn reason. Keeps any existing note. Re-renders so the row updates.
@@ -2126,8 +2173,9 @@ function renderContent() {
         <div class="h" style="color:var(--red)">Churned regulars</div>
         <div class="ib ia" style="margin-top:0;margin-bottom:18px"><b>Why churn matters:</b> losing the odd customer is normal, a bit of two steps forward and one back. People move, circumstances change and some gardens come to a natural end, so this will never be zero. What matters is the rate. A slow trickle is healthy; a sudden jump usually means something to put right, whether that is work slipping below standard, slow or unclear communication, or visits being missed or rushed. Treat a rising number as an early warning, not just a tally.</div>
         <div style="font-size:13px;color:var(--muted);margin-bottom:12px">${churnedList.length} churned${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}. Was recurring or had 5+ jobs, then no visit for 90+ days.</div>
+        ${churnedList.length ? churnReasonBreakdownHTML(churnedList) : ''}
         ${churnedList.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No churned customers in this period.</div>':
-          '<div class="table-wrap"><table><thead><tr>'+sortTh('Churned','n','Customer')+'<th class="c">Owner</th>'+sortTh('Churned','j','Jobs','r')+sortTh('Churned','r','Lifetime','r')+sortTh('Churned','first','First','r')+sortTh('Churned','last','Last visit','r')+sortTh('Churned','daysSince','Days','r')+'<th>Reason &amp; note</th></tr></thead>'+
+          '<div class="table-wrap"><table><thead><tr>'+sortTh('Churned','n','Customer')+'<th class="c">Owner</th>'+sortTh('Churned','j','Jobs','r')+sortTh('Churned','r','Lifetime','r')+sortTh('Churned','first','First','r')+sortTh('Churned','last','Last visit','r')+sortTh('Churned','daysSince','Days since last visit','r')+'<th>Reason &amp; note</th></tr></thead>'+
           '<tbody>'+sortRows(churnedList,churnSort.k,churnSort.d).map(c=>'<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--red)">'+fmt(c.r)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td class="r">'+c.daysSince+'</td><td><select class="disp-sel'+(c.disp?'':' unset')+'" onchange="setCustomerDisp(this.closest(\'tr\').dataset.cust, this.value)">'+dispOptions(c.disp)+'</select><input class="note-in" style="margin-top:5px" placeholder="Add a note" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>').join('')+'</tbody></table></div>'+
           '<div class="ib ig"><b>Total lifetime value lost:</b> '+fmt(chTotal)+'. '+chWho+'. A re-engagement push targeting the biggest names could win back recurring revenue.</div>'}
       </div>`;
