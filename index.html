@@ -259,11 +259,33 @@ th.sortable:hover{color:var(--green)}
 }
 /* Rounds board */
 .rb-wrap{display:flex;gap:16px;align-items:flex-start}
-.rb-tray{flex:0 0 232px;position:sticky;top:12px;max-height:calc(100vh - 40px);display:flex;flex-direction:column;background:#F7F9F5;border:1px solid var(--line);border-radius:14px;padding:12px}
+.rb-tray{flex:0 0 232px;position:sticky;top:12px;max-height:calc(100vh - 40px);overflow-y:auto;display:flex;flex-direction:column;background:#F7F9F5;border:1px solid var(--line);border-radius:14px;padding:12px}
 .rb-tray h4{font-family:'Fraunces',serif;font-size:15px;font-weight:600;margin:0 0 4px;color:var(--ink)}
 .rb-tray .rb-sub{font-size:11.5px;color:var(--muted);margin-bottom:10px;line-height:1.4}
 .rb-tray-search{width:100%;box-sizing:border-box;font:inherit;font-size:12.5px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:10px;background:#fff}
-.rb-tray-list{overflow-y:auto;display:flex;flex-direction:column;gap:7px;padding-right:2px}
+.rb-addph-btn{width:100%;box-sizing:border-box;font:inherit;font-size:12px;font-weight:600;color:#2F6F3E;background:#fff;border:1px dashed #BFD8BF;border-radius:8px;padding:8px;cursor:pointer;margin-bottom:10px}
+.rb-addph-btn:hover{background:#F0F6EE;border-color:#9FC8A0}
+.rb-addform{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px;display:flex;flex-direction:column;gap:7px}
+.rb-addin{width:100%;box-sizing:border-box;font:inherit;font-size:12.5px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:#fff}
+.rb-addrow{display:flex;gap:7px}
+.rb-addrow .rb-addin{flex:1;min-width:0}
+.rb-addsave{width:100%;box-sizing:border-box;font:inherit;font-size:12.5px;font-weight:600;color:#fff;background:var(--green);border:0;border-radius:8px;padding:8px;cursor:pointer;margin-top:2px}
+.rb-addsave:hover{filter:brightness(.96)}
+.rb-tray-list{display:flex;flex-direction:column;gap:7px;padding-right:2px}
+.rb-rounds-panel{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.rb-rpanel{border:1px solid var(--line);border-left:4px solid #888;border-radius:9px;padding:8px 9px;margin-bottom:8px;background:#fff}
+.rb-rpanel-h{display:flex;align-items:center;gap:6px}
+.rb-rname{flex:1;min-width:0;font:inherit;font-size:12.5px;font-weight:700;color:var(--ink);border:1px solid transparent;border-radius:6px;padding:3px 5px;background:transparent}
+.rb-rname:hover{border-color:var(--line);background:#fff}
+.rb-rname:focus{outline:none;border-color:var(--green);background:#fff}
+.rb-rpanel-ungroup{font-size:11px;color:var(--muted);background:none;border:0;cursor:pointer;white-space:nowrap;padding:3px 6px;border-radius:6px}
+.rb-rpanel-ungroup:hover{background:#EEF1EE;color:var(--ink)}
+.rb-rpanel-day{font-size:11px;color:var(--muted);margin:5px 0 7px}
+.rb-rpanel-mem{display:flex;flex-direction:column;gap:3px}
+.rb-rpanel-row{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:12px;color:var(--ink);background:var(--paper);border-radius:6px;padding:4px 4px 4px 8px}
+.rb-rpanel-row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rb-rpanel-row button{background:none;border:0;cursor:pointer;color:var(--muted);font-size:13px;line-height:1;padding:2px 5px;border-radius:5px;flex-shrink:0}
+.rb-rpanel-row button:hover{background:#F7DCDA;color:var(--red)}
 .rb-cols{flex:1;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:9px;min-width:0}
 .rb-col{background:#fff;border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;min-height:120px}
 .rb-col.rb-over{outline:2px dashed var(--green);outline-offset:-2px;background:#F2F8F0}
@@ -318,7 +340,7 @@ th.sortable:hover{color:var(--green)}
 .rb-week-sum{font-size:12px;color:var(--muted)}
 .rb-week-sum b{color:var(--ink)}
 @media(max-width:1500px){ .rb-cols{grid-template-columns:repeat(7,minmax(0,1fr))} }
-@media(max-width:1100px){ .rb-wrap{flex-direction:column} .rb-tray{position:static;flex-basis:auto;width:100%;max-height:none} .rb-tray-list{max-height:240px} .rb-cols{grid-template-columns:repeat(4,minmax(0,1fr));width:100%} }
+@media(max-width:1100px){ .rb-wrap{flex-direction:column} .rb-tray{position:static;flex-basis:auto;width:100%;max-height:60vh} .rb-cols{grid-template-columns:repeat(4,minmax(0,1fr));width:100%} }
 @media(max-width:760px){ .rb-cols{grid-template-columns:repeat(3,minmax(0,1fr))} }
 @media(max-width:520px){ .rb-cols{grid-template-columns:repeat(2,minmax(0,1fr))} }
 </style>
@@ -388,7 +410,7 @@ let auth = null; // {user, pass, role, name} once logged in. No password is stor
 let rawJobs=[], customers=[], rawLeads=[], rawRecurring=[], numToCust={}, manualNames={}, customerNotes={}, scorecards={}, plan={};
 let scoreEditFor=null;
 let jobsPeriod=[], jobs=[], prevJobs=[], allCustomers=[], churnedList=[], monthlyData=[], serviceData=[], missingPriceData=[];
-let roundsBoard = { assign:{}, rounds:{} };
+let roundsBoard = { assign:{}, rounds:{}, placeholders:{} };
 let leadStats=null, recurringStats=null, prevTotals=null;
 let rawCalls=[], callsStats=null, callsFilter='open', callsWho='', callSearch='', callType='all';
 let activeTab="Overview", custSegFilter="All", custSearch="";
@@ -717,6 +739,7 @@ function handleData(data) {
   roundsBoard = (data.rounds && typeof data.rounds === 'object') ? data.rounds : {};
   if (!roundsBoard.assign || typeof roundsBoard.assign !== 'object') roundsBoard.assign = {};
   if (!roundsBoard.rounds || typeof roundsBoard.rounds !== 'object') roundsBoard.rounds = {};
+  if (!roundsBoard.placeholders || typeof roundsBoard.placeholders !== 'object') roundsBoard.placeholders = {};
 
   rawJobs.forEach(j => {
     j._amount = parseAmount(j['Amount (£)']);
@@ -2504,14 +2527,25 @@ const RB_DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const RB_DAY_FULL = { Mon:'Monday', Tue:'Tuesday', Wed:'Wednesday', Thu:'Thursday', Fri:'Friday', Sat:'Saturday', Sun:'Sunday' };
 const RB_TARGET_LO = 6, RB_TARGET_HI = 7;
 const RB_COLORS = ['#E07B1A','#1565C0','#0D9488','#7C3AED','#D64545','#2E7D32','#B26A00','#3949AB','#C2185B','#00838F'];
-let rbSel = {}, rbTraySearch = '', rbSaveTimer = null, rbDragData = null;
+let rbSel = {}, rbTraySearch = '', rbSaveTimer = null, rbDragData = null, rbAddOpen = false, rbEditPhId = null;
 
-// All recurring customers (any operator), used for round bookkeeping that must not depend on the view.
-function rbAllRecurring(){ return allCustomers.filter(c => c.s==='Recurring'); }
+// Placeholder customers: planning-only entries that are not yet in the live system. They live
+// in the board document and behave like a recurring customer on the board (drag, group, hours,
+// route) but never touch revenue or the planner.
+function rbPhArr(){ const p=roundsBoard.placeholders||{}; return Object.keys(p).map(id=>p[id]); }
+function rbPhToCust(p){
+  const v4 = +p.v4 || 2;
+  const freq = v4>=4 ? 'every week' : (v4>=2 ? 'every 2 weeks' : 'every 4 weeks');
+  return { n:p.name, f:p.owner||'Mike', s:'Recurring', freq:freq, postcode:p.postcode||'', address:'', visit:0, j:0, r:0, ltv:0,
+           plan:{ v4:v4, hv:(p.hv===''||p.hv==null?'':p.hv) }, _ph:true, _phId:p.id };
+}
+// All recurring customers (any operator) plus placeholders, for round bookkeeping that must not depend on the view.
+function rbAllRecurring(){ return allCustomers.filter(c => c.s==='Recurring').concat(rbPhArr().map(rbPhToCust)); }
 // The recurring customers this board plans, scoped to the current operator view, biggest value first.
 function rbCustomers(){
-  return allCustomers.filter(c => c.s==='Recurring' && (franchiseeView==='All' || c.f===franchiseeView))
-    .sort((a,b)=> (b.ltv||b.r||0) - (a.ltv||a.r||0));
+  const live = allCustomers.filter(c => c.s==='Recurring' && (franchiseeView==='All' || c.f===franchiseeView));
+  const ph = rbPhArr().map(rbPhToCust).filter(c => franchiseeView==='All' || c.f===franchiseeView);
+  return live.concat(ph).sort((a,b)=> (b.ltv||b.r||0) - (a.ltv||a.r||0));
 }
 const RB_WEEKS = [1,2,3,4];
 function rbAssign(name){
@@ -2563,7 +2597,7 @@ function rbSave(){
   if(rbSaveTimer) clearTimeout(rbSaveTimer);
   const msg=document.getElementById('rbSaveMsg'); if(msg){ msg.textContent='Saving\u2026'; msg.style.color='var(--muted)'; }
   rbSaveTimer = setTimeout(function(){
-    apiCall({ action:'saveRounds', board: JSON.stringify({ assign:roundsBoard.assign, rounds:roundsBoard.rounds }) },
+    apiCall({ action:'saveRounds', board: JSON.stringify({ assign:roundsBoard.assign, rounds:roundsBoard.rounds, placeholders:roundsBoard.placeholders }) },
       function(d){ const m=document.getElementById('rbSaveMsg'); if(!m) return; if(!d||d.error){ m.textContent='Could not save, hit Refresh and check'; m.style.color='var(--red)'; } else { m.textContent='Saved'; m.style.color='var(--muted)'; } },
       function(){ const m=document.getElementById('rbSaveMsg'); if(m){ m.textContent='Could not reach the app to save'; m.style.color='var(--red)'; } });
   }, 350);
@@ -2573,7 +2607,7 @@ function rbRerender(){ const el=document.getElementById('content'); if(el && act
 function rbRenderTray(){ const el=document.getElementById('rbTrayList'); if(el) el.innerHTML = rbTrayListHTML(); }
 
 // Mutations. A drop sets both the day and the anchor week, and cadence fills the rest of the cycle.
-function rbCustByName(name){ const k=normName(name); return allCustomers.find(c=>normName(c.n)===k) || null; }
+function rbCustByName(name){ const k=normName(name); return allCustomers.find(c=>normName(c.n)===k) || rbPhArr().map(rbPhToCust).find(c=>normName(c.n)===k) || null; }
 function rbMoveCard(name, week, day){ const a=rbAssign(name); a.round=null; a.day=day; a.anchor=week||1; delete a.ord; rbApply(); }
 function rbMoveToTray(name){ const a=rbAssign(name); a.round=null; a.day=null; delete a.ord; rbApply(); }
 function rbMoveRound(rid, week, day){ const rd=rbRound(rid); if(rd){ rd.day=day; rd.anchor=(day==null?rd.anchor:(week||1)); delete rd.ord; rbApply(); } }
@@ -2583,6 +2617,7 @@ function rbTogglePin(name){ const a=rbAssign(name); a.pinned=!a.pinned; rbApply(
 function rbTogglePinRound(rid){ const rd=rbRound(rid); if(rd){ rd.pinned=!rd.pinned; rbApply(); } }
 function rbUngroup(rid){ const rd=rbRound(rid); if(!rd) return; rbAllRecurring().forEach(c=>{ const a=rbAssign(c.n); if(a.round===rid){ a.round=null; a.day=rd.day; a.anchor=rd.anchor||1; } }); delete roundsBoard.rounds[rid]; rbApply(); }
 function rbRenameRound(rid){ const rd=rbRound(rid); if(!rd) return; const nm=prompt('Round name', rd.name||''); if(nm===null) return; const v=String(nm).trim(); if(v) rd.name=v; rbApply(); }
+function rbRenameRoundTo(rid, val){ const rd=rbRound(rid); if(!rd) return; const v=String(val||'').trim(); if(v) rd.name=v; rbApply(); }
 function rbMenuMove(btn){ const name=btn.getAttribute('data-name'); const c=rbCustByName(name); rbMoveCard(name, c?rbCustAnchor(c):1, btn.getAttribute('data-day')); }
 function rbMenuTray(btn){ rbMoveToTray(btn.getAttribute('data-name')); }
 function rbToggleSel(name){ const k=normName(name); if(rbSel[k]) delete rbSel[k]; else rbSel[k]=true; rbRerender(); }
@@ -2606,6 +2641,36 @@ function rbGroupSelected(){
   roundsBoard.rounds[rid] = { id:rid, name:name, color:color, day:day, anchor:anchor, pinned:false };
   names.forEach(c=>{ const a=rbAssign(c.n); a.round=rid; });
   rbSel={}; rbApply();
+}
+
+// Placeholder customers (not yet on the system) for planning.
+function rbToggleAdd(){ if(rbAddOpen){ rbAddOpen=false; rbEditPhId=null; } else { rbAddOpen=true; rbEditPhId=null; } rbRerender(); }
+function rbEditPlaceholder(id){ rbEditPhId=id; rbAddOpen=true; rbRerender(); const t=document.querySelector('.rb-tray'); if(t) t.scrollTop=0; }
+function rbRemovePlaceholder(id){ const p=(roundsBoard.placeholders||{})[id]; if(!p) return; if(!confirm('Remove placeholder \u201c'+p.name+'\u201d from the board?')) return; delete roundsBoard.assign[normName(p.name)]; delete roundsBoard.placeholders[id]; rbApply(); }
+function rbSavePlaceholder(){
+  const g = id => { const el=document.getElementById(id); return el?el.value:''; };
+  const nm = String(g('rbPhName')||'').trim();
+  if(!nm){ alert('Give the customer a name or label.'); return; }
+  const hvRaw = g('rbPhHv'); const hv = (hvRaw===''||hvRaw==null) ? '' : (+hvRaw);
+  const v4 = parseInt(g('rbPhFreq'),10) || 2;
+  const pc = String(g('rbPhPc')||'').trim().toUpperCase();
+  if(!roundsBoard.placeholders) roundsBoard.placeholders = {};
+  const id = rbEditPhId || ('p'+Date.now().toString(36)+Math.random().toString(36).slice(2,5));
+  const prev = roundsBoard.placeholders[id] || {};
+  const owner = prev.owner || (franchiseeView==='Adam' ? 'Adam' : 'Mike');
+  roundsBoard.placeholders[id] = { id:id, name:nm, hv:hv, v4:v4, postcode:pc, owner:owner };
+  rbAddOpen=false; rbEditPhId=null;
+  rbApply();
+}
+function rbAddFormHTML(){
+  const e = rbEditPhId ? (roundsBoard.placeholders||{})[rbEditPhId] : null;
+  const v4 = e ? (+e.v4||2) : 2;
+  return '<div class="rb-addform">'
+    + '<input id="rbPhName" class="rb-addin" placeholder="Name or label" value="'+(e?escAttr(e.name):'')+'">'
+    + '<div class="rb-addrow"><input id="rbPhHv" class="rb-addin" type="number" step="0.25" min="0" placeholder="Hrs/visit" value="'+(e&&e.hv!=null&&e.hv!==''?escAttr(e.hv):'')+'">'
+    + '<select id="rbPhFreq" class="rb-addin"><option value="4"'+(v4>=4?' selected':'')+'>Weekly</option><option value="2"'+(v4===2?' selected':'')+'>Fortnightly</option><option value="1"'+(v4<=1?' selected':'')+'>Every 4 weeks</option></select></div>'
+    + '<input id="rbPhPc" class="rb-addin" placeholder="Postcode (optional, for route)" value="'+(e&&e.postcode?escAttr(e.postcode):'')+'">'
+    + '<button class="rb-addsave" onclick="rbSavePlaceholder()">'+(e?'Save changes':'Add to board')+'</button></div>';
 }
 
 // Routing: nearest-next ordering from the operator's base, keeping each round contiguous.
@@ -2726,23 +2791,27 @@ function rbCardHTML(c, inRound){
   const hvHtml = hv>0 ? '<span class="rb-hv">'+(Math.round(hv*10)/10)+'h</span>' : '<span class="rb-hv miss" title="Set hours per visit in the planner">? h</span>';
   const tagHtml = tag ? '<span class="rb-freq">'+tag+'</span>' : '';
   const owner = (franchiseeView==='All' && c.f) ? '<span class="rb-freq" style="background:'+(c.f==='Adam'?'#E3ECFA':'#FBE7D2')+';color:'+(c.f==='Adam'?'#1565C0':'#9A5410')+'">'+escAttr(c.f)+'</span>' : '';
+  const phTag = c._ph ? '<span class="rb-freq" style="background:#FFE7CC;color:#9A5410">new</span>' : '';
   if(inRound){
     return '<div class="rb-card" data-name="'+nm+'"><div class="rb-card-top">'
       + '<span class="rb-card-name"'+nmeta+'>'+nm+'</span>'
       + '<button class="rb-mini" title="Pop out of this round (stays on the day)" data-name="'+nm+'" onclick="rbEject(this.getAttribute(\'data-name\'))">\u2934</button>'
-      + '</div><div class="rb-card-sub">'+hvHtml+tagHtml+owner+'</div></div>';
+      + '</div><div class="rb-card-sub">'+hvHtml+tagHtml+phTag+owner+'</div></div>';
   }
   const pin = '<button class="rb-mini'+(a.pinned?' on':'')+'" title="'+(a.pinned?'Pinned, click to unpin':'Pin to this day')+'" data-name="'+nm+'" onclick="rbTogglePin(this.getAttribute(\'data-name\'))">\ud83d\udccc</button>';
   return '<div class="rb-card'+(rbSel[k]?' sel':'')+'" draggable="true" data-name="'+nm+'" ondragstart="rbDragCardStart(event)" ondragend="rbDragEnd(event)" ondragover="rbCardOver(event)" ondragleave="rbCardLeave(event)" ondrop="rbCardDrop(event)">'
     + '<div class="rb-card-top">'
       + '<input type="checkbox" '+(rbSel[k]?'checked':'')+' title="Select for grouping" data-name="'+nm+'" onchange="rbToggleSel(this.getAttribute(\'data-name\'))" style="margin:0 1px 0 0;cursor:pointer">'
-      + '<span class="rb-card-name"'+nmeta+'>'+nm+'</span>'+pin+rbCardMenu(nm)
-    + '</div><div class="rb-card-sub">'+hvHtml+tagHtml+owner+'</div></div>';
+      + '<span class="rb-card-name"'+nmeta+'>'+nm+'</span>'+pin+rbCardMenu(c)
+    + '</div><div class="rb-card-sub">'+hvHtml+tagHtml+phTag+owner+'</div></div>';
 }
-function rbCardMenu(nm){
+function rbCardMenu(c){
+  const nm = escAttr(c.n);
   const items = RB_DAYS.map(d=>'<button class="rb-menu-item" data-name="'+nm+'" data-day="'+d+'" onclick="rbMenuMove(this)">Move to '+RB_DAY_FULL[d]+'</button>').join('');
+  let extra = '';
+  if(c._ph){ const q=JSON.stringify(String(c._phId)); extra = '<div class="rb-menu-div"></div><button class="rb-menu-item" onclick=\'rbEditPlaceholder('+q+')\'>Edit details</button><button class="rb-menu-item" onclick=\'rbRemovePlaceholder('+q+')\'>Remove placeholder</button>'; }
   return '<details class="rb-menu"><summary class="rb-mini">\u22ee</summary><div class="rb-menu-list">'+items
-    + '<div class="rb-menu-div"></div><button class="rb-menu-item" data-name="'+nm+'" onclick="rbMenuTray(this)">Back to tray</button></div></details>';
+    + '<div class="rb-menu-div"></div><button class="rb-menu-item" data-name="'+nm+'" onclick="rbMenuTray(this)">Back to tray</button>'+extra+'</div></details>';
 }
 function rbRoundMenu(rid){
   const rd=rbRound(rid), q=JSON.stringify(String(rid)), aw=(rd&&rd.anchor)?rd.anchor:1;
@@ -2824,6 +2893,26 @@ function rbActionBarHTML(){
     + (canGroup ? '<button class="rb-ab-btn" onclick="rbGroupSelected()">Group into a round</button>' : '<span style="font-size:12px;opacity:.85">Select 2 or more on the same day to group</span>')
     + '<button class="rb-ab-btn ghost" onclick="rbClearSel()">Clear</button></div>';
 }
+function rbSidebarRoundsHTML(){
+  const rounds = rbRoundsArr().filter(rd=>rbRoundMembers(rd.id).length);
+  if(!rounds.length) return '';
+  let html = '<div class="rb-rounds-panel"><h4>Rounds</h4><div class="rb-sub">Rename, remove a job, or ungroup.</div>';
+  rounds.forEach(rd=>{
+    const mem = rbRoundMembers(rd.id);
+    const dayLab = rd.day ? RB_DAY_FULL[rd.day] : 'Unplaced';
+    const q = JSON.stringify(String(rd.id));
+    html += '<div class="rb-rpanel" style="border-left-color:'+rd.color+'">'
+      + '<div class="rb-rpanel-h"><span class="rb-chip" style="background:'+rd.color+'"></span>'
+        + '<input class="rb-rname" value="'+escAttr(rd.name)+'" data-rid="'+escAttr(rd.id)+'" onchange="rbRenameRoundTo(this.getAttribute(\'data-rid\'), this.value)" title="Edit the round name">'
+        + '<button class="rb-rpanel-ungroup" onclick=\'rbUngroup('+q+')\' title="Break this round back into single jobs">Ungroup</button>'
+      + '</div>'
+      + '<div class="rb-rpanel-day">'+dayLab+' \u00b7 '+mem.length+' job'+(mem.length===1?'':'s')+'</div>'
+      + '<div class="rb-rpanel-mem">'
+      + mem.map(c=>'<div class="rb-rpanel-row"><span title="'+escAttr(c.n)+'">'+escAttr(c.n)+'</span><button title="Remove from this round" data-name="'+escAttr(c.n)+'" onclick="rbEject(this.getAttribute(\'data-name\'))">\u2715</button></div>').join('')
+      + '</div></div>';
+  });
+  return html + '</div>';
+}
 function renderRoundsTab(){
   const op = franchiseeView==='All' ? '' : franchiseeView;
   const total = rbCustomers().length, placed = rbCustomers().filter(c=>rbCustDay(c)!=null).length;
@@ -2833,8 +2922,10 @@ function renderRoundsTab(){
     + '<div style="font-size:12px;color:var(--muted);margin-top:10px">'+placed+' of '+total+' placed</div></div>';
   const tray = '<div class="rb-tray" data-tray="1" ondragover="rbDragOver(event)" ondragleave="rbDragLeave(event)" ondrop="rbDropTray(event)">'
     + '<h4>Customers</h4><div class="rb-sub">Unplaced regulars. Drag onto a day, or use the \u22ee menu.</div>'
+    + '<button class="rb-addph-btn" onclick="rbToggleAdd()">'+(rbAddOpen?'\u00d7 Cancel':'+ Add a customer to plan')+'</button>'
+    + (rbAddOpen ? rbAddFormHTML() : '')
     + '<input class="rb-tray-search" placeholder="Search\u2026" value="'+escAttr(rbTraySearch)+'" oninput="rbTraySearch=this.value;rbRenderTray()">'
-    + '<div class="rb-tray-list" id="rbTrayList">'+rbTrayListHTML()+'</div></div>';
+    + '<div class="rb-tray-list" id="rbTrayList">'+rbTrayListHTML()+'</div>'+rbSidebarRoundsHTML()+'</div>';
   const weeks = '<div class="rb-weeks">'+RB_WEEKS.map(w=>rbWeekHTML(w, op)).join('')+'</div>';
   return intro + '<div class="rb-wrap">'+tray+weeks+'</div>' + rbActionBarHTML();
 }
