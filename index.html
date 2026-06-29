@@ -2392,7 +2392,7 @@ function renderRecurringHub(){
         'A stronger business. Recurring income holds up in a downturn and is worth far more if you ever sell or take on staff.'
       ]
     }) : segHeader({ title:'Recurring customers, your foundation', framing:'No recurring customers in this view yet.' });
-  return header + `
+  return header + customerRegPointer() + `
     <div class="grid grid-4">
       <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Active Recurring</div><div class="kpi-v">${recCusts.length}</div><div class="kpi-s">customers on a schedule</div></div>
       <div class="card accent-top"><div class="kpi-l">Avg per Visit</div><div class="kpi-v">${fmt(recVisitAvg)}</div><div class="kpi-s">${fmt(recRound)} for one round of all</div></div>
@@ -2522,12 +2522,11 @@ function renderPassedHub(){
   return head + search + table;
 }
 function customerRegPointer(){
-  return '<div class="card" style="margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:14px 18px">'
-    + '<div style="font-size:13px;color:var(--muted);line-height:1.5">The map and scorecard for your regulars now live in the Regulars tab, alongside the planner and rounds board.</div>'
-    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
-      + '<button class="filter-btn" onclick="goReg(\'Map\')">Open map \u2192</button>'
-      + '<button class="filter-btn" onclick="goReg(\'Scorecard\')">Open scorecard \u2192</button>'
-    + '</div></div>';
+  const btn = (sub,lab) => '<button class="filter-btn" onclick="goReg(\''+sub+'\')">'+lab+'</button>';
+  return '<div class="card" style="margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:16px 18px">'
+    + '<div><div style="font-weight:600;font-size:14px;color:var(--ink);margin-bottom:3px">Manage your regulars</div><div style="font-size:12.5px;color:var(--muted);line-height:1.5">Map, planner, rounds board and scorecard all live in the Regulars tab.</div></div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'+btn('Map','Map')+btn('Planner','Planner')+btn('Rounds','Rounds')+btn('Scorecard','Scorecard')+'</div>'
+    + '</div>';
 }
 function customerToolsRow(){
   const scored = allCustomers.filter(c=>c.s==='Recurring' && hasScore(c)).length;
@@ -3045,7 +3044,7 @@ function rbInitGeocode(){
 }
 
 function renderRegularsTab(){
-  const subs = ['Rounds','Planner','Map','Scorecard'];
+  const subs = ['Map','Planner','Rounds','Scorecard'];
   const nav = '<div class="filter-row" style="margin-bottom:18px">'+subs.map(s=>'<button class="filter-btn '+(regSub===s?'active':'')+'" onclick="setRegSub(\''+s+'\')">'+s+'</button>').join('')+'</div>';
   let body='';
   if(regSub==='Planner') body=renderPlannerTab();
@@ -3496,7 +3495,7 @@ function renderContent() {
       let filtered = allCustomers;
       if (custSegFilter !== 'All') filtered = filtered.filter(c => c.s === custSegFilter);
       if (custSearch) filtered = filtered.filter(c => c.n.toLowerCase().includes(custSearch.toLowerCase()));
-      const intro = custSegFilter==='All' ? (customerMixCard() + customerRegPointer()) : '';
+      const intro = custSegFilter==='All' ? customerMixCard() : '';
       const searchBox = `<input id="custSearchBox" class="search" placeholder="Search customers..." value="${custSearch}" oninput="onCustSearch(this.value, this.selectionStart)">`;
       body = intro + searchBox +
         `<div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">Showing ${filtered.length} customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView+' only':''}</div>
