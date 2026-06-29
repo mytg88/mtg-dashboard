@@ -40,7 +40,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--paper);color:var(--ink);-
 .tab{padding:15px 20px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;color:var(--muted);border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
 .tab.active{font-weight:700;color:var(--green);border-bottom-color:var(--green)}
 .tab:hover{color:var(--green)}
-.content{padding:26px 36px 60px}
+.content{padding:26px 36px 60px;max-width:1600px;margin:0 auto}
+body.rb-wide .content{max-width:2100px}
 .loading{text-align:center;padding:70px;color:var(--muted);font-size:15px}
 .grid{display:grid;gap:16px;margin-bottom:28px}
 .grid-4{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
@@ -2852,6 +2853,7 @@ function rbInitGeocode(){
 
 function renderContent() {
   const el = document.getElementById('content');
+  document.body.classList.toggle('rb-wide', activeTab==='Rounds');
   const histJobs = monthlyData.reduce((s,m)=>s+(m.hist&&m.j?m.j:0),0); // invoiced jobs pre-Oct-2024, in current period
   const totalJobs = jobs.length + histJobs;
   const totalRev = Math.round(monthlyData.reduce((s,m)=>s+m.r,0)); // override-aware: invoiced history + live Zenbooker
