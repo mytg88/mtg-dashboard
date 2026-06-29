@@ -360,8 +360,8 @@ th.sortable:hover{color:var(--green)}
 .td-task.done .td-title{color:var(--muted);text-decoration:line-through}
 .td-desc{font-size:12.5px;color:var(--muted);line-height:1.5;margin-top:3px}
 .td-tag{font-size:10px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:#4a554c;background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
-.td-actions{display:flex;gap:2px;flex-shrink:0;opacity:0;transition:opacity .12s}
-.td-task:hover .td-actions{opacity:1}
+.td-actions{display:flex;flex-direction:column;gap:6px;flex-shrink:0;align-items:center}
+.td-actions .td-mini{font-size:16px;width:34px;height:34px;padding:0;border:1px solid var(--line);border-radius:8px;display:inline-flex;align-items:center;justify-content:center}
 .td-mini{background:none;border:0;cursor:pointer;color:var(--muted);font-size:13px;padding:3px 5px;border-radius:6px;line-height:1}
 .td-mini:hover{background:var(--paper);color:var(--ink)}
 .td-block-h{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
@@ -3339,30 +3339,59 @@ const BP_OPTS = {
   offered:['Lawn mowing','Border maintenance','Weeding','Hedge trimming','Pruning','Planting','Leaf clearance','Pressure washing','Garden clearance','Waste removal','Lawn care treatments','Lawn renovations'],
   skills:['PA1/PA6 licence','Chainsaw tickets','Tree surgery experience','Hard landscaping','Garden design','Horticultural qualification','RHS qualification']
 };
-const BP_FUNDING=['Personal savings','Business loan','A mix of both'];
-const BP_D30=['Get your first 5-star review','Complete your first \u00a3200+ job','Serve your first referred job','Complete your first \u00a3500 job','Reach \u00a32,000 in revenue'];
-const BP_D90=['Reach 25 five-star reviews across platforms','Hit \u00a33,000 revenue in one calendar month','Sign up your first 10 regular maintenance customers','Deliver 100+ leaflets with a quote in your area','Post before and after photos regularly to social and Google'];
+const BP_FUNDING=['Personal savings','Reinvested profit','Business loan','A mix'];
 const BP_SECTIONS=[
   {key:'motivation', group:'Foundation', title:'Your motivation', desc:'Understand your why and what drives you.', why:'Your core motivations are the anchor for every decision. When challenges come, your why keeps you focused and resilient.'},
   {key:'vision', group:'Foundation', title:'Your vision', desc:'Set your five-year, one-year and three-month goals.', why:'A clear picture of where you are heading turns day-to-day work into progress towards something you actually want.'},
   {key:'income', group:'Targets and finances', title:'Income and targets', desc:'Set your income needs and the rates to hit them.', why:'Knowing the numbers you need protects your time. Price below them and you work hard for too little.'},
-  {key:'startup', group:'Targets and finances', title:'Startup costs', desc:'Plan your one-off investment to get going.', why:'A realistic startup budget means you launch with enough behind you and no nasty surprises.'},
+  {key:'invest', group:'Targets and finances', title:'Investment plan', desc:'What you plan to invest in the business this year.', why:'Reinvesting in better tools, training and marketing is how a maintenance round grows. Planning it keeps your spending deliberate rather than reactive.'},
   {key:'market', group:'Market', title:'Territory and marketing', desc:'Define your area, your customers and how you reach them.', why:'Focus beats spread. A tight area and two or three channels you do well will out-perform trying to be everywhere.'},
   {key:'services', group:'Operations', title:'Services and skills', desc:'Choose what you offer and where you will grow.', why:'A sensible mix of regular and one-off work keeps income steady and the days varied. Knowing your gaps tells you where to grow.'},
   {key:'ops', group:'Operations', title:'Operations', desc:'Plan your working pattern across the year.', why:'A clear pattern helps you protect earning time in season and use the quieter months for planning and rest.'},
-  {key:'action', group:'Action', title:'Action plan', desc:'Your first 30 and 90 day milestones.', why:'A plan becomes real when it turns into commitments with a deadline. These early wins build momentum.'}
+  {key:'action', group:'Action', title:'Goals and action plan', desc:'Your targets for the year and your focus for the next 90 days.', why:'Goals give you direction; a 90-day focus turns them into something you act on now. Revisit this each quarter as you tick things off and set the next ones.'}
 ];
+const BP_TERRITORIES=[
+  {name:'Parkstone', pc:'BH13, BH14'},
+  {name:'Bournemouth', pc:'BH2, BH3, BH4, BH8, BH9, BH10'},
+  {name:'Southbourne', pc:'BH1, BH5, BH6, BH7'},
+  {name:'Christchurch', pc:'BH23'},
+  {name:'Poole', pc:'BH12, BH15, BH16, BH17, BH18'},
+  {name:'Ferndown', pc:'BH11, BH21, BH22'}
+];
+// Pre-filled starting answers for a named franchisee (from the plan they already wrote).
+// Applied only when there is no saved plan yet; the franchisee then edits and fills the blanks.
+const BP_SEEDS = { adam: {
+  v:1,
+  motivation:{
+    why:['Love of outdoor work','Be my own boss','Build a reliable income'],
+    benefits:['Financial security','Physical fitness and outdoor work','Mental wellbeing','Community connection'],
+    lifestyle:'I plan to have a child in the coming years so for me it is important that my business helps me achieve:\n- a deposit for a house within 6 years\n- being available for family time at weekends and evenings, or for emergencies, appointments, sports days and so on\n- a stable and reliable income so I become mortgageable.'
+  },
+  vision:{
+    fiveYear:'In five years I see myself running a thriving garden maintenance business with:\n- personal income of \u00a336,000 to \u00a348,000\n- a small team of 2 vans and 3 to 4 people including myself\n- a loyal base of regular maintenance customers at 60 to 80 per cent capacity for 2 teams\n- the ability to leave staff on jobs so I can focus on other parts of the business such as generating work and admin\n- being a qualified horticulturist (RHS level 2 and PA1 & PA6) and expanding my arborist knowledge and certificates.',
+    yearOne:'By spring 2027 I want to:\n- achieve a 12 month labour turnover of \u00a362,000 to \u00a371,000\n- be confident running the business, from managing my schedule and customer relationships to handling enquiries and maximising the value of jobs and regular maintenance\n- have 3 days of booked maintenance for 2 gardeners per week\n- have a professional image with uniform for staff\n- have at least 100 positive reviews across Google, Facebook and Nextdoor to stay in the top 5 locally\n- upgrade my tools and spares.',
+    ninetyDay:'In the next 3 months I will:\n- complete all initial training provided by MTG\n- get confident with our working processes and put the foundations in place (waste licence, PLI, social profiles)\n- sell my existing van and replace it with a larger vehicle\n- secure maintenance customers for the year and prepare upsell offers\n- run a local proximity and route-density marketing push to capture new customers during the spring rush.'
+  },
+  income:{ monthly:'3000', rate:'33', breakeven:'27', turnover:'63340', costs:'51403' },
+  market:{ territory:'Bournemouth', alsoCover:[], channels:['Customer referrals','Social media','Door drops and flyers'], edge:'' },
+  services:{ offered:['Lawn mowing','Border maintenance','Weeding','Hedge trimming','Pruning','Planting','Leaf clearance','Pressure washing','Garden clearance','Waste removal','Lawn care treatments','Lawn renovations'], skills:[], develop:'I would like to enhance my knowledge of all aspects of gardening, including business management, plant knowledge, planting, garden design and build, lawn care and lawn renovations. I have been doing this through YouTube videos, gardening programmes and books. I would also like to enrol on a horticulture course to improve my knowledge of plant species and genus.' },
+  ops:{ peak:{start:'09:00',finish:'18:00',days:5,holiday:2}, off:{start:'09:30',finish:'16:30',days:5,holiday:4} },
+  action:{
+    year:[ {t:'Reach \u00a362,000 to \u00a371,000 labour turnover',done:false}, {t:'100+ positive reviews to stay top 5 in the area',done:false}, {t:'3 days of booked maintenance for 2 gardeners per week',done:false}, {t:'Become RHS level 2 and PA1 & PA6 qualified',done:false} ],
+    next90:[ {t:'Complete all initial MTG training',done:false}, {t:'Foundations in place: waste licence, PLI, social profiles',done:false}, {t:'Sell existing van and replace with a larger vehicle',done:false}, {t:'Spring marketing push for route density',done:false} ]
+  }
+} };
 let bpMode='overview', bpSection=0;
 let bpState={}, bpSaveTimer=null, bpBootedFor=null;
 function bpDefault(){ return { v:1, updatedAt:0, reviewEvery:'quarter',
   motivation:{why:[],benefits:[],lifestyle:''},
   vision:{fiveYear:'',yearOne:'',ninetyDay:''},
   income:{monthly:'',rate:'',breakeven:'',turnover:'',costs:''},
-  startup:{tools:'',vehicle:'',uniform:'',setup:'',other:'',funding:'Personal savings'},
-  market:{territory:'',alsoCover:'',channels:[],edge:''},
+  invest:{tools:'',vehicle:'',training:'',marketing:'',other:'',funding:'Reinvested profit'},
+  market:{territory:'',alsoCover:[],channels:[],edge:''},
   services:{offered:[],skills:[],develop:''},
   ops:{peak:{start:'09:00',finish:'18:00',days:5,holiday:2}, off:{start:'09:30',finish:'16:30',days:5,holiday:4}},
-  action:{ d30:BP_D30.map(t=>({t:t,done:false})), d90:BP_D90.map(t=>({t:t,done:false})) }
+  action:{ year:[], next90:[] }
 }; }
 function bpCacheKey(){ return 'mtg_bizplan_'+((typeof auth!=='undefined'&&auth&&auth.user)?String(auth.user).toLowerCase():'anon'); }
 function bpEnsure(){
@@ -3370,11 +3399,12 @@ function bpEnsure(){
   if(!bpState||typeof bpState!=='object') bpState={};
   if(!bpState.v) bpState.v=1;
   if(!bpState.reviewEvery) bpState.reviewEvery='quarter';
-  ['motivation','vision','income','startup','market','services'].forEach(k=>{ bpState[k]=Object.assign({}, d[k], bpState[k]||{}); });
+  ['motivation','vision','income','invest','market','services'].forEach(k=>{ bpState[k]=Object.assign({}, d[k], bpState[k]||{}); });
   bpState.ops = bpState.ops||{}; bpState.ops.peak=Object.assign({}, d.ops.peak, bpState.ops.peak||{}); bpState.ops.off=Object.assign({}, d.ops.off, bpState.ops.off||{});
   bpState.action = bpState.action||{};
-  if(!Array.isArray(bpState.action.d30)||!bpState.action.d30.length) bpState.action.d30=d.action.d30;
-  if(!Array.isArray(bpState.action.d90)||!bpState.action.d90.length) bpState.action.d90=d.action.d90;
+  if(!Array.isArray(bpState.action.year)) bpState.action.year=[];
+  if(!Array.isArray(bpState.action.next90)) bpState.action.next90=[];
+  if(!Array.isArray(bpState.market.alsoCover)) bpState.market.alsoCover=[];
 }
 function bpLoadCache(){ try{ const raw=localStorage.getItem(bpCacheKey()); if(raw){ bpState=JSON.parse(raw)||{}; return true; } }catch(e){} return false; }
 function bpWriteCache(){ try{ localStorage.setItem(bpCacheKey(), JSON.stringify(bpState)); }catch(e){} }
@@ -3382,19 +3412,20 @@ function bpLoad(){ const had=bpLoadCache(); if(!had) bpState=bpDefault(); bpEnsu
 function bpSaveServerNow(){ try{ if(typeof auth!=='undefined'&&auth) apiCall({ action:'saveDoc', doc:'bizplan', data: JSON.stringify(bpState) }); }catch(e){} }
 function bpSave(){ bpState.updatedAt=Date.now(); bpWriteCache(); clearTimeout(bpSaveTimer); bpSaveTimer=setTimeout(bpSaveServerNow,800); }
 // Adopt the saved server copy once per user per session; a full reload re-pulls across devices.
+function bpWho(){ return ((typeof auth!=='undefined'&&auth&&(auth.name||auth.user))||'anon').toString().toLowerCase(); }
 function bpBoot(data){
-  const u=(typeof auth!=='undefined'&&auth&&auth.user)?String(auth.user).toLowerCase():'anon';
+  const u=bpWho();
   if(bpBootedFor===u) return; bpBootedFor=u;
   const had=bpLoadCache();
   const srv=data&&data.bizplan;
   if(srv&&typeof srv==='object'&&srv.v){ bpState=srv; bpEnsure(); bpWriteCache(); }
-  else { if(!had) bpState=bpDefault(); bpEnsure(); }
+  else { if(!had){ const seed=BP_SEEDS[u]; bpState = seed?JSON.parse(JSON.stringify(seed)):bpDefault(); } bpEnsure(); bpWriteCache(); }
   if(activeTab==='Plan') bpRerender();
 }
 function bpNum(v){ const n=parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,'')); return isNaN(n)?0:n; }
 function bpProfit(){ return bpNum(bpState.income.turnover)-bpNum(bpState.income.costs); }
 function bpMargin(){ const t=bpNum(bpState.income.turnover); return t>0?Math.round(bpProfit()/t*1000)/10:0; }
-function bpStartupTotal(){ const s=bpState.startup; return bpNum(s.tools)+bpNum(s.vehicle)+bpNum(s.uniform)+bpNum(s.setup)+bpNum(s.other); }
+function bpInvestTotal(){ const s=bpState.invest; return bpNum(s.tools)+bpNum(s.vehicle)+bpNum(s.training)+bpNum(s.marketing)+bpNum(s.other); }
 function bpOpsWeeks(){ return Math.max(0, 52 - bpNum(bpState.ops.peak.holiday) - bpNum(bpState.ops.off.holiday)); }
 function bpOpsDays(){ const pk=Math.max(0,(40-bpNum(bpState.ops.peak.holiday)))*bpNum(bpState.ops.peak.days); const of=Math.max(0,(12-bpNum(bpState.ops.off.holiday)))*bpNum(bpState.ops.off.days); return Math.round(pk+of); }
 function bpDone(i){
@@ -3402,11 +3433,11 @@ function bpDone(i){
   if(k==='motivation') return (s.motivation.why||[]).length>0;
   if(k==='vision') return !!(s.vision.fiveYear||'').trim();
   if(k==='income') return bpNum(s.income.rate)>0 || bpNum(s.income.monthly)>0;
-  if(k==='startup') return bpStartupTotal()>0;
+  if(k==='invest') return bpInvestTotal()>0;
   if(k==='market') return !!(s.market.territory||'').trim();
   if(k==='services') return (s.services.offered||[]).length>0;
   if(k==='ops') return !!(s.ops.peak.start&&s.ops.peak.finish);
-  if(k==='action') return (s.action.d30||[]).some(m=>m.done)||(s.action.d90||[]).some(m=>m.done);
+  if(k==='action') return (s.action.year||[]).length>0||(s.action.next90||[]).length>0;
   return false;
 }
 function bpProgress(){ let n=0; for(let i=0;i<BP_SECTIONS.length;i++) if(bpDone(i)) n++; return {done:n, total:BP_SECTIONS.length}; }
@@ -3429,6 +3460,9 @@ function bpChipsHTML(sec, field, optsKey){ const opts=BP_OPTS[optsKey], sel=bpSt
 function bpTextHTML(sec, field, ph, multiline){ const v=bpEsc(bpState[sec][field]||''); if(multiline) return '<textarea class="bp-textarea" placeholder="'+bpEsc(ph)+'" oninput="bpSet(\''+sec+'\',\''+field+'\',this.value)">'+v+'</textarea>'; return '<input class="bp-input" placeholder="'+bpEsc(ph)+'" value="'+v+'" oninput="bpSet(\''+sec+'\',\''+field+'\',this.value)">'; }
 function bpNumHTML(sec, field, ph, derived){ const v=bpEsc(bpState[sec][field]||''); const oi=derived?("bpIncomeOnInput('"+field+"',this.value)"):("bpSet('"+sec+"','"+field+"',this.value)"); return '<div class="bp-num-wrap"><span class="bp-cur">\u00a3</span><input class="bp-num" inputmode="decimal" placeholder="'+bpEsc(ph||'0')+'" value="'+v+'" oninput="'+oi+'"></div>'; }
 function bpSelHTML(sec, field, opts){ const cur=bpState[sec][field]; return '<select class="bp-sel" onchange="bpSet(\''+sec+'\',\''+field+'\',this.value)">'+opts.map(function(o){ return '<option'+(o===cur?' selected':'')+'>'+bpEsc(o)+'</option>'; }).join('')+'</select>'; }
+function bpTerritorySelectHTML(){ const cur=bpState.market.territory||''; const sel=BP_TERRITORIES.filter(function(t){return t.name===cur;})[0]; return '<select class="bp-sel" onchange="bpSet(\'market\',\'territory\',this.value)"><option value="">Select your territory</option>'+BP_TERRITORIES.map(function(t){ return '<option'+(t.name===cur?' selected':'')+'>'+bpEsc(t.name)+'</option>'; }).join('')+'</select>'+(sel?'<div class="bp-hint" style="margin-top:6px">'+bpEsc(sel.pc)+'</div>':''); }
+function bpTerritoryChipsHTML(){ const sel=bpState.market.alsoCover||[]; return '<div class="bp-chips">'+BP_TERRITORIES.map(function(t,i){ const on=sel.indexOf(t.name)!==-1; return '<button class="bp-chip'+(on?' on':'')+'" onclick="bpToggleTerr('+i+')" title="'+bpEsc(t.pc)+'">'+bpEsc(t.name)+'</button>'; }).join('')+'</div>'; }
+function bpToggleTerr(i){ const name=BP_TERRITORIES[i].name; const arr=bpState.market.alsoCover||[]; const j=arr.indexOf(name); if(j===-1) arr.push(name); else arr.splice(j,1); bpState.market.alsoCover=arr; bpSave(); bpRerender(); }
 function bpOpsTime(sub, field){ return '<input class="bp-input" type="time" value="'+bpEsc(bpState.ops[sub][field])+'" oninput="bpSetOps(\''+sub+'\',\''+field+'\',this.value)">'; }
 function bpOpsFields(){
   function pat(sub,label,note){ const p=bpState.ops[sub]; return '<div class="card" style="margin-bottom:14px"><div class="bp-q" style="margin-top:0">'+label+'</div><div class="bp-hint">'+note+'</div>'
@@ -3441,8 +3475,10 @@ function bpOpsFields(){
     + '<div class="bp-derived"><div><span class="bp-deri-l">Working weeks a year</span><span class="bp-deri-v" id="bpOpsWk">'+bpOpsWeeks()+'</span></div><div><span class="bp-deri-l">Working days a year (approx)</span><span class="bp-deri-v" id="bpOpsDy">'+bpOpsDays()+'</span></div></div>';
 }
 function bpActionFields(){
-  function list(key,label,sub){ const arr=bpState.action[key]||[]; return '<div class="bp-q">'+label+'</div><div class="bp-hint">'+sub+'</div>'+arr.map(function(m,i){ return '<div class="bp-mile'+(m.done?' done':'')+'"><button class="bp-mile-check'+(m.done?' on':'')+'" onclick="bpToggleMile(\''+key+'\','+i+')"></button><span class="bp-mile-t">'+bpEsc(m.t)+'</span><button class="td-mini" title="Remove" onclick="bpDelMile(\''+key+'\','+i+')">\u2715</button></div>'; }).join('')+'<div style="margin-top:10px"><button class="bp-btn ghost" onclick="bpAddMile(\''+key+'\')">+ Add a milestone</button></div>'; }
-  return '<div class="bp-hint">Turn your plan into commitments. Tick these off as you hit them.</div>'+list('d30','First 30 days','Prove the concept and get moving.')+'<div style="height:20px"></div>'+list('d90','First 90 days','Let your area know you are in business.');
+  function list(key,label,sub,addlabel){ const arr=bpState.action[key]||[]; return '<div class="bp-q">'+label+'</div><div class="bp-hint">'+sub+'</div>'+(arr.length?arr.map(function(m,i){ return '<div class="bp-mile'+(m.done?' done':'')+'"><button class="bp-mile-check'+(m.done?' on':'')+'" onclick="bpToggleMile(\''+key+'\','+i+')"></button><span class="bp-mile-t">'+bpEsc(m.t)+'</span><button class="td-mini" title="Remove" onclick="bpDelMile(\''+key+'\','+i+')">\u2715</button></div>'; }).join(''):'<div class="bp-hint" style="font-style:italic">Nothing added yet.</div>')+'<div style="margin-top:10px"><button class="bp-btn ghost" onclick="bpAddMile(\''+key+'\')">+ '+addlabel+'</button></div>'; }
+  return list('year','What do you want to achieve this year?','Your bigger targets for the next twelve months. For example: reach a revenue figure, sign a number of regular customers, gain a qualification, or build your reviews.','Add a goal')
+    + '<div style="height:22px"></div>'
+    + list('next90','What will you focus on in the next 90 days?','The concrete steps that move you towards those goals right now. Refresh these at each review.','Add a focus');
 }
 function bpSectionFields(i){
   const k=BP_SECTIONS[i].key;
@@ -3457,13 +3493,13 @@ function bpSectionFields(i){
     + '<div><div class="bp-q">Break-even rate</div>'+bpNumHTML('income','breakeven','27')+'</div></div>'
     + '<div class="bp-row" style="margin-top:14px"><div><div class="bp-q">Target annual turnover</div>'+bpNumHTML('income','turnover','63000',true)+'</div><div><div class="bp-q">Annual running costs</div>'+bpNumHTML('income','costs','51000',true)+'</div></div>'
     + '<div class="bp-derived"><div><span class="bp-deri-l">Annual profit</span><span class="bp-deri-v" id="bpProfitV">'+fmt(bpProfit())+'</span></div><div><span class="bp-deri-l">Profit margin</span><span class="bp-deri-v" id="bpMarginV">'+bpMargin()+'%</span></div></div>';
-  if(k==='startup') return '<div class="bp-hint">Your one-off costs to get started. Leave anything that does not apply at zero.</div>'
-    + '<div class="bp-row"><div><div class="bp-q">Tools and machinery</div>'+bpNumHTML('startup','tools','3000')+'</div><div><div class="bp-q">Vehicle</div>'+bpNumHTML('startup','vehicle','6000')+'</div></div>'
-    + '<div class="bp-row" style="margin-top:14px"><div><div class="bp-q">Uniform and PPE</div>'+bpNumHTML('startup','uniform','500')+'</div><div><div class="bp-q">Franchise or setup fee</div>'+bpNumHTML('startup','setup','0')+'</div></div>'
-    + '<div class="bp-row" style="margin-top:14px"><div><div class="bp-q">Other startup costs</div>'+bpNumHTML('startup','other','0')+'</div><div><div class="bp-q">How will you fund this?</div>'+bpSelHTML('startup','funding',BP_FUNDING)+'</div></div>'
-    + '<div class="bp-derived"><div><span class="bp-deri-l">Total startup investment</span><span class="bp-deri-v">'+fmt(bpStartupTotal())+'</span></div></div>';
-  if(k==='market') return '<div class="bp-q">Your primary territory</div><div class="bp-hint">Your main operating area.</div>'+bpTextHTML('market','territory','For example, Parkstone and Poole Central')
-    + '<div class="bp-q">Other areas you are willing to cover</div>'+bpTextHTML('market','alsoCover','Neighbouring areas you would take work in.')
+  if(k==='invest') return '<div class="bp-hint">What you plan to put into the business over the next year. Leave anything that does not apply at zero.</div>'
+    + '<div class="bp-row"><div><div class="bp-q">Tools and machinery</div>'+bpNumHTML('invest','tools','0')+'</div><div><div class="bp-q">Vehicle</div>'+bpNumHTML('invest','vehicle','0')+'</div></div>'
+    + '<div class="bp-row" style="margin-top:14px"><div><div class="bp-q">Training and qualifications</div>'+bpNumHTML('invest','training','0')+'</div><div><div class="bp-q">Marketing</div>'+bpNumHTML('invest','marketing','0')+'</div></div>'
+    + '<div class="bp-row" style="margin-top:14px"><div><div class="bp-q">Other</div>'+bpNumHTML('invest','other','0')+'</div><div><div class="bp-q">How will you fund it?</div>'+bpSelHTML('invest','funding',BP_FUNDING)+'</div></div>'
+    + '<div class="bp-derived"><div><span class="bp-deri-l">Total planned investment</span><span class="bp-deri-v">'+fmt(bpInvestTotal())+'</span></div></div>';
+  if(k==='market') return '<div class="bp-q">Your primary territory</div><div class="bp-hint">Your main operating area.</div>'+bpTerritorySelectHTML()
+    + '<div class="bp-q">Other areas you are willing to cover</div><div class="bp-hint">You will be offered jobs here if they come up. You can always say no.</div>'+bpTerritoryChipsHTML()
     + '<div class="bp-q">Which marketing channels will you focus on?</div><div class="bp-hint">Pick two or three to start with and master them before adding more.</div>'+bpChipsHTML('market','channels','channels')
     + '<div class="bp-q">How will you stand out locally?</div>'+bpTextHTML('market','edge','What makes customers choose you: reliability, quality, communication, the My Tidy Garden brand.',true);
   if(k==='services') return '<div class="bp-q">Which services will you offer?</div>'+bpChipsHTML('services','offered','offered')
@@ -3523,7 +3559,7 @@ function bpPrintHTML(){
   const s=bpState, who=(typeof auth!=='undefined'&&auth&&auth.name)?auth.name:'';
   const list=a=>(a&&a.length)?'<ul>'+a.map(x=>'<li>'+bpEsc(x)+'</li>').join('')+'</ul>':'<p class="muted">Not set.</p>';
   const para=t=>t?('<p>'+bpEsc(t).replace(/\n/g,'<br>')+'</p>'):'<p class="muted">Not set.</p>';
-  const mile=arr=>(arr&&arr.length)?'<ul class="m">'+arr.map(m=>'<li>'+(m.done?'\u2611 ':'\u2610 ')+bpEsc(m.t)+'</li>').join('')+'</ul>':'';
+  const mile=arr=>(arr&&arr.length)?'<ul class="m">'+arr.map(m=>'<li>'+(m.done?'\u2611 ':'\u2610 ')+bpEsc(m.t)+'</li>').join('')+'</ul>':'<p class="muted">Not set.</p>';
   const money=v=>v?fmt(bpNum(v)):'\u2014';
   return '<!doctype html><html><head><meta charset="utf-8"><title>My Tidy Garden business plan</title><style>'
     + 'body{font-family:Georgia,serif;color:#16241C;max-width:760px;margin:30px auto;padding:0 24px;line-height:1.55}'
@@ -3533,11 +3569,11 @@ function bpPrintHTML(){
     + '<h2>1. Motivation</h2><b>Why</b>'+list(s.motivation.why)+'<b>Benefits</b>'+list(s.motivation.benefits)+'<b>Lifestyle goals</b>'+para(s.motivation.lifestyle)
     + '<h2>2. Vision</h2><b>Five years</b>'+para(s.vision.fiveYear)+'<b>Year one</b>'+para(s.vision.yearOne)+'<b>Next three months</b>'+para(s.vision.ninetyDay)
     + '<h2>3. Income and targets</h2><table><tr><td>Target monthly income</td><td>'+money(s.income.monthly)+'</td></tr><tr><td>Required hourly rate</td><td>'+(s.income.rate?'\u00a3'+bpNum(s.income.rate)+'/hr':'\u2014')+'</td></tr><tr><td>Break-even rate</td><td>'+(s.income.breakeven?'\u00a3'+bpNum(s.income.breakeven)+'/hr':'\u2014')+'</td></tr><tr><td>Annual turnover</td><td>'+money(s.income.turnover)+'</td></tr><tr><td>Annual costs</td><td>'+money(s.income.costs)+'</td></tr><tr><td>Annual profit</td><td>'+fmt(bpProfit())+'</td></tr><tr><td>Profit margin</td><td>'+bpMargin()+'%</td></tr></table>'
-    + '<h2>4. Startup costs</h2><table><tr><td>Tools and machinery</td><td>'+money(s.startup.tools)+'</td></tr><tr><td>Vehicle</td><td>'+money(s.startup.vehicle)+'</td></tr><tr><td>Uniform and PPE</td><td>'+money(s.startup.uniform)+'</td></tr><tr><td>Franchise or setup fee</td><td>'+money(s.startup.setup)+'</td></tr><tr><td>Other</td><td>'+money(s.startup.other)+'</td></tr><tr><td>Total</td><td>'+fmt(bpStartupTotal())+'</td></tr><tr><td>Funding</td><td>'+bpEsc(s.startup.funding||'')+'</td></tr></table>'
-    + '<h2>5. Territory and marketing</h2><b>Primary territory</b>'+para(s.market.territory)+'<b>Also covering</b>'+para(s.market.alsoCover)+'<b>Channels</b>'+list(s.market.channels)+'<b>How you stand out</b>'+para(s.market.edge)
+    + '<h2>4. Investment plan</h2><table><tr><td>Tools and machinery</td><td>'+money(s.invest.tools)+'</td></tr><tr><td>Vehicle</td><td>'+money(s.invest.vehicle)+'</td></tr><tr><td>Training and qualifications</td><td>'+money(s.invest.training)+'</td></tr><tr><td>Marketing</td><td>'+money(s.invest.marketing)+'</td></tr><tr><td>Other</td><td>'+money(s.invest.other)+'</td></tr><tr><td>Total planned investment</td><td>'+fmt(bpInvestTotal())+'</td></tr><tr><td>Funding</td><td>'+bpEsc(s.invest.funding||'')+'</td></tr></table>'
+    + '<h2>5. Territory and marketing</h2><b>Primary territory</b>'+para(s.market.territory)+'<b>Also covering</b>'+list(s.market.alsoCover)+'<b>Channels</b>'+list(s.market.channels)+'<b>How you stand out</b>'+para(s.market.edge)
     + '<h2>6. Services and skills</h2><b>Services</b>'+list(s.services.offered)+'<b>Specialist skills</b>'+list(s.services.skills)+'<b>Skills to develop</b>'+para(s.services.develop)
     + '<h2>7. Operations</h2><table><tr><td></td><td>Peak</td><td>Off-season</td></tr><tr><td>Start</td><td>'+bpEsc(s.ops.peak.start)+'</td><td>'+bpEsc(s.ops.off.start)+'</td></tr><tr><td>Finish</td><td>'+bpEsc(s.ops.peak.finish)+'</td><td>'+bpEsc(s.ops.off.finish)+'</td></tr><tr><td>Days per week</td><td>'+bpEsc(s.ops.peak.days)+'</td><td>'+bpEsc(s.ops.off.days)+'</td></tr><tr><td>Holiday weeks</td><td>'+bpEsc(s.ops.peak.holiday)+'</td><td>'+bpEsc(s.ops.off.holiday)+'</td></tr></table><p>Working weeks a year: '+bpOpsWeeks()+'. Working days a year (approx): '+bpOpsDays()+'.</p>'
-    + '<h2>8. Action plan</h2><b>First 30 days</b>'+mile(s.action.d30)+'<b>First 90 days</b>'+mile(s.action.d90)
+    + '<h2>8. Goals and action plan</h2><b>Goals for the year</b>'+mile(s.action.year)+'<b>Focus for the next 90 days</b>'+mile(s.action.next90)
     + '</body></html>';
 }
 bpLoad();
