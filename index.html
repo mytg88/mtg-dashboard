@@ -789,6 +789,8 @@ function handleData(data) {
   if (!roundsBoard.assign || typeof roundsBoard.assign !== 'object') roundsBoard.assign = {};
   if (!roundsBoard.rounds || typeof roundsBoard.rounds !== 'object') roundsBoard.rounds = {};
   if (!roundsBoard.placeholders || typeof roundsBoard.placeholders !== 'object') roundsBoard.placeholders = {};
+  // Per-user to-do list: adopt the saved server copy, or seed the server from local on first run.
+  todoBoot(data);
 
   rawJobs.forEach(j => {
     j._amount = parseAmount(j['Amount (£)']);
@@ -3133,12 +3135,40 @@ const TODO_BLOCKS = { start:{label:'Start of day',color:'#E07B1A'}, during:{labe
 let todoDay = 'today';
 let todoState = { tasks:[], doneMap:{}, addOpen:false, editId:null };
 let todoSaveTimer = null;
-function todoLoad(){
-  try { const raw=localStorage.getItem('mtg_todo_v1'); if(raw){ const j=JSON.parse(raw); if(Array.isArray(j.tasks)) todoState.tasks=j.tasks; if(j.doneMap) todoState.doneMap=j.doneMap; } } catch(e){}
-  if(!todoState.tasks.length) todoState.tasks = TODO_SEED.map(t=>Object.assign({}, t));
-  todoState.tasks.forEach(t=>{ if(!t.kind) t.kind='routine'; if(t.urgent===undefined) t.urgent=false; if(t.due===undefined) t.due=null; });
+// Local cache is keyed per logged-in user so two people on one browser never collide.
+// The sheet (via the per-user doc store) is the source of truth across devices.
+function todoCacheKey(){ return 'mtg_todo_' + ((typeof auth!=='undefined' && auth && auth.user) ? String(auth.user).toLowerCase() : 'anon'); }
+function todoMigrate(){ todoState.tasks.forEach(t=>{ if(!t.kind) t.kind='routine'; if(t.urgent===undefined) t.urgent=false; if(t.due===undefined) t.due=null; }); }
+function todoSeed(){ todoState.tasks = TODO_SEED.map(t=>Object.assign({}, t)); }
+function todoLoadCache(){
+  try { const raw=localStorage.getItem(todoCacheKey()); if(raw){ const j=JSON.parse(raw); todoState.tasks=Array.isArray(j.tasks)?j.tasks:[]; todoState.doneMap=(j.doneMap&&typeof j.doneMap==='object')?j.doneMap:{}; return true; } } catch(e){}
+  return false;
 }
-function todoSave(){ clearTimeout(todoSaveTimer); todoSaveTimer=setTimeout(()=>{ try{ localStorage.setItem('mtg_todo_v1', JSON.stringify({ tasks:todoState.tasks, doneMap:todoState.doneMap })); }catch(e){} }, 250); }
+function todoWriteCache(){ try { localStorage.setItem(todoCacheKey(), JSON.stringify({ tasks:todoState.tasks, doneMap:todoState.doneMap })); } catch(e){} }
+function todoLoad(){ const had=todoLoadCache(); if(!had && !todoState.tasks.length) todoSeed(); todoMigrate(); }
+function todoSaveServerNow(){ try { if(typeof auth!=='undefined' && auth) apiCall({ action:'saveDoc', doc:'todo', data: JSON.stringify({ tasks:todoState.tasks, doneMap:todoState.doneMap }) }); } catch(e){} }
+function todoSave(){ todoWriteCache(); clearTimeout(todoSaveTimer); todoSaveTimer=setTimeout(todoSaveServerNow, 800); }
+// Reconcile against the server copy once boot data arrives, now that we know the user.
+// A saved server document wins (cross-device truth); if none exists yet, seed it from what we have.
+// We adopt the server copy once per user per session so a manual Refresh never overwrites
+// edits made this session that are still syncing; a full page reload re-pulls across devices.
+let todoBootedFor = null;
+function todoBoot(data){
+  const u = (typeof auth!=='undefined' && auth && auth.user) ? String(auth.user).toLowerCase() : 'anon';
+  if(todoBootedFor === u) return;
+  todoBootedFor = u;
+  const had=todoLoadCache();
+  const srv = data && data.todos;
+  if(srv && typeof srv==='object' && Array.isArray(srv.tasks)){
+    todoState.tasks = srv.tasks;
+    todoState.doneMap = (srv.doneMap && typeof srv.doneMap==='object') ? srv.doneMap : {};
+    todoMigrate(); todoWriteCache();
+  } else {
+    if(!had && !todoState.tasks.length) todoSeed();
+    todoMigrate(); todoWriteCache(); todoSaveServerNow();
+  }
+  if(activeTab==='To-do') todoRerender();
+}
 function todoWeekKey(d){
   const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
   const day=(t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-day+3);
