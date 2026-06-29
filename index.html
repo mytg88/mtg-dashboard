@@ -420,6 +420,7 @@ let roundsBoard = { assign:{}, rounds:{}, placeholders:{} };
 let leadStats=null, recurringStats=null, prevTotals=null;
 let rawCalls=[], callsStats=null, callsFilter='open', callsWho='', callSearch='', callType='all';
 let activeTab="Overview", custSegFilter="All", custSearch="";
+let regSub="Rounds"; // sub-view inside the Regulars tab: Rounds / Planner / Map / Scorecard
 // Possible header names a customer phone number might live under, once it's added to the feed.
 const PHONE_HEADERS = ['Phone','Customer Phone','Mobile','Telephone','Phone Number','Contact Number','Cell','Tel'];
 // Reduce any stored format to the UK national significant number so they all compare equal:
@@ -1369,7 +1370,7 @@ function scorePill(c){
   const lab = r.complete ? (r.grade+' \u00b7 '+r.pct+'%') : (r.pct+'% \u00b7 '+r.ans+'/'+r.total);
   return '<button class="sc-pill" style="background:'+scoreGradeColor(r.grade)+'" onclick="openScorecard(this.closest(\'tr\').dataset.cust)">'+escAttr(lab)+'</button>';
 }
-function openScorecard(name){ scoreEditFor=name; activeTab='Customers'; custSegFilter='Scorecard'; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
+function openScorecard(name){ scoreEditFor=name; activeTab='Regulars'; regSub='Scorecard'; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 function closeScorecard(){ scoreEditFor=null; renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 // The running order for scoring: every active regular, biggest first. Used by next/previous and "start scoring".
 function scoreQueue(){ return allCustomers.filter(c=>c.s==='Recurring').sort((a,b)=>b.r-a.r).map(c=>c.n); }
@@ -1538,8 +1539,8 @@ function renderScorecardTab(){
 // ---------- regulars map (Leaflet, lazy-loaded) ----------
 let liveMap=null, mapShowChurned=false, mapShowRepeat=false, mapShowOneOff=false, geoCache={}, placeGeo={};
 let mapShowStart=true, mapShowTips=true, mapShowSuppliers=true; // place layers default on, toggled for display only (never deletes)
-// The map now lives inside the Customers tab as the "Map" view.
-function mapIsOpen(){ return activeTab==='Customers' && custSegFilter==='Map'; }
+// The map now lives inside the Regulars tab as the "Map" view.
+function mapIsOpen(){ return activeTab==='Regulars' && regSub==='Map'; }
 function segColor(c){
   if(c.s==='Churned') return '#D64545';
   if(c.s==='Repeat') return '#0D9488';
@@ -2275,13 +2276,15 @@ function stackedServiceSVG(top, colorOf) {
   return '<div class="svg-wrap"><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">' + grid + bars + xl + '</svg></div>' + legend;
 }
 
-const tabList = ["Overview","Leads","Calls","Revenue","Customers","Planner","Rounds","Missing Prices"];
+const tabList = ["Overview","Leads","Calls","Revenue","Customers","Regulars","Missing Prices"];
 function renderTabs() {
   document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+t+'</button>').join('');
 }
 function setTab(t) { activeTab=t; custSegFilter="All"; custSearch=""; callSearch=""; callType="all"; scoreEditFor=null; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 function setView(v) { franchiseeView=v; applyFilters(); renderContent(); dfRender(); }
 function goSeg(seg) { activeTab='Customers'; custSegFilter=seg; custSearch=''; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
+function setRegSub(s){ regSub=s; renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
+function goReg(sub){ activeTab='Regulars'; if(sub) regSub=sub; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 // Re-rendering rebuilds the search box, which drops focus after each keystroke. Put it back.
 function onCustSearch(v, pos) {
   custSearch = v;
@@ -2518,6 +2521,14 @@ function renderPassedHub(){
     : '<div class="card"><div style="color:var(--muted);text-align:center;padding:40px">No customers'+(custSearch?' match your search':' here yet')+'.</div></div>';
   return head + search + table;
 }
+function customerRegPointer(){
+  return '<div class="card" style="margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:14px 18px">'
+    + '<div style="font-size:13px;color:var(--muted);line-height:1.5">The map and scorecard for your regulars now live in the Regulars tab, alongside the planner and rounds board.</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      + '<button class="filter-btn" onclick="goReg(\'Map\')">Open map \u2192</button>'
+      + '<button class="filter-btn" onclick="goReg(\'Scorecard\')">Open scorecard \u2192</button>'
+    + '</div></div>';
+}
 function customerToolsRow(){
   const scored = allCustomers.filter(c=>c.s==='Recurring' && hasScore(c)).length;
   const mapped = allCustomers.filter(c=>c.s==='Recurring' && c.postcode).length;
@@ -2531,7 +2542,7 @@ function customerToolsRow(){
 /* ===================== Rounds board (4-week rota) ===================== */
 const RB_DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const RB_DAY_FULL = { Mon:'Monday', Tue:'Tuesday', Wed:'Wednesday', Thu:'Thursday', Fri:'Friday', Sat:'Saturday', Sun:'Sunday' };
-const RB_TARGET_LO = 6, RB_TARGET_HI = 7;
+const RB_TARGET_LO = 6, RB_TARGET_HI = 8;
 const RB_COLORS = ['#E07B1A','#1565C0','#0D9488','#7C3AED','#D64545','#2E7D32','#B26A00','#3949AB','#C2185B','#00838F'];
 let rbSel = {}, rbTraySearch = '', rbSaveTimer = null, rbDragData = null, rbAddOpen = false, rbEditPhId = null, rbViewOverride = 'All';
 
@@ -2635,7 +2646,7 @@ function rbSave(){
   }, 350);
 }
 function rbApply(){ rbSave(); rbRerender(); }
-function rbRerender(){ const el=document.getElementById('content'); if(el && activeTab==='Rounds') el.innerHTML = renderRoundsTab(); }
+function rbRerender(){ const el=document.getElementById('content'); if(el && activeTab==='Regulars' && regSub==='Rounds') el.innerHTML = renderRegularsTab(); }
 function rbRenderTray(){ const el=document.getElementById('rbTrayList'); if(el) el.innerHTML = rbTrayListHTML(); }
 
 // Mutations. A drop sets both the day and the anchor week, and cadence fills the rest of the cycle.
@@ -3029,13 +3040,23 @@ function rbInitGeocode(){
   (async function(){
     try{ if(needPc) await geocodePostcodes(pcs); }catch(e){}
     try{ if(needBase) await geocodePlaces([base]); }catch(e){}
-    if(activeTab==='Rounds') rbRerender();
+    if(activeTab==='Regulars' && regSub==='Rounds') rbRerender();
   })();
 }
 
+function renderRegularsTab(){
+  const subs = ['Rounds','Planner','Map','Scorecard'];
+  const nav = '<div class="filter-row" style="margin-bottom:18px">'+subs.map(s=>'<button class="filter-btn '+(regSub===s?'active':'')+'" onclick="setRegSub(\''+s+'\')">'+s+'</button>').join('')+'</div>';
+  let body='';
+  if(regSub==='Planner') body=renderPlannerTab();
+  else if(regSub==='Map') body=renderMapTab();
+  else if(regSub==='Scorecard') body=renderScorecardTab();
+  else body=renderRoundsTab();
+  return nav+body;
+}
 function renderContent() {
   const el = document.getElementById('content');
-  document.body.classList.toggle('rb-wide', activeTab==='Rounds');
+  document.body.classList.toggle('rb-wide', activeTab==='Regulars' && regSub==='Rounds');
   const histJobs = monthlyData.reduce((s,m)=>s+(m.hist&&m.j?m.j:0),0); // invoiced jobs pre-Oct-2024, in current period
   const totalJobs = jobs.length + histJobs;
   const totalRev = Math.round(monthlyData.reduce((s,m)=>s+m.r,0)); // override-aware: invoiced history + live Zenbooker
@@ -3464,21 +3485,18 @@ function renderContent() {
     const segs = ["All","Recurring","Repeat","One-Off","Churned"].concat(franchiseeView==='Adam' ? [] : ["Passed to Adam"]);
     const chipBtn = (v,label) => '<button class="filter-btn '+(custSegFilter===v?'active':'')+'" onclick="custSegFilter=\''+v+'\';custSearch=\'\';scoreEditFor=null;renderContent();window.scrollTo({top:0,behavior:\'smooth\'})">'+label+'</button>';
     const segChips = segs.map(s=>chipBtn(s, s+' ('+(s==='All'?allCustomers.length:allCustomers.filter(c=>c.s===s).length)+')')).join('');
-    const toolChips = chipBtn('Map','Map') + chipBtn('Scorecard','Scorecard');
-    const chips = `<div class="filter-row">${segChips}<span style="width:1px;align-self:stretch;min-height:20px;background:var(--line);margin:0 4px"></span>${toolChips}</div>`;
+    const chips = `<div class="filter-row">${segChips}</div>`;
     let body, isMap=false;
     if (custSegFilter === 'Recurring') body = renderRecurringHub();
     else if (custSegFilter === 'Churned') body = renderChurnedHub();
     else if (custSegFilter === 'Repeat') body = renderRepeatHub();
     else if (custSegFilter === 'One-Off') body = renderOneOffHub();
-    else if (custSegFilter === 'Map') { body = renderMapTab(); isMap = true; }
-    else if (custSegFilter === 'Scorecard') body = renderScorecardTab();
     else if (custSegFilter === 'Passed to Adam') body = renderPassedHub();
     else {
       let filtered = allCustomers;
       if (custSegFilter !== 'All') filtered = filtered.filter(c => c.s === custSegFilter);
       if (custSearch) filtered = filtered.filter(c => c.n.toLowerCase().includes(custSearch.toLowerCase()));
-      const intro = custSegFilter==='All' ? (customerMixCard() + customerToolsRow()) : '';
+      const intro = custSegFilter==='All' ? (customerMixCard() + customerRegPointer()) : '';
       const searchBox = `<input id="custSearchBox" class="search" placeholder="Search customers..." value="${custSearch}" oninput="onCustSearch(this.value, this.selectionStart)">`;
       body = intro + searchBox +
         `<div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">Showing ${filtered.length} customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView+' only':''}</div>
@@ -3490,14 +3508,11 @@ function renderContent() {
   }
 
 
-  else if (activeTab==='Planner') {
-    el.innerHTML = renderPlannerTab();
-    recalcPlanner();
-  }
-
-  else if (activeTab==='Rounds') {
-    el.innerHTML = renderRoundsTab();
-    rbInitGeocode();
+  else if (activeTab==='Regulars') {
+    el.innerHTML = renderRegularsTab();
+    if(regSub==='Planner') recalcPlanner();
+    else if(regSub==='Map') initLiveMap();
+    else if(regSub==='Rounds') rbInitGeocode();
   }
 
   else if (activeTab==='Missing Prices') {
