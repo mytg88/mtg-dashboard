@@ -3686,7 +3686,7 @@ function renderContent() {
     </div>
     ${cmpLabel && prevTotals && prevTotals.has ? '<div style="font-size:12px;color:var(--muted);margin:-14px 0 22px;display:flex;align-items:center;gap:6px"><span class="chip chip-up" style="pointer-events:none">\u25b2</span><span class="chip chip-down" style="pointer-events:none">\u25bc</span> compared with the same period last year ('+cmpLabel.replace(/^vs /,'')+'). Active recurring is a live snapshot, so it has no comparison.</div>' : ''}
     ${monthlyData.some(m=>m.m < '2024-10') ? '<div style="font-size:11px;color:var(--muted);margin:-14px 0 22px;line-height:1.5">Revenue, completed jobs and customers cover the full history back to 2021. Recurring status comes from live job records, so customers who left before October 2024 show as repeat, one-off or churned.</div>' : ''}
-    <div class="card" style="margin-bottom:28px;cursor:pointer" onclick="setTab('Revenue')" title="Open the Revenue tab"><div class="h">Revenue trend</div>${areaChartSVG(monthlyData,'#2E7D32')}</div>
+    <div class="card" style="margin-bottom:28px;cursor:pointer" onclick="setTab('Revenue')"><div class="h">Revenue trend</div>${areaChartSVG(monthlyData,'#2E7D32')}</div>
     ${customerMixCard()}
     <div class="grid grid-2">
       <div class="card"><div class="h">Franchisee performance</div>
