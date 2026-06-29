@@ -3342,13 +3342,13 @@ const BP_OPTS = {
 const BP_FUNDING=['Personal savings','Reinvested profit','Business loan','A mix'];
 const BP_SECTIONS=[
   {key:'motivation', group:'Foundation', title:'Your motivation', desc:'Understand your why and what drives you.', why:'Your core motivations are the anchor for every decision. When challenges come, your why keeps you focused and resilient.'},
-  {key:'vision', group:'Foundation', title:'Your vision', desc:'Set your five-year, one-year and three-month goals.', why:'A clear picture of where you are heading turns day-to-day work into progress towards something you actually want.'},
+  {key:'vision', group:'Foundation', title:'Vision and goals', desc:'Where you are heading, plus your year-one and 90-day goals.', why:'A clear picture of where you are heading turns day-to-day work into progress towards something you actually want. The 90-day question is where it becomes action.'},
   {key:'income', group:'Targets and finances', title:'Income and targets', desc:'Set your income needs and the rates to hit them.', why:'Knowing the numbers you need protects your time. Price below them and you work hard for too little.'},
   {key:'invest', group:'Targets and finances', title:'Investment plan', desc:'What you plan to invest in the business this year.', why:'Reinvesting in better tools, training and marketing is how a maintenance round grows. Planning it keeps your spending deliberate rather than reactive.'},
   {key:'market', group:'Market', title:'Territory and marketing', desc:'Define your area, your customers and how you reach them.', why:'Focus beats spread. A tight area and two or three channels you do well will out-perform trying to be everywhere.'},
   {key:'services', group:'Operations', title:'Services and skills', desc:'Choose what you offer and where you will grow.', why:'A sensible mix of regular and one-off work keeps income steady and the days varied. Knowing your gaps tells you where to grow.'},
   {key:'ops', group:'Operations', title:'Operations', desc:'Plan your working pattern across the year.', why:'A clear pattern helps you protect earning time in season and use the quieter months for planning and rest.'},
-  {key:'action', group:'Action', title:'Goals and action plan', desc:'Your targets for the year and your focus for the next 90 days.', why:'Goals give you direction; a 90-day focus turns them into something you act on now. Revisit this each quarter as you tick things off and set the next ones.'}
+  {key:'review', group:'Review', title:'Summary and review', desc:'A recap of your plan, and when to revisit it.', why:'A plan is only useful if you come back to it. Set a review rhythm and we will drop a reminder into your to-do list.'}
 ];
 const BP_TERRITORIES=[
   {name:'Parkstone', pc:'BH13, BH14'},
@@ -3375,11 +3375,7 @@ const BP_SEEDS = { adam: {
   income:{ monthly:'3000', rate:'33', breakeven:'27', turnover:'63340', costs:'51403' },
   market:{ territory:'Bournemouth', alsoCover:[], channels:['Customer referrals','Social media','Door drops and flyers'], edge:'' },
   services:{ offered:['Lawn mowing','Border maintenance','Weeding','Hedge trimming','Pruning','Planting','Leaf clearance','Pressure washing','Garden clearance','Waste removal','Lawn care treatments','Lawn renovations'], skills:[], develop:'I would like to enhance my knowledge of all aspects of gardening, including business management, plant knowledge, planting, garden design and build, lawn care and lawn renovations. I have been doing this through YouTube videos, gardening programmes and books. I would also like to enrol on a horticulture course to improve my knowledge of plant species and genus.' },
-  ops:{ peak:{start:'09:00',finish:'18:00',days:5,holiday:2}, off:{start:'09:30',finish:'16:30',days:5,holiday:4} },
-  action:{
-    year:[ {t:'Reach \u00a362,000 to \u00a371,000 labour turnover',done:false}, {t:'100+ positive reviews to stay top 5 in the area',done:false}, {t:'3 days of booked maintenance for 2 gardeners per week',done:false}, {t:'Become RHS level 2 and PA1 & PA6 qualified',done:false} ],
-    next90:[ {t:'Complete all initial MTG training',done:false}, {t:'Foundations in place: waste licence, PLI, social profiles',done:false}, {t:'Sell existing van and replace with a larger vehicle',done:false}, {t:'Spring marketing push for route density',done:false} ]
-  }
+  ops:{ peak:{start:'09:00',finish:'18:00',days:5,holiday:2}, off:{start:'09:30',finish:'16:30',days:5,holiday:4} }
 } };
 let bpMode='overview', bpSection=0;
 let bpState={}, bpSaveTimer=null, bpBootedFor=null;
@@ -3390,8 +3386,7 @@ function bpDefault(){ return { v:1, updatedAt:0, reviewEvery:'quarter',
   invest:{tools:'',vehicle:'',training:'',marketing:'',other:'',funding:'Reinvested profit'},
   market:{territory:'',alsoCover:[],channels:[],edge:''},
   services:{offered:[],skills:[],develop:''},
-  ops:{peak:{start:'09:00',finish:'18:00',days:5,holiday:2}, off:{start:'09:30',finish:'16:30',days:5,holiday:4}},
-  action:{ year:[], next90:[] }
+  ops:{peak:{start:'09:00',finish:'18:00',days:5,holiday:2}, off:{start:'09:30',finish:'16:30',days:5,holiday:4}}
 }; }
 function bpCacheKey(){ return 'mtg_bizplan_'+((typeof auth!=='undefined'&&auth&&auth.user)?String(auth.user).toLowerCase():'anon'); }
 function bpEnsure(){
@@ -3401,9 +3396,6 @@ function bpEnsure(){
   if(!bpState.reviewEvery) bpState.reviewEvery='quarter';
   ['motivation','vision','income','invest','market','services'].forEach(k=>{ bpState[k]=Object.assign({}, d[k], bpState[k]||{}); });
   bpState.ops = bpState.ops||{}; bpState.ops.peak=Object.assign({}, d.ops.peak, bpState.ops.peak||{}); bpState.ops.off=Object.assign({}, d.ops.off, bpState.ops.off||{});
-  bpState.action = bpState.action||{};
-  if(!Array.isArray(bpState.action.year)) bpState.action.year=[];
-  if(!Array.isArray(bpState.action.next90)) bpState.action.next90=[];
   if(!Array.isArray(bpState.market.alsoCover)) bpState.market.alsoCover=[];
 }
 function bpLoadCache(){ try{ const raw=localStorage.getItem(bpCacheKey()); if(raw){ bpState=JSON.parse(raw)||{}; return true; } }catch(e){} return false; }
@@ -3437,11 +3429,12 @@ function bpDone(i){
   if(k==='market') return !!(s.market.territory||'').trim();
   if(k==='services') return (s.services.offered||[]).length>0;
   if(k==='ops') return !!(s.ops.peak.start&&s.ops.peak.finish);
-  if(k==='action') return (s.action.year||[]).length>0||(s.action.next90||[]).length>0;
+  if(k==='review') return !!(s.reviewReminder&&s.reviewReminder.due);
   return false;
 }
 function bpProgress(){ let n=0; for(let i=0;i<BP_SECTIONS.length;i++) if(bpDone(i)) n++; return {done:n, total:BP_SECTIONS.length}; }
-function bpNextReview(){ if(!bpState.updatedAt) return null; const d=new Date(bpState.updatedAt); const add=bpState.reviewEvery==='month'?1:(bpState.reviewEvery==='half'?6:3); d.setMonth(d.getMonth()+add); return d; }
+function bpNextReview(){ const base=bpState.updatedAt||Date.now(); const d=new Date(base); const add=bpState.reviewEvery==='month'?1:(bpState.reviewEvery==='half'?6:3); d.setMonth(d.getMonth()+add); return d; }
+function bpYmd(d){ const z=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate()); }
 function bpFmtDate(d){ if(!d) return '\u2014'; const m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return d.getDate()+' '+m[d.getMonth()]+' '+d.getFullYear(); }
 function bpEsc(s){ return escAttr(s==null?'':s); }
 // setters
@@ -3450,9 +3443,21 @@ function bpSetOps(sub, field, val){ bpState.ops[sub][field]=val; bpSave(); }
 function bpSetOpsNum(sub, field, val){ bpState.ops[sub][field]=val; bpSave(); const w=document.getElementById('bpOpsWk'), d=document.getElementById('bpOpsDy'); if(w)w.textContent=bpOpsWeeks(); if(d)d.textContent=bpOpsDays(); }
 function bpIncomeOnInput(field, val){ bpState.income[field]=val; bpSave(); const p=document.getElementById('bpProfitV'), m=document.getElementById('bpMarginV'); if(p)p.textContent=fmt(bpProfit()); if(m)m.textContent=bpMargin()+'%'; }
 function bpToggleOpt(sec, field, optsKey, idx){ const o=BP_OPTS[optsKey][idx]; const arr=bpState[sec][field]||[]; const j=arr.indexOf(o); if(j===-1) arr.push(o); else arr.splice(j,1); bpState[sec][field]=arr; bpSave(); bpRerender(); }
-function bpToggleMile(key, idx){ const m=bpState.action[key][idx]; if(m){ m.done=!m.done; bpSave(); bpRerender(); } }
-function bpDelMile(key, idx){ bpState.action[key].splice(idx,1); bpSave(); bpRerender(); }
-function bpAddMile(key){ const t=prompt('New milestone'); if(t&&t.trim()){ bpState.action[key].push({t:t.trim(),done:false}); bpSave(); bpRerender(); } }
+function bpAddReviewReminder(){
+  const d=bpNextReview(); const due=bpYmd(d);
+  const id='bp-review';
+  const patch={ id:id, custom:true, kind:'dated', tab:null, due:due, block:null, recur:'once', urgent:false, title:'Review your business plan', desc:'Revisit your plan, update your numbers and set your next 90 day focus.' };
+  if(typeof todoState!=='undefined' && todoState && Array.isArray(todoState.tasks)){
+    const ex=todoState.tasks.filter(function(x){return x.id===id;})[0];
+    if(ex) Object.assign(ex, patch); else todoState.tasks.push(patch);
+    if(typeof todoSave==='function') todoSave();
+  }
+  bpState.reviewReminder={ due:due }; bpSave(); bpRerender();
+}
+function bpRemoveReviewReminder(){
+  if(typeof todoState!=='undefined' && todoState && Array.isArray(todoState.tasks)){ todoState.tasks=todoState.tasks.filter(function(x){return x.id!=='bp-review';}); if(typeof todoSave==='function') todoSave(); }
+  delete bpState.reviewReminder; bpSave(); bpRerender();
+}
 function bpSetReview(v){ bpState.reviewEvery=v; bpSave(); bpRerender(); }
 function bpGoResources(){ if(typeof tabList!=='undefined' && tabList.indexOf('Resources')!==-1){ setTab('Resources'); } else { alert('The rate calculator will live in the Resources section, coming soon.'); } }
 // field builders
@@ -3474,11 +3479,33 @@ function bpOpsFields(){
     + pat('off','Off-season pattern','December to February, roughly 12 weeks. Good for admin, planning and holidays.')
     + '<div class="bp-derived"><div><span class="bp-deri-l">Working weeks a year</span><span class="bp-deri-v" id="bpOpsWk">'+bpOpsWeeks()+'</span></div><div><span class="bp-deri-l">Working days a year (approx)</span><span class="bp-deri-v" id="bpOpsDy">'+bpOpsDays()+'</span></div></div>';
 }
-function bpActionFields(){
-  function list(key,label,sub,addlabel){ const arr=bpState.action[key]||[]; return '<div class="bp-q">'+label+'</div><div class="bp-hint">'+sub+'</div>'+(arr.length?arr.map(function(m,i){ return '<div class="bp-mile'+(m.done?' done':'')+'"><button class="bp-mile-check'+(m.done?' on':'')+'" onclick="bpToggleMile(\''+key+'\','+i+')"></button><span class="bp-mile-t">'+bpEsc(m.t)+'</span><button class="td-mini" title="Remove" onclick="bpDelMile(\''+key+'\','+i+')">\u2715</button></div>'; }).join(''):'<div class="bp-hint" style="font-style:italic">Nothing added yet.</div>')+'<div style="margin-top:10px"><button class="bp-btn ghost" onclick="bpAddMile(\''+key+'\')">+ '+addlabel+'</button></div>'; }
-  return list('year','What do you want to achieve this year?','Your bigger targets for the next twelve months. For example: reach a revenue figure, sign a number of regular customers, gain a qualification, or build your reviews.','Add a goal')
-    + '<div style="height:22px"></div>'
-    + list('next90','What will you focus on in the next 90 days?','The concrete steps that move you towards those goals right now. Refresh these at each review.','Add a focus');
+function bpReviewFields(){
+  const s=bpState, inc=s.income;
+  const join=function(a){ return (a&&a.length)?a.map(bpEsc).join(', '):'\u2014'; };
+  const first=function(t){ return t?bpEsc(String(t).split('\n')[0]):'\u2014'; };
+  const line=function(l,v){ return '<div style="display:flex;gap:14px;padding:9px 0;border-bottom:1px solid var(--line)"><div style="width:140px;flex-shrink:0;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);padding-top:1px">'+l+'</div><div style="font-size:13px;color:var(--ink);line-height:1.5">'+v+'</div></div>'; };
+  const tldr='<div class="bp-q" style="margin-top:0">Your plan at a glance</div><div class="bp-hint">A quick recap of what you have set. Jump back to any section from the steps above to change it.</div>'
+    + '<div class="card" style="margin-bottom:22px">'
+    + line('Why', join(s.motivation.why))
+    + line('Five year vision', first(s.vision.fiveYear))
+    + line('Next 90 days', first(s.vision.ninetyDay))
+    + line('Income target', (inc.monthly?fmt(bpNum(inc.monthly))+' a month':'\u2014')+(inc.rate?' at \u00a3'+bpNum(inc.rate)+'/hr':''))
+    + line('Annual', inc.turnover?(fmt(bpNum(inc.turnover))+' turnover, '+fmt(bpProfit())+' profit ('+bpMargin()+'%)'):'\u2014')
+    + line('Territory', bpEsc(s.market.territory||'\u2014'))
+    + line('Services', (s.services.offered||[]).length+' selected')
+    + '</div>';
+  const review=bpNextReview();
+  const set=s.reviewReminder&&s.reviewReminder.due;
+  const matches=set&&review&&s.reviewReminder.due===bpYmd(review);
+  const opts=['month|Month','quarter|Quarter','half|Six months'].map(function(o){ const p=o.split('|'); return '<option value="'+p[0]+'"'+(s.reviewEvery===p[0]?' selected':'')+'>'+p[1]+'</option>'; }).join('');
+  const reviewCard='<div class="bp-q">Keep your plan alive</div><div class="bp-hint">A plan only works if you revisit it. Set how often to review, and drop a reminder into your to-do list.</div>'
+    + '<div class="card"><div class="bp-row"><div><span class="bp-deri-l">Review every</span><select class="bp-sel" onchange="bpSetReview(this.value)">'+opts+'</select></div>'
+    + '<div><span class="bp-deri-l">Next review suggested</span><div class="bp-deri-v">'+bpFmtDate(review)+'</div></div></div>'
+    + (set
+        ? '<div class="bp-why" style="margin-top:16px;background:#E8F5E9;border-color:#CDE8D0;color:#27502f"><b>Reminder set.</b> \u201cReview your business plan\u201d is in your to-do list for '+bpFmtDate(new Date(s.reviewReminder.due+'T00:00:00'))+'.'+(matches?'':' <a onclick="bpAddReviewReminder()" style="color:var(--green6);text-decoration:underline;cursor:pointer">Update to '+bpFmtDate(review)+'</a>.')+' <a onclick="bpRemoveReviewReminder()" style="color:var(--red);text-decoration:underline;cursor:pointer">Remove</a></div>'
+        : '<div style="margin-top:16px"><button class="bp-btn primary" onclick="bpAddReviewReminder()">Add review reminder to my to-do list</button></div>')
+    + '</div>';
+  return tldr+reviewCard;
 }
 function bpSectionFields(i){
   const k=BP_SECTIONS[i].key;
@@ -3506,7 +3533,7 @@ function bpSectionFields(i){
     + '<div class="bp-q">Specialist skills or qualifications</div><div class="bp-hint">These can unlock higher-value work and justify higher rates.</div>'+bpChipsHTML('services','skills','skills')
     + '<div class="bp-q">Which skills would you most like to develop over the next year?</div>'+bpTextHTML('services','develop','Skills to improve or new ones to learn that could grow your business.',true);
   if(k==='ops') return bpOpsFields();
-  if(k==='action') return bpActionFields();
+  if(k==='review') return bpReviewFields();
   return '';
 }
 function bpKpi(l,v,s,color){ return '<div class="card accent-top"><div class="kpi-l">'+l+'</div><div class="kpi-v"'+(color?' style="color:'+color+'"':'')+'>'+v+'</div><div class="kpi-s">'+s+'</div></div>'; }
@@ -3567,13 +3594,13 @@ function bpPrintHTML(){
     + '</style></head><body>'
     + '<h1>My Tidy Garden business plan</h1><div class="sub">'+(who?bpEsc(who)+' \u00b7 ':'')+bpFmtDate(new Date())+'</div>'
     + '<h2>1. Motivation</h2><b>Why</b>'+list(s.motivation.why)+'<b>Benefits</b>'+list(s.motivation.benefits)+'<b>Lifestyle goals</b>'+para(s.motivation.lifestyle)
-    + '<h2>2. Vision</h2><b>Five years</b>'+para(s.vision.fiveYear)+'<b>Year one</b>'+para(s.vision.yearOne)+'<b>Next three months</b>'+para(s.vision.ninetyDay)
+    + '<h2>2. Vision and goals</h2><b>Five years</b>'+para(s.vision.fiveYear)+'<b>Year one</b>'+para(s.vision.yearOne)+'<b>Next three months</b>'+para(s.vision.ninetyDay)
     + '<h2>3. Income and targets</h2><table><tr><td>Target monthly income</td><td>'+money(s.income.monthly)+'</td></tr><tr><td>Required hourly rate</td><td>'+(s.income.rate?'\u00a3'+bpNum(s.income.rate)+'/hr':'\u2014')+'</td></tr><tr><td>Break-even rate</td><td>'+(s.income.breakeven?'\u00a3'+bpNum(s.income.breakeven)+'/hr':'\u2014')+'</td></tr><tr><td>Annual turnover</td><td>'+money(s.income.turnover)+'</td></tr><tr><td>Annual costs</td><td>'+money(s.income.costs)+'</td></tr><tr><td>Annual profit</td><td>'+fmt(bpProfit())+'</td></tr><tr><td>Profit margin</td><td>'+bpMargin()+'%</td></tr></table>'
     + '<h2>4. Investment plan</h2><table><tr><td>Tools and machinery</td><td>'+money(s.invest.tools)+'</td></tr><tr><td>Vehicle</td><td>'+money(s.invest.vehicle)+'</td></tr><tr><td>Training and qualifications</td><td>'+money(s.invest.training)+'</td></tr><tr><td>Marketing</td><td>'+money(s.invest.marketing)+'</td></tr><tr><td>Other</td><td>'+money(s.invest.other)+'</td></tr><tr><td>Total planned investment</td><td>'+fmt(bpInvestTotal())+'</td></tr><tr><td>Funding</td><td>'+bpEsc(s.invest.funding||'')+'</td></tr></table>'
     + '<h2>5. Territory and marketing</h2><b>Primary territory</b>'+para(s.market.territory)+'<b>Also covering</b>'+list(s.market.alsoCover)+'<b>Channels</b>'+list(s.market.channels)+'<b>How you stand out</b>'+para(s.market.edge)
     + '<h2>6. Services and skills</h2><b>Services</b>'+list(s.services.offered)+'<b>Specialist skills</b>'+list(s.services.skills)+'<b>Skills to develop</b>'+para(s.services.develop)
     + '<h2>7. Operations</h2><table><tr><td></td><td>Peak</td><td>Off-season</td></tr><tr><td>Start</td><td>'+bpEsc(s.ops.peak.start)+'</td><td>'+bpEsc(s.ops.off.start)+'</td></tr><tr><td>Finish</td><td>'+bpEsc(s.ops.peak.finish)+'</td><td>'+bpEsc(s.ops.off.finish)+'</td></tr><tr><td>Days per week</td><td>'+bpEsc(s.ops.peak.days)+'</td><td>'+bpEsc(s.ops.off.days)+'</td></tr><tr><td>Holiday weeks</td><td>'+bpEsc(s.ops.peak.holiday)+'</td><td>'+bpEsc(s.ops.off.holiday)+'</td></tr></table><p>Working weeks a year: '+bpOpsWeeks()+'. Working days a year (approx): '+bpOpsDays()+'.</p>'
-    + '<h2>8. Goals and action plan</h2><b>Goals for the year</b>'+mile(s.action.year)+'<b>Focus for the next 90 days</b>'+mile(s.action.next90)
+    + '<p class="muted" style="margin-top:24px">Next review: '+bpFmtDate(bpNextReview())+'.</p>'
     + '</body></html>';
 }
 bpLoad();
