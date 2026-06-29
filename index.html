@@ -3397,6 +3397,7 @@ function bpEnsure(){
   ['motivation','vision','income','invest','market','services'].forEach(k=>{ bpState[k]=Object.assign({}, d[k], bpState[k]||{}); });
   bpState.ops = bpState.ops||{}; bpState.ops.peak=Object.assign({}, d.ops.peak, bpState.ops.peak||{}); bpState.ops.off=Object.assign({}, d.ops.off, bpState.ops.off||{});
   if(!Array.isArray(bpState.market.alsoCover)) bpState.market.alsoCover=[];
+  if(!Array.isArray(bpState.history)) bpState.history=[];
 }
 function bpLoadCache(){ try{ const raw=localStorage.getItem(bpCacheKey()); if(raw){ bpState=JSON.parse(raw)||{}; return true; } }catch(e){} return false; }
 function bpWriteCache(){ try{ localStorage.setItem(bpCacheKey(), JSON.stringify(bpState)); }catch(e){} }
@@ -3458,6 +3459,21 @@ function bpRemoveReviewReminder(){
   if(typeof todoState!=='undefined' && todoState && Array.isArray(todoState.tasks)){ todoState.tasks=todoState.tasks.filter(function(x){return x.id!=='bp-review';}); if(typeof todoSave==='function') todoSave(); }
   delete bpState.reviewReminder; bpSave(); bpRerender();
 }
+function bpSnapshotData(){ const c=JSON.parse(JSON.stringify(bpState)); delete c.history; delete c.reviewReminder; return c; }
+function bpSnapNums(data){ const i=(data&&data.income)||{}; const t=bpNum(i.turnover), c=bpNum(i.costs), p=t-c, m=t>0?Math.round(p/t*1000)/10:0; const parts=[]; if(bpNum(i.rate)) parts.push('\u00a3'+bpNum(i.rate)+'/hr'); if(t) parts.push(fmt(t)+' turnover'); if(t||c) parts.push(fmt(p)+' profit'+(t?' ('+m+'%)':'')); return parts.length?parts.join(' \u00b7 '):'No figures set'; }
+function bpAddSnapshot(){
+  if(!Array.isArray(bpState.history)) bpState.history=[];
+  const def = bpState.history.length ? ('Review \u2013 '+bpFmtDate(new Date())) : 'Initial plan';
+  const label = prompt('Name this snapshot', def); if(label===null) return; const lab=(String(label).trim()||def);
+  bpState.history.push({ id:'s-'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), at:Date.now(), label:lab, data:bpSnapshotData() });
+  bpSave(); bpMode='history'; bpRerender(); window.scrollTo({top:0,behavior:'smooth'});
+}
+function bpRemoveSnapshot(id){ const h=(bpState.history||[]).filter(function(x){return x.id===id;})[0]; if(!h) return; if(!confirm('Remove the snapshot \u201c'+h.label+'\u201d?')) return; bpState.history=bpState.history.filter(function(x){return x.id!==id;}); bpSave(); bpRerender(); }
+function bpViewSnapshot(id){ const snap=(bpState.history||[]).filter(function(x){return x.id===id;})[0]; if(!snap) return; const cur=bpState; bpState=JSON.parse(JSON.stringify(snap.data)); bpEnsure(); try{ bpExport(); } finally { bpState=cur; } }
+function bpModeBtns(active){
+  function b(mode,label){ return '<button class="bp-mode-btn'+(active===mode?' on':'')+'" onclick="bpSetMode(\''+mode+'\')">'+label+'</button>'; }
+  return '<div class="bp-modes">'+b('overview','Overview')+b('edit','Edit plan')+b('history','History')+'<button class="bp-mode-btn" onclick="bpExport()">Export</button></div>';
+}
 function bpSetReview(v){ bpState.reviewEvery=v; bpSave(); bpRerender(); }
 function bpGoResources(){ if(typeof tabList!=='undefined' && tabList.indexOf('Resources')!==-1){ setTab('Resources'); } else { alert('The rate calculator will live in the Resources section, coming soon.'); } }
 // field builders
@@ -3505,7 +3521,10 @@ function bpReviewFields(){
         ? '<div class="bp-why" style="margin-top:16px;background:#E8F5E9;border-color:#CDE8D0;color:#27502f"><b>Reminder set.</b> \u201cReview your business plan\u201d is in your to-do list for '+bpFmtDate(new Date(s.reviewReminder.due+'T00:00:00'))+'.'+(matches?'':' <a onclick="bpAddReviewReminder()" style="color:var(--green6);text-decoration:underline;cursor:pointer">Update to '+bpFmtDate(review)+'</a>.')+' <a onclick="bpRemoveReviewReminder()" style="color:var(--red);text-decoration:underline;cursor:pointer">Remove</a></div>'
         : '<div style="margin-top:16px"><button class="bp-btn primary" onclick="bpAddReviewReminder()">Add review reminder to my to-do list</button></div>')
     + '</div>';
-  return tldr+reviewCard;
+  const histCount=(s.history&&s.history.length)||0;
+  const snap='<div class="bp-q">Track your progress</div><div class="bp-hint">When you finish a review, save a snapshot so you can look back at how your plan and numbers have changed over time.</div>'
+    + '<div><button class="bp-btn" onclick="bpAddSnapshot()">Save a snapshot of this plan</button>'+(histCount?' <button class="bp-btn ghost" onclick="bpSetMode(\'history\')">View history ('+histCount+')</button>':'')+'</div>';
+  return tldr+reviewCard+'<div style="height:22px"></div>'+snap;
 }
 function bpSectionFields(i){
   const k=BP_SECTIONS[i].key;
@@ -3540,7 +3559,7 @@ function bpKpi(l,v,s,color){ return '<div class="card accent-top"><div class="kp
 function bpOverviewHTML(){
   const pr=bpProgress(), pct=Math.round(pr.done/pr.total*100), inc=bpState.income;
   const head='<div class="bp-head"><div><div class="h" style="margin-bottom:4px">Business plan</div><div style="font-size:13px;color:var(--muted)">Plan your business, then revisit it as you learn and grow.</div></div>'
-    + '<div class="bp-modes"><button class="bp-mode-btn on">Overview</button><button class="bp-mode-btn" onclick="bpSetMode(\'edit\')">Edit plan</button><button class="bp-mode-btn" onclick="bpExport()">Export</button></div></div>';
+    + bpModeBtns('overview')+'</div>';
   const kpis='<div class="grid grid-4">'
     + bpKpi('Required rate', inc.rate?'\u00a3'+bpNum(inc.rate)+'/hr':'\u2014','what you aim to charge')
     + bpKpi('Break-even rate', inc.breakeven?'\u00a3'+bpNum(inc.breakeven)+'/hr':'\u2014','covers your costs')
@@ -3566,7 +3585,7 @@ function bpOverviewHTML(){
 function bpEditHTML(){
   const pr=bpProgress(), pct=Math.round(pr.done/pr.total*100);
   const head='<div class="bp-head"><div><div class="h" style="margin-bottom:4px">Business plan</div><div style="font-size:13px;color:var(--muted)">Section '+(bpSection+1)+' of '+BP_SECTIONS.length+'</div></div>'
-    + '<div class="bp-modes"><button class="bp-mode-btn" onclick="bpSetMode(\'overview\')">Overview</button><button class="bp-mode-btn on">Edit plan</button><button class="bp-mode-btn" onclick="bpExport()">Export</button></div></div>';
+    + bpModeBtns('edit')+'</div>';
   const prog='<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div class="td-prog-bar" style="flex:1"><div class="td-prog-fill" style="width:'+pct+'%"></div></div><div style="font-size:12px;color:var(--muted);white-space:nowrap">'+pct+'% complete</div></div>';
   const steps='<div class="bp-steps">'+BP_SECTIONS.map(function(sec,i){ return '<button class="bp-step'+(i===bpSection?' on':'')+(bpDone(i)?' done':'')+'" onclick="bpGoSection('+i+')"><span class="bp-step-dot"></span>'+bpEsc(sec.title)+'</button>'; }).join('')+'</div>';
   const sec=BP_SECTIONS[bpSection];
@@ -3577,7 +3596,20 @@ function bpEditHTML(){
     + '<button class="bp-btn primary" onclick="'+(isLast?'bpSetMode(\'overview\')':'bpGoSection('+(bpSection+1)+')')+'">'+(isLast?'Finish':'Next \u203a')+'</button></div>';
   return head+prog+steps+body+nav;
 }
-function renderPlanTab(){ return bpMode==='edit'?bpEditHTML():bpOverviewHTML(); }
+function bpHistoryHTML(){
+  const head='<div class="bp-head"><div><div class="h" style="margin-bottom:4px">Business plan</div><div style="font-size:13px;color:var(--muted)">Snapshots of your plan over time.</div></div>'+bpModeBtns('history')+'</div>';
+  const hist=(bpState.history||[]).slice().sort(function(a,b){return b.at-a.at;});
+  const save='<div class="card" style="margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap"><div><div style="font-size:13.5px;font-weight:600">Save a snapshot</div><div style="font-size:12.5px;color:var(--muted);margin-top:3px">Capture your plan exactly as it is today. Do this at each review to see how it changes over time.</div></div><button class="bp-btn primary" onclick="bpAddSnapshot()">Save snapshot</button></div>';
+  let listHtml;
+  if(!hist.length){ listHtml='<div class="card" style="text-align:center;color:var(--muted);font-size:13px;padding:34px">No snapshots yet. Save one to capture your plan as it is today.</div>'; }
+  else {
+    listHtml='<div class="card"><div class="h" style="margin-bottom:8px">History</div>'+hist.map(function(h){
+      return '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:14px 0;border-bottom:1px solid var(--line)"><div style="min-width:0"><div style="font-size:13.5px;font-weight:600;color:var(--ink)">'+bpEsc(h.label)+'</div><div style="font-size:12px;color:var(--muted);margin-top:2px">'+bpFmtDate(new Date(h.at))+'</div><div style="font-size:12px;color:var(--ink);margin-top:6px">'+bpSnapNums(h.data)+'</div></div><div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0"><button class="bp-btn" style="padding:7px 14px" onclick="bpViewSnapshot(\''+h.id+'\')">View</button><button class="bp-btn ghost" style="padding:7px 14px;color:var(--red)" onclick="bpRemoveSnapshot(\''+h.id+'\')">Remove</button></div></div>';
+    }).join('')+'</div>';
+  }
+  return head+save+listHtml;
+}
+function renderPlanTab(){ return bpMode==='edit'?bpEditHTML():(bpMode==='history'?bpHistoryHTML():bpOverviewHTML()); }
 function bpRerender(){ const el=document.getElementById('content'); if(el && activeTab==='Plan') el.innerHTML=renderPlanTab(); }
 function bpSetMode(m){ bpMode=m; bpRerender(); window.scrollTo({top:0,behavior:'smooth'}); }
 function bpGoSection(i){ bpSection=i; bpMode='edit'; bpRerender(); window.scrollTo({top:0,behavior:'smooth'}); }
