@@ -1488,14 +1488,22 @@ function renderPlaceMarkers(map){
   if(!map || !window.L) return;
   if(map._mtgPlaces){ try{ map.removeLayer(map._mtgPlaces); }catch(e){} }
   const layer=L.layerGroup().addTo(map); map._mtgPlaces=layer;
+  const shown=[];
   mapPlaces.forEach(p=>{
     if(p.kind==='start' && !mapShowStart) return;
     if(p.kind==='tip' && !mapShowTips) return;
     if(p.kind==='supplier' && !mapShowSuppliers) return;
     if(p.kind==='start' && !(franchiseeView==='All' || franchiseeView===p.op)) return;
     const g=placeGeo[p.q]; if(!g) return;
-    const s=PLACE_STYLE[p.kind]||PLACE_STYLE.supplier;
-    L.marker([g.lat,g.lng],{ icon:placeIcon(p.kind,p.op), zIndexOffset:1000 })
+    shown.push({ p:p, lat:g.lat, lng:g.lng });
+  });
+  // Fan out places that resolve to the same spot, e.g. a tip and a supplier on the same site,
+  // so neither hides behind the other.
+  const groups={};
+  shown.forEach(m=>{ const k=m.lat.toFixed(4)+','+m.lng.toFixed(4); (groups[k]=groups[k]||[]).push(m); });
+  Object.keys(groups).forEach(k=>{ const g=groups[k]; if(g.length>1){ const R=0.0009; g.forEach((m,i)=>{ const a=(i/g.length)*2*Math.PI - Math.PI/2; m.lat += R*Math.cos(a); m.lng += R*Math.sin(a)/Math.cos(m.lat*Math.PI/180); }); } });
+  shown.forEach(m=>{ const p=m.p, s=PLACE_STYLE[p.kind]||PLACE_STYLE.supplier;
+    L.marker([m.lat,m.lng],{ icon:placeIcon(p.kind,p.op), zIndexOffset:1000 })
       .bindPopup('<div style="font-family:DM Sans,sans-serif;min-width:140px"><div style="font-weight:700;font-size:13px">'+escAttr(p.label)+'</div><div style="font-size:12px;color:#5b665c;margin-top:2px">'+s.sub+(p.op?' \u00b7 '+p.op:'')+'</div></div>')
       .addTo(layer);
   });
