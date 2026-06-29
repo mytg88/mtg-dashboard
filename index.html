@@ -279,6 +279,8 @@ th.sortable:hover{color:var(--green)}
 .rb-card:active{cursor:grabbing}
 .rb-card.sel{outline:2px solid var(--green);outline-offset:-2px;background:#EFF6EC}
 .rb-card.rb-drag{opacity:.45}
+.rb-card.rb-ins-top{box-shadow:inset 0 3px 0 0 var(--green)}
+.rb-card.rb-ins-bot{box-shadow:inset 0 -3px 0 0 var(--green)}
 .rb-card-top{display:flex;align-items:center;gap:6px}
 .rb-card-name{font-weight:600;color:var(--ink);flex:1;line-height:1.25;word-break:break-word}
 .rb-card-sub{font-size:11px;color:var(--muted);margin-top:3px;display:flex;gap:7px;flex-wrap:wrap;align-items:center}
@@ -2524,7 +2526,11 @@ function rbCustDay(c){ const a=rbAssign(c.n); if(a.round){ const rd=rbRound(a.ro
 // The anchor week (1-4) a customer is keyed to: the round's anchor if grouped, else its own.
 function rbCustAnchor(c){ const a=rbAssign(c.n); if(a.round){ const rd=rbRound(a.round); return rd&&rd.anchor?rd.anchor:1; } return a.anchor||1; }
 // How often, in weeks, this customer is visited (1 = weekly, 2 = fortnightly, 4 = four-weekly).
+// Trust the planner's visits-per-4-weeks first, since that is the curated figure, then fall
+// back to the live booking frequency text.
 function rbCadence(c){
+  const v4 = +planFields(c).v4 || 0;
+  if(v4 > 0) return Math.max(1, Math.min(4, Math.round(4 / v4)));
   const f = String(c.freq||'').toLowerCase();
   if(/every\s+week|weekly/.test(f)) return 1;
   const m = f.match(/every\s+(\d+)\s+week/); if(m) return Math.max(1,parseInt(m[1],10));
@@ -2562,9 +2568,9 @@ function rbRenderTray(){ const el=document.getElementById('rbTrayList'); if(el) 
 
 // Mutations. A drop sets both the day and the anchor week, and cadence fills the rest of the cycle.
 function rbCustByName(name){ const k=normName(name); return allCustomers.find(c=>normName(c.n)===k) || null; }
-function rbMoveCard(name, week, day){ const a=rbAssign(name); a.round=null; a.day=day; a.anchor=week||1; rbApply(); }
-function rbMoveToTray(name){ const a=rbAssign(name); a.round=null; a.day=null; rbApply(); }
-function rbMoveRound(rid, week, day){ const rd=rbRound(rid); if(rd){ rd.day=day; rd.anchor=(day==null?rd.anchor:(week||1)); rbApply(); } }
+function rbMoveCard(name, week, day){ const a=rbAssign(name); a.round=null; a.day=day; a.anchor=week||1; delete a.ord; rbApply(); }
+function rbMoveToTray(name){ const a=rbAssign(name); a.round=null; a.day=null; delete a.ord; rbApply(); }
+function rbMoveRound(rid, week, day){ const rd=rbRound(rid); if(rd){ rd.day=day; rd.anchor=(day==null?rd.anchor:(week||1)); delete rd.ord; rbApply(); } }
 function rbJoinRound(name, rid){ const rd=rbRound(rid); if(!rd) return; const a=rbAssign(name); a.round=rid; rbApply(); }
 function rbEject(name){ const a=rbAssign(name); if(!a.round) return; const rd=rbRound(a.round); a.round=null; a.day=rd?rd.day:a.day; a.anchor=rd&&rd.anchor?rd.anchor:1; rbApply(); }
 function rbTogglePin(name){ const a=rbAssign(name); a.pinned=!a.pinned; rbApply(); }
@@ -2620,6 +2626,16 @@ function rbDayUnits(week, day){
   return units;
 }
 function rbOrderStops(week, day, op){
+  // If the day has been hand-arranged, follow that order so the route matches the plan.
+  const allUnits = rbDayAllUnits(day);
+  if(allUnits.some(u=>rbUnitOrd(u)!=null)){
+    const stops=[];
+    allUnits.forEach(u=>{
+      if(u.kind==='round'){ rbRoundMembers(u.id).filter(c=>rbDueIn(c, week)).forEach(c=>stops.push(c)); }
+      else { const c=rbCustByName(u.id); if(c && rbDueIn(c, week)) stops.push(c); }
+    });
+    return stops;
+  }
   const base=rbBase(op).coord;
   const units=rbDayUnits(week, day);
   const withC=units.filter(u=>u.coord), without=units.filter(u=>!u.coord);
@@ -2651,7 +2667,44 @@ function rbDropTray(ev){ ev.preventDefault(); const d=rbDragData; rbDragData=nul
 function rbDropRound(ev){ const d=rbDragData; if(d&&d.kind==='card'){ ev.preventDefault(); ev.stopPropagation(); const rid=ev.currentTarget.getAttribute('data-rid'); rbDragData=null; rbJoinRound(d.name, rid); } }
 function rbDragCardStart(ev){ const el=ev.currentTarget; rbDragData={kind:'card', name:el.getAttribute('data-name')}; try{ev.dataTransfer.effectAllowed='move';ev.dataTransfer.setData('text/plain',el.getAttribute('data-name')||'');}catch(e){} el.classList.add('rb-drag'); }
 function rbDragRoundStart(ev){ const el=ev.currentTarget; rbDragData={kind:'round', rid:el.getAttribute('data-rid')}; try{ev.dataTransfer.effectAllowed='move';ev.dataTransfer.setData('text/plain',el.getAttribute('data-rid')||'');}catch(e){} }
-function rbDragEnd(ev){ if(ev.currentTarget&&ev.currentTarget.classList) ev.currentTarget.classList.remove('rb-drag'); document.querySelectorAll('.rb-over').forEach(e=>e.classList.remove('rb-over')); }
+function rbDragEnd(ev){ if(ev.currentTarget&&ev.currentTarget.classList) ev.currentTarget.classList.remove('rb-drag'); document.querySelectorAll('.rb-over,.rb-ins-top,.rb-ins-bot').forEach(e=>e.classList.remove('rb-over','rb-ins-top','rb-ins-bot')); }
+
+// Ordering within a day. A unit is a loose card or a whole round. Until a day is hand-arranged
+// units fall in value order; once you drag to reorder, every unit on that day gets an explicit
+// position and the day stays in the order you set, across all four weeks.
+function rbUnitOrd(u){ if(u.kind==='round'){ const rd=rbRound(u.id); return rd&&rd.ord!=null?rd.ord:null; } const a=roundsBoard.assign[normName(u.id)]; return (a&&a.ord!=null)?a.ord:null; }
+function rbUnitVal(u){ if(u.kind==='round'){ return rbRoundMembers(u.id).reduce((s,c)=>s+(c.ltv||c.r||0),0); } const c=rbCustByName(u.id); return c?(c.ltv||c.r||0):0; }
+function rbDayAllUnits(day){
+  const units=[], seenR={};
+  rbCustomers().forEach(c=>{ if(rbCustDay(c)!==day) return; const a=rbAssign(c.n); if(a.round){ if(!seenR[a.round]){ seenR[a.round]=1; units.push({kind:'round', id:a.round}); } } else units.push({kind:'card', id:c.n}); });
+  units.sort((x,y)=>{ const ox=rbUnitOrd(x), oy=rbUnitOrd(y), hx=(ox!=null), hy=(oy!=null); if(hx&&hy) return ox-oy; if(hx!==hy) return hx?-1:1; return rbUnitVal(y)-rbUnitVal(x); });
+  return units;
+}
+function rbCardOver(ev){ if(!rbDragData) return; ev.preventDefault(); ev.stopPropagation(); const el=ev.currentTarget; const r=el.getBoundingClientRect(); const top=(ev.clientY < r.top+r.height/2); el.classList.toggle('rb-ins-top', top); el.classList.toggle('rb-ins-bot', !top); }
+function rbCardLeave(ev){ const el=ev.currentTarget; if(el&&el.classList) el.classList.remove('rb-ins-top','rb-ins-bot'); }
+function rbCardDrop(ev){
+  if(!rbDragData) return;
+  ev.preventDefault(); ev.stopPropagation();
+  const el=ev.currentTarget; el.classList.remove('rb-ins-top','rb-ins-bot');
+  const col=el.closest('.rb-col'); if(!col){ rbDragData=null; return; }
+  const day=col.getAttribute('data-day'), week=parseInt(col.getAttribute('data-week'),10)||1;
+  const r=el.getBoundingClientRect(), before=(ev.clientY < r.top+r.height/2);
+  const d=rbDragData; rbDragData=null;
+  rbReorderOnto(day, week, d, el.getAttribute('data-name'), before);
+}
+function rbReorderOnto(day, week, d, targetName, before){
+  if(d.kind==='card'){ const a=rbAssign(d.name); a.round=null; if(a.day!==day){ a.day=day; a.anchor=week; } }
+  else if(d.kind==='round'){ const rd=rbRound(d.rid); if(rd && rd.day!==day){ rd.day=day; rd.anchor=week; } }
+  const isDragged = u => (d.kind==='card') ? (u.kind==='card' && normName(u.id)===normName(d.name)) : (u.kind==='round' && u.id===d.rid);
+  let units = rbDayAllUnits(day);
+  const dragged = units.find(isDragged);
+  units = units.filter(u=>!isDragged(u));
+  let ti = units.findIndex(u=> u.kind==='card' && normName(u.id)===normName(targetName));
+  if(ti<0) ti = units.length; else if(!before) ti = ti+1;
+  if(dragged) units.splice(ti,0,dragged);
+  units.forEach((u,i)=>{ if(u.kind==='round'){ const rd=rbRound(u.id); if(rd) rd.ord=i; } else rbAssign(u.id).ord=i; });
+  rbApply();
+}
 
 // Rendering
 function rbCardHTML(c, inRound){
@@ -2666,7 +2719,7 @@ function rbCardHTML(c, inRound){
       + '</div><div class="rb-card-sub">'+hvHtml+tagHtml+owner+'</div></div>';
   }
   const pin = '<button class="rb-mini'+(a.pinned?' on':'')+'" title="'+(a.pinned?'Pinned, click to unpin':'Pin to this day')+'" data-name="'+nm+'" onclick="rbTogglePin(this.getAttribute(\'data-name\'))">\ud83d\udccc</button>';
-  return '<div class="rb-card'+(rbSel[k]?' sel':'')+'" draggable="true" data-name="'+nm+'" ondragstart="rbDragCardStart(event)" ondragend="rbDragEnd(event)">'
+  return '<div class="rb-card'+(rbSel[k]?' sel':'')+'" draggable="true" data-name="'+nm+'" ondragstart="rbDragCardStart(event)" ondragend="rbDragEnd(event)" ondragover="rbCardOver(event)" ondragleave="rbCardLeave(event)" ondrop="rbCardDrop(event)">'
     + '<div class="rb-card-top">'
       + '<input type="checkbox" '+(rbSel[k]?'checked':'')+' title="Select for grouping" data-name="'+nm+'" onchange="rbToggleSel(this.getAttribute(\'data-name\'))" style="margin:0 1px 0 0;cursor:pointer">'
       + '<span class="rb-card-name">'+nm+'</span>'+pin+rbCardMenu(nm)
@@ -2703,11 +2756,12 @@ function rbRoundHTML(rid, week){
     + '<div class="rb-round-body" data-rid="'+escAttr(rid)+'" ondragover="rbDragOver(event)" ondrop="rbDropRound(event)">'+mem.map(c=>rbCardHTML(c,true)).join('')+'</div></div>';
 }
 function rbColBodyHTML(week, day){
-  const onDay = rbCustomers().filter(c=>rbCustDay(c)===day && rbDueIn(c, week));
-  const roundIds=[], seen={};
-  onDay.forEach(c=>{ const a=rbAssign(c.n); if(a.round && !seen[a.round]){ seen[a.round]=1; roundIds.push(a.round); } });
-  let html = roundIds.map(rid=>rbRoundHTML(rid, week)).join('');
-  html += onDay.filter(c=>!rbAssign(c.n).round).map(c=>rbCardHTML(c,false)).join('');
+  const units = rbDayAllUnits(day);
+  let html='';
+  units.forEach(u=>{
+    if(u.kind==='round'){ html += rbRoundHTML(u.id, week); }
+    else { const c=rbCustByName(u.id); if(c && rbDueIn(c, week)) html += rbCardHTML(c, false); }
+  });
   return html || '<div class="rb-empty">Drop here</div>';
 }
 function rbDayStats(week, day){
@@ -2760,7 +2814,7 @@ function renderRoundsTab(){
   const op = franchiseeView==='All' ? '' : franchiseeView;
   const total = rbCustomers().length, placed = rbCustomers().filter(c=>rbCustDay(c)!=null).length;
   const intro = '<div class="card" style="margin-bottom:16px"><div class="h">4-week rota board</div>'
-    + '<div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:900px">Your visit pattern across the full four-week cycle. Drag each recurring customer onto a day, and their cadence fills the rest, weekly shows every week, fortnightly every other, four-weekly once. The week you drop a non-weekly customer on sets which weeks they fall in, so drag a fortnightly job to the next week to flip it onto the other fortnight and balance the load. Aim for '+RB_TARGET_LO+' to '+RB_TARGET_HI+' billable hours a day. Tick two or more on the same day to group them into a round. Each day\u2019s Route runs from your base. Hours come from the planner, so set hours per visit there for anyone showing \u201c? h\u201d. <span id="rbSaveMsg" style="color:var(--muted)"></span></div>'
+    + '<div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:900px">Your visit pattern across the full four-week cycle. Drag each recurring customer onto a day, and their cadence fills the rest, weekly shows every week, fortnightly every other, four-weekly once. The week you drop a non-weekly customer on sets which weeks they fall in, so drag a fortnightly job to the next week to flip it onto the other fortnight and balance the load. Aim for '+RB_TARGET_LO+' to '+RB_TARGET_HI+' billable hours a day. Tick two or more on the same day to group them into a round. Drag a job up or down within a day to set the running order, and the route follows the order you set. Each day\u2019s Route runs from your base. Hours come from the planner, so set hours per visit there for anyone showing \u201c? h\u201d. <span id="rbSaveMsg" style="color:var(--muted)"></span></div>'
     + (franchiseeView==='All'?'<div class="ib ib-blue" style="margin-top:12px;font-size:12.5px">You\u2019re viewing everyone. Switch the view to Mike or Adam to build day routes and plan one person\u2019s week.</div>':'')
     + '<div style="font-size:12px;color:var(--muted);margin-top:10px">'+placed+' of '+total+' placed</div></div>';
   const tray = '<div class="rb-tray" data-tray="1" ondragover="rbDragOver(event)" ondragleave="rbDragLeave(event)" ondrop="rbDropTray(event)">'
