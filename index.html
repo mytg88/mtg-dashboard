@@ -1382,9 +1382,13 @@ function scorecardQuadrantSVG(scored){
   [30,65,100].forEach(t=>{ s+='<text x="'+xs(t)+'" y="'+(padT+plotH+18)+'" text-anchor="middle" font-size="9.5" fill="var(--muted)">'+t+'%</text>'; });
   (split?[0,medV,maxV]:[0,maxV]).forEach(v=>{ s+='<text x="'+(padL-8)+'" y="'+(ys(v)+3)+'" text-anchor="end" font-size="9.5" fill="var(--muted)">'+fmt(v)+'</text>'; });
   const arg=n=>JSON.stringify(String(n)).replace(/"/g,'&quot;');
-  scored.forEach(o=>{ const cx=xs(o.r.pct), cy=ys(o.av), c=scoreGradeColor(o.r.grade);
+  const pts=scored.map(o=>({o, cx:xs(o.r.pct), cy:ys(o.av)}));
+  // Dots that land on the same spot (same score and value) would hide each other, so fan them out sideways.
+  const groups={}; pts.forEach(p=>{ const k=Math.round(p.cx/7)+'_'+Math.round(p.cy/7); (groups[k]=groups[k]||[]).push(p); });
+  Object.keys(groups).forEach(k=>{ const g=groups[k]; if(g.length>1){ const spread=9; g.forEach((p,i)=>{ p.cx += (i-(g.length-1)/2)*spread; }); } });
+  pts.forEach(p=>{ const o=p.o, c=scoreGradeColor(o.r.grade);
     const tip=o.c.n+' \u00b7 '+o.r.grade+' '+o.r.pct+'% \u00b7 ~'+fmt(o.av)+'/yr'+(o.r.complete?'':' (in progress)')+' \u00b7 click to open';
-    s+='<circle class="qd-dot" cx="'+cx+'" cy="'+cy+'" r="7" fill="'+c+'" stroke="#fff" stroke-width="2.5" onclick="openScorecard('+arg(o.c.n)+')"><title>'+escAttr(tip)+'</title></circle>'; });
+    s+='<circle class="qd-dot" cx="'+p.cx+'" cy="'+p.cy+'" r="7" fill="'+c+'" stroke="#fff" stroke-width="2.5" onclick="openScorecard('+arg(o.c.n)+')"><title>'+escAttr(tip)+'</title></circle>'; });
   return s+'</svg>';
 }
 // The Scorecard tab: results view (default) or the form when a customer is open.
