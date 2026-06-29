@@ -40,7 +40,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--paper);color:var(--ink);-
 .tab{padding:15px 20px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;color:var(--muted);border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
 .tab.active{font-weight:700;color:var(--green);border-bottom-color:var(--green)}
 .tab:hover{color:var(--green)}
-.content{padding:26px 36px 60px;max-width:1240px}
+.content{padding:26px 36px 60px}
 .loading{text-align:center;padding:70px;color:var(--muted);font-size:15px}
 .grid{display:grid;gap:16px;margin-bottom:28px}
 .grid-4{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
@@ -316,7 +316,6 @@ th.sortable:hover{color:var(--green)}
 .rb-week-t{font-family:'Fraunces',serif;font-size:16px;font-weight:600;color:var(--ink)}
 .rb-week-sum{font-size:12px;color:var(--muted)}
 .rb-week-sum b{color:var(--ink)}
-body.rb-fullwidth .content{max-width:none}
 @media(max-width:1500px){ .rb-cols{grid-template-columns:repeat(7,minmax(0,1fr))} }
 @media(max-width:1100px){ .rb-wrap{flex-direction:column} .rb-tray{position:static;flex-basis:auto;width:100%;max-height:none} .rb-tray-list{max-height:240px} .rb-cols{grid-template-columns:repeat(4,minmax(0,1fr));width:100%} }
 @media(max-width:760px){ .rb-cols{grid-template-columns:repeat(3,minmax(0,1fr))} }
@@ -987,6 +986,12 @@ function processData() {
   const jobPc = {};
   histJobs.forEach(j => { const nm = NAME_ALIAS[j['Customer Name']] || j['Customer Name']; if (!nm || !j._postcode) return; const k = norm(nm); const d = j._date ? j._date.getTime() : 0; if (!jobPc[k] || d >= jobPc[k].d) jobPc[k] = { pc: j._postcode, d }; });
   allCustomers.forEach(c => { const k = norm(c.n); c.postcode = pcByCust[k] || (jobPc[k] ? jobPc[k].pc : '') || ''; });
+  // Each customer's full service address, same precedence, used for accurate door-to-door routes.
+  const addrByCust = {};
+  rawRecurring.forEach(r => { const a = String(r.address || '').trim(); if (a && r._cust) { const k = norm(r._cust); if (!addrByCust[k]) addrByCust[k] = a; } });
+  const jobAddr = {};
+  histJobs.forEach(j => { const a = String(j.address || '').trim(); const nm = NAME_ALIAS[j['Customer Name']] || j['Customer Name']; if (!nm || !a) return; const k = norm(nm); const d = j._date ? j._date.getTime() : 0; if (!jobAddr[k] || d >= jobAddr[k].d) jobAddr[k] = { a:a, d:d }; });
+  allCustomers.forEach(c => { const k = norm(c.n); c.address = addrByCust[k] || (jobAddr[k] ? jobAddr[k].a : '') || ''; });
   // Best-estimate annual value: realised regular-maintenance revenue over the trailing 12 months
   // (extras such as pressure washing or lawn care are excluded by counting only the maintenance
   // service), annualised for customers with under a year of history. Falls back to the cadence x
@@ -2650,11 +2655,18 @@ function rbOrderStops(week, day, op){
   return stops;
 }
 function rbLL(g){ return g.lat.toFixed(6)+','+g.lng.toFixed(6); }
+// A route waypoint: the customer's full address where we have it (so each stop is the real
+// door, not the postcode centroid), falling back to the postcode coordinate.
+function rbWaypoint(c){
+  const a = String(c.address||'').trim();
+  if(a) return encodeURIComponent(a);
+  const g = rbCoord(c); return g ? rbLL(g) : null;
+}
 function rbRouteUrl(week, day, op){
   if(!op) return null;
   const base=rbBase(op);
   const startTok = base.coord ? rbLL(base.coord) : encodeURIComponent(base.label);
-  const wp = rbOrderStops(week, day, op).map(c=>{ const g=rbCoord(c); return g?rbLL(g):null; }).filter(Boolean);
+  const wp = rbOrderStops(week, day, op).map(rbWaypoint).filter(Boolean);
   if(!wp.length) return null;
   return 'https://www.google.com/maps/dir/'+[startTok].concat(wp).concat([startTok]).join('/');
 }
@@ -2709,12 +2721,13 @@ function rbReorderOnto(day, week, d, targetName, before){
 // Rendering
 function rbCardHTML(c, inRound){
   const a=rbAssign(c.n), hv=rbHv(c), tag=rbFreqTag(c), k=normName(c.n), nm=escAttr(c.n);
+  const nmeta = c.address ? ' title="'+escAttr(c.address)+'"' : (c.postcode ? ' title="'+escAttr(c.postcode)+'"' : '');
   const hvHtml = hv>0 ? '<span class="rb-hv">'+(Math.round(hv*10)/10)+'h</span>' : '<span class="rb-hv miss" title="Set hours per visit in the planner">? h</span>';
   const tagHtml = tag ? '<span class="rb-freq">'+tag+'</span>' : '';
   const owner = (franchiseeView==='All' && c.f) ? '<span class="rb-freq" style="background:'+(c.f==='Adam'?'#E3ECFA':'#FBE7D2')+';color:'+(c.f==='Adam'?'#1565C0':'#9A5410')+'">'+escAttr(c.f)+'</span>' : '';
   if(inRound){
     return '<div class="rb-card" data-name="'+nm+'"><div class="rb-card-top">'
-      + '<span class="rb-card-name">'+nm+'</span>'
+      + '<span class="rb-card-name"'+nmeta+'>'+nm+'</span>'
       + '<button class="rb-mini" title="Pop out of this round (stays on the day)" data-name="'+nm+'" onclick="rbEject(this.getAttribute(\'data-name\'))">\u2934</button>'
       + '</div><div class="rb-card-sub">'+hvHtml+tagHtml+owner+'</div></div>';
   }
@@ -2722,7 +2735,7 @@ function rbCardHTML(c, inRound){
   return '<div class="rb-card'+(rbSel[k]?' sel':'')+'" draggable="true" data-name="'+nm+'" ondragstart="rbDragCardStart(event)" ondragend="rbDragEnd(event)" ondragover="rbCardOver(event)" ondragleave="rbCardLeave(event)" ondrop="rbCardDrop(event)">'
     + '<div class="rb-card-top">'
       + '<input type="checkbox" '+(rbSel[k]?'checked':'')+' title="Select for grouping" data-name="'+nm+'" onchange="rbToggleSel(this.getAttribute(\'data-name\'))" style="margin:0 1px 0 0;cursor:pointer">'
-      + '<span class="rb-card-name">'+nm+'</span>'+pin+rbCardMenu(nm)
+      + '<span class="rb-card-name"'+nmeta+'>'+nm+'</span>'+pin+rbCardMenu(nm)
     + '</div><div class="rb-card-sub">'+hvHtml+tagHtml+owner+'</div></div>';
 }
 function rbCardMenu(nm){
@@ -2839,7 +2852,6 @@ function rbInitGeocode(){
 
 function renderContent() {
   const el = document.getElementById('content');
-  document.body.classList.toggle('rb-fullwidth', activeTab==='Rounds');
   const histJobs = monthlyData.reduce((s,m)=>s+(m.hist&&m.j?m.j:0),0); // invoiced jobs pre-Oct-2024, in current period
   const totalJobs = jobs.length + histJobs;
   const totalRev = Math.round(monthlyData.reduce((s,m)=>s+m.r,0)); // override-aware: invoiced history + live Zenbooker
