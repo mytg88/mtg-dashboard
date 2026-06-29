@@ -276,6 +276,8 @@ th.sortable:hover{color:var(--green)}
 .rb-vt:hover{color:var(--ink)}
 .rb-vt.on{background:#fff;color:var(--green);box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .rb-tray-list{display:flex;flex-direction:column;gap:7px;padding-right:2px}
+.rb-tray-band{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:8px 0 1px;padding-top:8px;border-top:1px solid var(--line)}
+.rb-tray-band:first-child{margin-top:0;padding-top:0;border-top:0}
 .rb-rounds-panel{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
 .rb-rpanel{border:1px solid var(--line);border-left:4px solid #888;border-radius:9px;padding:8px 9px;margin-bottom:8px;background:#fff}
 .rb-rpanel-h{display:flex;align-items:center;gap:6px}
@@ -2650,31 +2652,43 @@ function rbRenameRound(rid){ const rd=rbRound(rid); if(!rd) return; const nm=pro
 function rbRenameRoundTo(rid, val){ const rd=rbRound(rid); if(!rd) return; const v=String(val||'').trim(); if(v) rd.name=v; rbApply(); }
 function rbMenuMove(btn){ const name=btn.getAttribute('data-name'); const c=rbCustByName(name); rbMoveCard(name, c?rbCustAnchor(c):1, btn.getAttribute('data-day')); }
 function rbMenuTray(btn){ rbMoveToTray(btn.getAttribute('data-name')); }
-function rbToggleSel(name){ const k=normName(name); if(rbSel[k]) delete rbSel[k]; else rbSel[k]=true; rbRerender(); }
+function rbToggleSel(name, wk){ const k=normName(name)+'#'+(wk==null?'t':wk); if(rbSel[k]) delete rbSel[k]; else rbSel[k]=true; rbRerender(); }
 function rbClearSel(){ rbSel={}; rbRerender(); }
+// The visits currently ticked, as {customer, week}. Week is null for a card ticked in the tray.
+// Selection is per visit so a weekly customer can be put in one round on one week and another
+// round on a different week without the two selections clashing.
+function rbSelectedVisits(){
+  const out=[], custs=rbCustomers();
+  Object.keys(rbSel).forEach(key=>{ if(!rbSel[key]) return; const i=key.lastIndexOf('#'); if(i<0) return; const nk=key.slice(0,i), wk=key.slice(i+1); const c=custs.find(x=>normName(x.n)===nk); if(c) out.push({c:c, week:(wk==='t'?null:parseInt(wk,10))}); });
+  return out;
+}
 function rbSuggestRoundName(custs){
   const counts={}; custs.forEach(c=>{ const m=String(c.postcode||'').toUpperCase().match(/^([A-Z]{1,2}\d{1,2})/); if(m) counts[m[1]]=(counts[m[1]]||0)+1; });
   let best='',bc=0; Object.keys(counts).forEach(k=>{ if(counts[k]>bc){bc=counts[k];best=k;} });
   return best;
 }
 function rbGroupSelected(){
-  const names = rbCustomers().filter(c=>rbSel[normName(c.n)]);
+  const vis = rbSelectedVisits();
+  const names = Array.from(new Set(vis.map(v=>normName(v.c.n))));
   if(names.length<2) return;
-  const days = new Set(names.map(c=>rbCustDay(c)||'tray'));
-  if(days.size>1){ alert('Pick customers that are all on the same day (or all still in the tray) to group them.'); return; }
-  const day = rbCustDay(names[0]);
-  // A round runs at the cadence of its least frequent member, anchored to that member's fortnight,
+  const dayOf = v => (v.week!=null) ? rbVisitDay(v.c, v.week) : rbCustDay(v.c);
+  const days = new Set(vis.map(v=>dayOf(v)||'tray'));
+  if(days.size>1){ alert('Pick visits that are all on the same day (or all still in the tray) to group them.'); return; }
+  const day = dayOf(vis[0]);
+  const custs = names.map(nk=> vis.find(v=>normName(v.c.n)===nk).c);
+  // A round runs at the cadence of its least frequent member, anchored to the week you grouped on,
   // so a fortnightly round only appears on its weeks and a weekly member rides it just then.
-  let every=1, anchorFrom=names[0];
-  names.forEach(c=>{ const e=rbCadence(c); if(e>every){ every=e; anchorFrom=c; } });
+  let every=1, anchorFrom=custs[0];
+  custs.forEach(c=>{ const e=rbCadence(c); if(e>every){ every=e; anchorFrom=c; } });
   every = Math.max(1, Math.min(4, every));
-  const anchor = rbCustAnchor(anchorFrom) || 1;
+  let anchor=1; const af = vis.find(v=>v.c===anchorFrom && v.week!=null);
+  if(af) anchor=af.week; else { const ws=vis.map(v=>v.week).filter(w=>w!=null); if(ws.length) anchor=Math.min.apply(null, ws); }
   const rid = 'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
   const used = rbRoundsArr().map(r=>r.color);
   const color = RB_COLORS.find(c=>used.indexOf(c)===-1) || RB_COLORS[rbRoundsArr().length % RB_COLORS.length];
-  const name = rbSuggestRoundName(names) || ('Round '+(rbRoundsArr().length+1));
+  const name = rbSuggestRoundName(custs) || ('Round '+(rbRoundsArr().length+1));
   roundsBoard.rounds[rid] = { id:rid, name:name, color:color, day:day, anchor:anchor, every:every, pinned:false };
-  names.forEach(c=>{ const a=rbAssign(c.n); if(!Array.isArray(a.rounds)) a.rounds=[]; if(a.rounds.indexOf(rid)===-1) a.rounds.push(rid); a.day=day; if(rbCadence(c)>1) a.anchor=anchor; delete a.ord; });
+  custs.forEach(c=>{ const a=rbAssign(c.n); if(!Array.isArray(a.rounds)) a.rounds=[]; if(a.rounds.indexOf(rid)===-1) a.rounds.push(rid); a.day=day; if(rbCadence(c)>1) a.anchor=anchor; delete a.ord; });
   rbSel={}; rbApply();
 }
 
@@ -2838,9 +2852,10 @@ function rbCardHTML(c, inRound, rid){
       + '</div><div class="rb-card-sub">'+hvHtml+tagHtml+phTag+owner+'</div></div>';
   }
   const pin = '<button class="rb-mini'+(a.pinned?' on':'')+'" title="'+(a.pinned?'Pinned, click to unpin':'Pin to this day')+'" data-name="'+nm+'" onclick="rbTogglePin(this.getAttribute(\'data-name\'))">\ud83d\udccc</button>';
-  return '<div class="rb-card'+(rbSel[k]?' sel':'')+'" draggable="true" data-name="'+nm+'" ondragstart="rbDragCardStart(event)" ondragend="rbDragEnd(event)" ondragover="rbCardOver(event)" ondragleave="rbCardLeave(event)" ondrop="rbCardDrop(event)">'
+  const wk = (week==null?'t':week), sk = k+'#'+wk, selOn = !!rbSel[sk];
+  return '<div class="rb-card'+(selOn?' sel':'')+'" draggable="true" data-name="'+nm+'" data-week="'+wk+'" ondragstart="rbDragCardStart(event)" ondragend="rbDragEnd(event)" ondragover="rbCardOver(event)" ondragleave="rbCardLeave(event)" ondrop="rbCardDrop(event)">'
     + '<div class="rb-card-top">'
-      + '<input type="checkbox" '+(rbSel[k]?'checked':'')+' title="Select for grouping" data-name="'+nm+'" onchange="rbToggleSel(this.getAttribute(\'data-name\'))" style="margin:0 1px 0 0;cursor:pointer">'
+      + '<input type="checkbox" '+(selOn?'checked':'')+' title="Tick to group this visit" data-name="'+nm+'" data-week="'+wk+'" onchange="rbToggleSel(this.getAttribute(\'data-name\'), this.getAttribute(\'data-week\'))" style="margin:0 1px 0 0;cursor:pointer">'
       + '<span class="rb-card-name"'+nmeta+'>'+nm+'</span>'+pin+rbCardMenu(c)
     + '</div><div class="rb-card-sub">'+hvHtml+tagHtml+phTag+owner+'</div></div>';
 }
@@ -2883,7 +2898,7 @@ function rbColBodyHTML(week, day){
   let html='';
   units.forEach(u=>{
     if(u.kind==='round'){ html += rbRoundHTML(u.id, week); }
-    else { const c=rbCustByName(u.id); if(c && rbIsLooseIn(c, week)) html += rbCardHTML(c, false); }
+    else { const c=rbCustByName(u.id); if(c && rbIsLooseIn(c, week)) html += rbCardHTML(c, false, null, week); }
   });
   return html || '<div class="rb-empty">Drop here</div>';
 }
@@ -2916,21 +2931,46 @@ function rbWeekHTML(week, op){
     + '<span class="rb-week-sum"><b>'+ws.hrs+'h</b> across '+ws.count+' visit'+(ws.count===1?'':'s')+'</span></div>'
     + '<div class="rb-cols">'+RB_DAYS.map(d=>rbColHTML(week, d, op)).join('')+'</div></div>';
 }
+function rbCadLabel(cd){ return cd===1?'Weekly':cd===2?'Fortnightly':cd===4?'Every 4 weeks':cd+'-weekly'; }
+// Break a postcode into area letters + outward number + sub, so we can cluster by district in the
+// natural way (BH9 before BH13, not a raw string sort). No postcode sorts to the end.
+function rbPcParts(pc){
+  const s=String(pc||'').toUpperCase().replace(/\s+/g,' ').trim();
+  const m=s.match(/^([A-Z]{1,2})(\d{1,2})([A-Z]?)/);
+  if(m) return { area:m[1], num:parseInt(m[2],10), sub:m[3]||'', raw:s };
+  return { area:'ZZZ', num:9999, sub:'', raw:s };
+}
+// Order the unplaced list: weekly first, then fortnightly, then four-weekly, and within each band by
+// postcode district so nearby customers sit together and the rounds are easy to spot before dragging.
+function rbTrayCmp(a,b){
+  const ca=rbCadence(a), cb=rbCadence(b); if(ca!==cb) return ca-cb;
+  const pa=rbPcParts(a.postcode), pb=rbPcParts(b.postcode);
+  if(pa.area!==pb.area) return pa.area<pb.area?-1:1;
+  if(pa.num!==pb.num) return pa.num-pb.num;
+  if(pa.sub!==pb.sub) return pa.sub<pb.sub?-1:1;
+  if(pa.raw!==pb.raw) return pa.raw<pb.raw?-1:1;
+  return a.n.localeCompare(b.n);
+}
 function rbTrayListHTML(){
   const q = rbTraySearch.trim().toLowerCase();
   const trayRounds = rbRoundsArr().filter(rd=>rd.day==null && rbRoundMembers(rd.id).length);
-  const tray = rbCustomers().filter(c=>{ const a=rbAssign(c.n); return (!a.rounds||!a.rounds.length) && a.day==null; });
+  let tray = rbCustomers().filter(c=>{ const a=rbAssign(c.n); return (!a.rounds||!a.rounds.length) && a.day==null; });
+  tray = tray.filter(c=>!q || c.n.toLowerCase().indexOf(q)!==-1).sort(rbTrayCmp);
   let items = trayRounds.map(rd=>'<div class="rb-round" style="border-left-color:'+rd.color+'"><div class="rb-round-h" draggable="true" data-rid="'+escAttr(rd.id)+'" ondragstart="rbDragRoundStart(event)" ondragend="rbDragEnd(event)"><span class="rb-chip" style="background:'+rd.color+'"></span><span class="rb-round-name">'+escAttr(rd.name)+'</span>'+rbRoundMenu(rd.id)+'</div><div class="rb-round-body" data-rid="'+escAttr(rd.id)+'" ondragover="rbDragOver(event)" ondrop="rbDropRound(event)">'+rbRoundMembers(rd.id).map(c=>rbCardHTML(c,true,rd.id)).join('')+'</div></div>');
-  items = items.concat(tray.filter(c=>!q || c.n.toLowerCase().indexOf(q)!==-1).map(c=>rbCardHTML(c,false)));
-  return items.length ? items.join('') : '<div class="rb-empty">'+(q?'No matches':'All placed')+'</div>';
+  let lastCad=null, body='';
+  tray.forEach(c=>{ const cd=rbCadence(c); if(cd!==lastCad){ body+='<div class="rb-tray-band">'+rbCadLabel(cd)+'</div>'; lastCad=cd; } body+=rbCardHTML(c,false,null,null); });
+  const html = items.join('') + body;
+  return html ? html : '<div class="rb-empty">'+(q?'No matches':'All placed')+'</div>';
 }
 function rbActionBarHTML(){
-  const names = rbCustomers().filter(c=>rbSel[normName(c.n)]);
-  if(!names.length) return '';
-  const days = new Set(names.map(c=>rbCustDay(c)||'tray'));
+  const vis = rbSelectedVisits();
+  if(!vis.length) return '';
+  const names = Array.from(new Set(vis.map(v=>normName(v.c.n))));
+  const dayOf = v => (v.week!=null) ? rbVisitDay(v.c, v.week) : rbCustDay(v.c);
+  const days = new Set(vis.map(v=>dayOf(v)||'tray'));
   const canGroup = names.length>=2 && days.size===1;
   return '<div class="rb-actionbar"><b>'+names.length+' selected</b>'
-    + (canGroup ? '<button class="rb-ab-btn" onclick="rbGroupSelected()">Group into a round</button>' : '<span style="font-size:12px;opacity:.85">Select 2 or more on the same day to group</span>')
+    + (canGroup ? '<button class="rb-ab-btn" onclick="rbGroupSelected()">Group into a round</button>' : '<span style="font-size:12px;opacity:.85">Tick 2 or more visits on the same day to group</span>')
     + '<button class="rb-ab-btn ghost" onclick="rbClearSel()">Clear</button></div>';
 }
 function rbSidebarRoundsHTML(){
@@ -2963,7 +3003,7 @@ function renderRoundsTab(){
     ? '<div class="rb-viewtog">'+['All','Mike','Adam'].map(v=>'<button class="rb-vt'+(rbViewOverride===v?' on':'')+'" onclick="rbSetView('+JSON.stringify(v)+')">'+v+'</button>').join('')+'</div>'
     : '';
   const intro = '<div class="card" style="margin-bottom:16px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap"><div class="h">4-week rota board</div>'+toggle+'</div>'
-    + '<div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:900px">Your visit pattern across the full four-week cycle. Drag each recurring customer onto a day, and their cadence fills the rest, weekly shows every week, fortnightly every other, four-weekly once. The week you drop a non-weekly customer on sets which weeks they fall in, so drag a fortnightly job to the next week to flip it onto the other fortnight and balance the load. Aim for '+RB_TARGET_LO+' to '+RB_TARGET_HI+' billable hours a day. Tick two or more on the same day to group them into a round. Drag a job up or down within a day to set the running order, and the route follows the order you set. Each day\u2019s Route runs from your base. Hours come from the planner, so set hours per visit there for anyone showing \u201c? h\u201d. <span id="rbSaveMsg" style="color:var(--muted)"></span></div>'
+    + '<div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:900px">Your visit pattern across the full four-week cycle. Drag each recurring customer onto a day, and their cadence fills the rest, weekly shows every week, fortnightly every other, four-weekly once. The week you drop a non-weekly customer on sets which weeks they fall in, so drag a fortnightly job to the next week to flip it onto the other fortnight and balance the load. Aim for '+RB_TARGET_LO+' to '+RB_TARGET_HI+' billable hours a day. Tick two or more visits on the same day to group them into a round, ticking the specific week you mean. A weekly customer can ride two rounds, so to split them across alternating weeks, group the first week, then tick their other week and group that separately. Drag a job up or down within a day to set the running order, and the route follows the order you set. Each day\u2019s Route runs from your base. Hours come from the planner, so set hours per visit there for anyone showing \u201c? h\u201d. <span id="rbSaveMsg" style="color:var(--muted)"></span></div>'
     + (ev==='All'?'<div class="ib ib-blue" style="margin-top:12px;font-size:12.5px">Showing Mike and Adam together. Pick Mike or Adam above to build day routes and plan one person\u2019s week.</div>':'')
     + '<div style="font-size:12px;color:var(--muted);margin-top:10px">'+placed+' of '+total+' placed'+(ev!=='All'?' \u00b7 '+ev:'')+'</div></div>';
   const tray = '<div class="rb-tray" data-tray="1" ondragover="rbDragOver(event)" ondragleave="rbDragLeave(event)" ondrop="rbDropTray(event)">'
