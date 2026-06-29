@@ -2838,7 +2838,7 @@ function rbReorderOnto(day, week, d, targetName, before){
 }
 
 // Rendering
-function rbCardHTML(c, inRound, rid){
+function rbCardHTML(c, inRound, rid, week){
   const a=rbAssign(c.n), hv=rbHv(c), tag=rbFreqTag(c), k=normName(c.n), nm=escAttr(c.n);
   const nmeta = c.address ? ' title="'+escAttr(c.address)+'"' : (c.postcode ? ' title="'+escAttr(c.postcode)+'"' : '');
   const hvHtml = hv>0 ? '<span class="rb-hv">'+(Math.round(hv*10)/10)+'h</span>' : '<span class="rb-hv miss" title="Set hours per visit in the planner">? h</span>';
