@@ -2974,7 +2974,12 @@ function rbActionBarHTML(){
     + '<button class="rb-ab-btn ghost" onclick="rbClearSel()">Clear</button></div>';
 }
 function rbSidebarRoundsHTML(){
-  const rounds = rbRoundsArr().filter(rd=>rbRoundMembers(rd.id).length);
+  const dayIdx = d => { const i=RB_DAYS.indexOf(d); return i<0?99:i; };
+  const rounds = rbRoundsArr().filter(rd=>rbRoundMembers(rd.id).length).sort((a,b)=>{
+    const wa=rbRoundDueWeeks(a)[0]||1, wb=rbRoundDueWeeks(b)[0]||1; if(wa!==wb) return wa-wb;
+    const da=dayIdx(a.day), db=dayIdx(b.day); if(da!==db) return da-db;
+    return String(a.name||'').localeCompare(String(b.name||''));
+  });
   if(!rounds.length) return '';
   let html = '<div class="rb-rounds-panel"><h4>Rounds</h4><div class="rb-sub">Rename, remove a job, or ungroup.</div>';
   rounds.forEach(rd=>{
