@@ -378,6 +378,19 @@ th.sortable:hover{color:var(--green)}
 .td-lab{font-size:11px;color:var(--muted);margin-bottom:4px;display:block}
 .td-save{align-self:flex-start;font:inherit;font-size:13px;font-weight:600;color:#fff;background:var(--green);border:0;border-radius:8px;padding:9px 18px;cursor:pointer}
 .td-save:hover{filter:brightness(.96)}
+.td-star{color:#CBD5C5}
+.td-star.on{color:var(--amber)}
+.td-task.urgent{border-left:3px solid var(--red)}
+.td-tag.td-urgent{background:#FBE4E4;color:var(--red);border-color:#F0C9C9}
+.td-tag.due-od{background:#FBE4E4;color:var(--red);border-color:#F0C9C9}
+.td-tag.due-soon{background:#FFF3DF;color:#9A5410;border-color:#EAD9B0}
+.td-hero{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap}
+.td-hero-date{font-size:13px;color:var(--muted);margin-top:2px}
+.td-when-btn{font:inherit;font-size:12px;font-weight:600;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:7px;padding:6px 11px;cursor:pointer}
+.td-when-btn:hover{background:#EAF0E8}
+.td-sec-h{font-family:'Fraunces',serif;font-size:16px;font-weight:600;color:var(--ink);margin:0 0 11px}
+.td-chk-lab{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);cursor:pointer}
+.td-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:8px;vertical-align:middle}
 </style>
 </head>
 <body>
@@ -3116,12 +3129,14 @@ const TODO_SEED = [
   { id:'t-checkin', tab:'unplanned', block:null, recur:'contingency', title:'Check in with quiet customers', desc:'Send friendly messages to customers you have not contacted recently.' },
   { id:'t-flag-issues', tab:'unplanned', block:null, recur:'contingency', title:'Flag issues early', desc:'Report any customer changes, access problems or delays.' }
 ];
-let todoDay = 'workday';
+const TODO_BLOCKS = { start:{label:'Start of day',color:'#E07B1A'}, during:{label:'During day',color:'#1565C0'}, end:{label:'End of day',color:'#7C3AED'} };
+let todoDay = 'today';
 let todoState = { tasks:[], doneMap:{}, addOpen:false, editId:null };
 let todoSaveTimer = null;
 function todoLoad(){
   try { const raw=localStorage.getItem('mtg_todo_v1'); if(raw){ const j=JSON.parse(raw); if(Array.isArray(j.tasks)) todoState.tasks=j.tasks; if(j.doneMap) todoState.doneMap=j.doneMap; } } catch(e){}
   if(!todoState.tasks.length) todoState.tasks = TODO_SEED.map(t=>Object.assign({}, t));
+  todoState.tasks.forEach(t=>{ if(!t.kind) t.kind='routine'; if(t.urgent===undefined) t.urgent=false; if(t.due===undefined) t.due=null; });
 }
 function todoSave(){ clearTimeout(todoSaveTimer); todoSaveTimer=setTimeout(()=>{ try{ localStorage.setItem('mtg_todo_v1', JSON.stringify({ tasks:todoState.tasks, doneMap:todoState.doneMap })); }catch(e){} }, 250); }
 function todoWeekKey(d){
@@ -3141,6 +3156,14 @@ function todoPeriodKey(recur, ts){
 // A task counts as done only within its current period, so a daily task reopens tomorrow,
 // a weekly one next week, and a four-weekly one next cycle. Contingency stays until unticked.
 function todoIsDone(t){ const ts=todoState.doneMap[t.id]; if(!ts) return false; if(t.recur==='contingency'||t.recur==='once') return true; return todoPeriodKey(t.recur,ts)===todoPeriodKey(t.recur,Date.now()); }
+function todoYmd(offset){ const d=new Date(); d.setDate(d.getDate()+(offset||0)); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function todoTodayInfo(){ const d=new Date(); const dow=d.getDay(); const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']; const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return { d:d, ymd:todoYmd(0), isWeekend:(dow===0||dow===6), label:days[dow]+' '+d.getDate()+' '+months[d.getMonth()] }; }
+function todoDueLabel(due){ const today=todoYmd(0), tom=todoYmd(1); if(due<today) return 'Overdue'; if(due===today) return 'Today'; if(due===tom) return 'Tomorrow'; const d=new Date(due+'T00:00:00'); const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return days[d.getDay()]+' '+d.getDate()+' '+months[d.getMonth()]; }
+function todoDatedOpen(){ return todoState.tasks.filter(t=>t.kind==='dated' && !todoIsDone(t)); }
+function todoSortUrgentDate(a,b){ const u=(b.urgent?1:0)-(a.urgent?1:0); if(u) return u; return a.due<b.due?-1:(a.due>b.due?1:0); }
+function todoDueByToday(){ const today=todoYmd(0); return todoDatedOpen().filter(t=>t.due<=today).sort(todoSortUrgentDate); }
+function todoUpcoming(){ const today=todoYmd(0); return todoDatedOpen().filter(t=>t.due>today).sort((a,b)=>a.due<b.due?-1:1); }
+function todoToggleUrgent(id){ const t=todoState.tasks.find(x=>x.id===id); if(!t) return; t.urgent=!t.urgent; todoSave(); todoRerender(); }
 function todoRerender(){ const el=document.getElementById('content'); if(el && activeTab==='To-do') el.innerHTML=renderTodoTab(); }
 function todoSetDay(d){ todoState.addOpen=false; todoState.editId=null; todoDay=d; todoRerender(); }
 function todoToggle(id){ const t=todoState.tasks.find(x=>x.id===id); if(!t) return; if(todoIsDone(t)) delete todoState.doneMap[id]; else todoState.doneMap[id]=Date.now(); todoSave(); todoRerender(); }
@@ -3149,61 +3172,108 @@ function todoEdit(id){ todoState.editId=id; todoState.addOpen=true; todoRerender
 function todoDelete(id){ const t=todoState.tasks.find(x=>x.id===id); if(!t) return; if(!confirm('Remove \u201c'+t.title+'\u201d?')) return; todoState.tasks=todoState.tasks.filter(x=>x.id!==id); delete todoState.doneMap[id]; todoSave(); todoRerender(); }
 function todoSaveTask(){
   const g=id=>{ const e=document.getElementById(id); return e?e.value:''; };
+  const gc=id=>{ const e=document.getElementById(id); return e?!!e.checked:false; };
   const title=String(g('tdTitle')||'').trim(); if(!title){ alert('Give the task a title.'); return; }
   const desc=String(g('tdDesc')||'').trim();
-  const tab=g('tdTab')||'workday';
-  const block=tab==='workday'?(g('tdBlock')||'start'):null;
-  const recur=tab==='unplanned'?'contingency':(g('tdRecur')||'daily');
-  if(todoState.editId){ const t=todoState.tasks.find(x=>x.id===todoState.editId); if(t){ t.title=title; t.desc=desc; t.tab=tab; t.block=block; t.recur=recur; } }
-  else { todoState.tasks.push({ id:'t-u'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), tab:tab, block:block, recur:recur, title:title, desc:desc, custom:true }); }
-  todoState.addOpen=false; todoState.editId=null; todoDay=tab; todoSave(); todoRerender();
+  const urgent=gc('tdUrgent');
+  const kind=g('tdKind')||'routine';
+  let patch;
+  if(kind==='dated'){
+    const due=g('tdDue'); if(!due){ alert('Pick a date for this reminder.'); return; }
+    let db=g('tdDBlock'); if(db==='none'||!db) db=null;
+    patch={ kind:'dated', tab:null, due:due, block:db, recur:'once', urgent:urgent, title:title, desc:desc };
+  } else {
+    const tab=g('tdTab')||'workday';
+    const block=tab==='workday'?(g('tdBlock')||'start'):null;
+    const recur=tab==='unplanned'?'contingency':(g('tdRecur')||'daily');
+    patch={ kind:'routine', tab:tab, due:null, block:block, recur:recur, urgent:urgent, title:title, desc:desc };
+  }
+  if(todoState.editId){ const t=todoState.tasks.find(x=>x.id===todoState.editId); if(t) Object.assign(t, patch); }
+  else { patch.id='t-u'+Date.now().toString(36)+Math.random().toString(36).slice(2,5); patch.custom=true; todoState.tasks.push(patch); }
+  todoState.addOpen=false; todoState.editId=null;
+  todoDay = (kind==='dated') ? 'today' : patch.tab;
+  todoSave(); todoRerender();
 }
 function todoTaskHTML(t){
   const done=todoIsDone(t);
-  const rl = t.recur==='daily'?'daily':(t.recur==='weekly'?'weekly':(t.recur==='fourweekly'?'4-weekly':''));
-  const tag = rl?'<span class="td-tag">'+rl+'</span>':'';
-  return '<div class="td-task'+(done?' done':'')+'">'
+  const tags=[];
+  if(t.kind==='dated'){ const od=t.due<todoYmd(0); tags.push('<span class="td-tag '+(od?'due-od':'due-soon')+'">'+todoDueLabel(t.due)+'</span>'); }
+  else { const rl = t.recur==='daily'?'daily':(t.recur==='weekly'?'weekly':(t.recur==='fourweekly'?'4-weekly':'')); if(rl) tags.push('<span class="td-tag">'+rl+'</span>'); }
+  if(t.urgent) tags.push('<span class="td-tag td-urgent">urgent</span>');
+  const star='<button class="td-mini td-star'+(t.urgent?' on':'')+'" title="'+(t.urgent?'Urgent, click to clear':'Mark urgent')+'" onclick="todoToggleUrgent(\''+t.id+'\')">\u2605</button>';
+  return '<div class="td-task'+(done?' done':'')+(t.urgent?' urgent':'')+'">'
     + '<button class="td-check'+(done?' on':'')+'" title="'+(done?'Done, click to undo':'Mark done')+'" onclick="todoToggle(\''+t.id+'\')"></button>'
-    + '<div class="td-body"><div class="td-title">'+escAttr(t.title)+tag+'</div>'+(t.desc?'<div class="td-desc">'+escAttr(t.desc)+'</div>':'')+'</div>'
-    + '<div class="td-actions"><button class="td-mini" title="Edit" onclick="todoEdit(\''+t.id+'\')">\u270e</button><button class="td-mini" title="Remove" onclick="todoDelete(\''+t.id+'\')">\u2715</button></div>'
+    + '<div class="td-body"><div class="td-title">'+escAttr(t.title)+tags.join('')+'</div>'+(t.desc?'<div class="td-desc">'+escAttr(t.desc)+'</div>':'')+'</div>'
+    + '<div class="td-actions">'+star+'<button class="td-mini" title="Edit" onclick="todoEdit(\''+t.id+'\')">\u270e</button><button class="td-mini" title="Remove" onclick="todoDelete(\''+t.id+'\')">\u2715</button></div>'
     + '</div>';
 }
 function todoTasksFor(tab){ return todoState.tasks.filter(t=>t.tab===tab); }
 function todoProg(tab){ const ts=todoTasksFor(tab); return { done:ts.filter(todoIsDone).length, total:ts.length }; }
 function todoBlockCard(b, lab){
+  const col = TODO_BLOCKS[b]?TODO_BLOCKS[b].color:'var(--green4)';
   const ts=todoState.tasks.filter(t=>t.tab==='workday' && t.block===b);
   const done=ts.filter(todoIsDone).length, pct=ts.length?Math.round(done/ts.length*100):0;
-  return '<div class="card" style="margin-bottom:16px"><div class="td-block-h"><div class="td-block-title">'+lab+'</div>'
-    + '<div class="td-prog">'+done+'/'+ts.length+'<div class="td-prog-bar"><div class="td-prog-fill" style="width:'+pct+'%"></div></div></div></div>'
+  return '<div class="card accent-top" style="border-top-color:'+col+';margin-bottom:16px"><div class="td-block-h"><div class="td-block-title"><span class="td-dot" style="background:'+col+'"></span>'+lab+'</div>'
+    + '<div class="td-prog">'+done+'/'+ts.length+'<div class="td-prog-bar"><div class="td-prog-fill" style="width:'+pct+'%;background:'+col+'"></div></div></div></div>'
     + (ts.length?ts.map(todoTaskHTML).join(''):'<div style="font-size:12.5px;color:var(--muted)">No tasks here yet.</div>')+'</div>';
 }
 function todoWeekendBanner(){ return '<div style="background:#EEF6EE;border:1px solid #CFE3CF;border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:13px;color:#33503a;line-height:1.6"><b>Rest, recover and stay sharp.</b> Weekends are for recharging, but a few focused jobs now keep the week ahead running smoothly. Keep your response times sharp, look after your body and enjoy the time off. You are the most important tool in the business.</div>'; }
 function todoUnplannedBanner(){ return '<div style="background:#FBF4E4;border:1px solid #EAD9B0;border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:13px;color:#6b5418;line-height:1.6"><b>Make the most of a day off the tools.</b> An unplanned day is still a chance to move the business forward through marketing, training, customer care and admin. Work through whatever fits, and contact the franchisor if you want more ideas.</div>'; }
 function todoAddFormHTML(){
   const e=todoState.editId?todoState.tasks.find(t=>t.id===todoState.editId):null;
-  const tab=e?e.tab:todoDay, block=(e&&e.block)?e.block:'start', recur=e?e.recur:(tab==='unplanned'?'contingency':'daily');
+  const kind=e?(e.kind||'routine'):'routine';
+  const tab=e?(e.tab||'workday'):(todoDay==='unplanned'?'unplanned':(todoDay==='weekend'?'weekend':'workday'));
+  const block=(e&&e.block)?e.block:'start';
+  const recur=e?e.recur:(tab==='unplanned'?'contingency':'daily');
+  const due=(e&&e.due)?e.due:todoYmd(1);
+  const dblock=(e&&e.kind==='dated'&&e.block)?e.block:'none';
+  const urgent=e?!!e.urgent:false;
   const opt=(v,cur,lab)=>'<option value="'+v+'"'+(cur===v?' selected':'')+'>'+lab+'</option>';
+  const toggleJs="document.getElementById('tdRoutineFields').style.display=this.value==='routine'?'':'none';document.getElementById('tdDatedFields').style.display=this.value==='dated'?'':'none'";
   return '<div class="td-form">'
     + '<div><span class="td-lab">Task</span><input id="tdTitle" class="td-in" placeholder="What needs doing" value="'+(e?escAttr(e.title):'')+'"></div>'
     + '<div><span class="td-lab">Note (optional)</span><input id="tdDesc" class="td-in" placeholder="A short description" value="'+(e&&e.desc?escAttr(e.desc):'')+'"></div>'
-    + '<div class="td-row">'
+    + '<div><span class="td-lab">Type</span><select id="tdKind" class="td-sel" onchange="'+toggleJs+'">'+opt('routine',kind,'Repeating routine')+opt('dated',kind,'One-off reminder (set a date)')+'</select></div>'
+    + '<div id="tdRoutineFields" class="td-row"'+(kind==='routine'?'':' style="display:none"')+'>'
       + '<div><span class="td-lab">Day type</span><select id="tdTab" class="td-sel">'+opt('workday',tab,'Workday')+opt('weekend',tab,'Weekend')+opt('unplanned',tab,'Unplanned')+'</select></div>'
       + '<div><span class="td-lab">Time of day</span><select id="tdBlock" class="td-sel">'+opt('start',block,'Start of day')+opt('during',block,'During day')+opt('end',block,'End of day')+'</select></div>'
       + '<div><span class="td-lab">Recurs</span><select id="tdRecur" class="td-sel">'+opt('daily',recur,'Daily')+opt('weekly',recur,'Weekly')+opt('fourweekly',recur,'Every 4 weeks')+'</select></div>'
     + '</div>'
-    + '<div style="font-size:11.5px;color:var(--muted);line-height:1.5">Time of day applies to workday tasks. Unplanned tasks are a contingency checklist, so recurrence does not apply to them.</div>'
+    + '<div id="tdDatedFields"'+(kind==='dated'?'':' style="display:none"')+'>'
+      + '<div class="td-row"><div><span class="td-lab">Date</span><input id="tdDue" type="date" class="td-in" value="'+due+'"></div>'
+        + '<div><span class="td-lab">Time of day (optional)</span><select id="tdDBlock" class="td-sel">'+opt('none',dblock,'Any time')+opt('start',dblock,'Start of day')+opt('during',dblock,'During day')+opt('end',dblock,'End of day')+'</select></div></div>'
+      + '<div style="margin-top:8px;display:flex;gap:8px"><button type="button" class="td-when-btn" onclick="document.getElementById(\'tdDue\').value=todoYmd(0)">Today</button><button type="button" class="td-when-btn" onclick="document.getElementById(\'tdDue\').value=todoYmd(1)">Tomorrow</button></div>'
+    + '</div>'
+    + '<label class="td-chk-lab"><input type="checkbox" id="tdUrgent"'+(urgent?' checked':'')+'> Mark as urgent</label>'
     + '<button class="td-save" onclick="todoSaveTask()">'+(e?'Save changes':'Add task')+'</button></div>';
 }
+function renderTodoToday(nav, add){
+  const info=todoTodayInfo();
+  const due=todoDueByToday(), up=todoUpcoming();
+  const routineTasks = info.isWeekend ? todoTasksFor('weekend') : todoState.tasks.filter(t=>t.tab==='workday');
+  const totalT = due.length + routineTasks.length;
+  const doneT = routineTasks.filter(todoIsDone).length;
+  const pct = totalT?Math.round(doneT/totalT*100):0;
+  const hero='<div class="card" style="margin-bottom:16px"><div class="td-hero"><div><div class="h" style="margin-bottom:2px">Today</div><div class="td-hero-date">'+info.label+' \u00b7 '+(info.isWeekend?'weekend':'workday')+' routine</div></div>'
+    + '<div class="td-prog" style="font-size:13px">'+doneT+' of '+totalT+' done<div class="td-prog-bar" style="width:150px"><div class="td-prog-fill" style="width:'+pct+'%"></div></div></div></div></div>';
+  let body='';
+  if(due.length){ body+='<div class="card" style="margin-bottom:16px"><div class="td-sec-h">Due today</div>'+due.map(todoTaskHTML).join('')+'</div>'; }
+  if(info.isWeekend){ const ts=todoTasksFor('weekend'); body+=todoWeekendBanner()+'<div class="card" style="margin-bottom:16px"><div class="td-sec-h">Weekend routine</div>'+(ts.length?ts.map(todoTaskHTML).join(''):'<div style="font-size:12.5px;color:var(--muted)">No weekend tasks yet.</div>')+'</div>'; }
+  else { body+=todoBlockCard('start','Start of day')+todoBlockCard('during','During day')+todoBlockCard('end','End of day'); }
+  if(up.length){ body+='<div class="card"><div class="td-sec-h">Coming up</div>'+up.slice(0,8).map(todoTaskHTML).join('')+'</div>'; }
+  return hero+nav+add+body;
+}
 function renderTodoTab(){
-  const days=[['workday','Workday'],['weekend','Weekend'],['unplanned','Unplanned']];
+  const days=[['today','Today'],['workday','Workday'],['weekend','Weekend'],['unplanned','Unplanned']];
   const nav='<div class="filter-row" style="margin-bottom:16px">'+days.map(function(d){ return '<button class="filter-btn '+(todoDay===d[0]?'active':'')+'" onclick="todoSetDay(\''+d[0]+'\')">'+d[1]+'</button>'; }).join('')+'</div>';
+  const add='<div style="margin-bottom:16px"><button class="td-add-btn" onclick="todoToggleAdd()">'+(todoState.addOpen?'\u00d7 Cancel':'+ Add a task or reminder')+'</button>'+(todoState.addOpen?todoAddFormHTML():'')+'</div>';
+  if(todoDay==='today') return renderTodoToday(nav, add);
   const p=todoProg(todoDay), pct=p.total?Math.round(p.done/p.total*100):0;
-  const blurb = todoDay==='workday' ? 'Your daily admin routine, grouped by start, during and end of day. Tick things off as you go. Daily tasks reset each day and weekly ones each week, so the list always shows what is still outstanding.'
+  const blurb = todoDay==='workday' ? 'Your daily admin routine, grouped by start, during and end of day. Daily tasks reset each day and weekly ones each week, so the list always shows what is still outstanding.'
     : todoDay==='weekend' ? 'A short weekend routine to keep next week running smoothly. These reset each week.'
     : 'Contingency tasks for an unexpected day off the tools, illness, weather or a cancellation. Work through what applies.';
-  const intro='<div class="card" style="margin-bottom:16px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap"><div><div class="h" style="margin-bottom:6px">To-do</div><div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:700px">'+blurb+'</div></div>'
+  const intro='<div class="card" style="margin-bottom:16px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap"><div><div class="h" style="margin-bottom:6px">'+(todoDay==='workday'?'Workday':(todoDay==='weekend'?'Weekend':'Unplanned'))+' routine</div><div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:700px">'+blurb+'</div></div>'
     + '<div class="td-prog" style="font-size:13px">'+p.done+' of '+p.total+' done<div class="td-prog-bar" style="width:150px"><div class="td-prog-fill" style="width:'+pct+'%"></div></div></div></div></div>';
-  const add='<div style="margin-bottom:16px"><button class="td-add-btn" onclick="todoToggleAdd()">'+(todoState.addOpen?'\u00d7 Cancel':'+ Add a task')+'</button>'+(todoState.addOpen?todoAddFormHTML():'')+'</div>';
   let body='';
   if(todoDay==='workday'){ body=todoBlockCard('start','Start of day')+todoBlockCard('during','During day')+todoBlockCard('end','End of day'); }
   else if(todoDay==='weekend'){ const ts=todoTasksFor('weekend'); body=todoWeekendBanner()+'<div class="card">'+(ts.length?ts.map(todoTaskHTML).join(''):'<div style="font-size:12.5px;color:var(--muted)">No weekend tasks yet.</div>')+'</div>'; }
