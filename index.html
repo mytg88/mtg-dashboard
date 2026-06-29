@@ -391,6 +391,58 @@ th.sortable:hover{color:var(--green)}
 .td-sec-h{font-family:'Fraunces',serif;font-size:16px;font-weight:600;color:var(--ink);margin:0 0 11px}
 .td-chk-lab{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);cursor:pointer}
 .td-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:8px;vertical-align:middle}
+.bp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.bp-modes{display:flex;gap:6px;flex-wrap:wrap}
+.bp-mode-btn{font:inherit;font-size:12.5px;font-weight:600;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:9px;padding:8px 14px;cursor:pointer}
+.bp-mode-btn:hover{border-color:var(--green4)}
+.bp-mode-btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.bp-grp-h{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:20px 0 9px}
+.bp-sec-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;margin-bottom:8px;transition:all .12s}
+.bp-sec-row:hover{border-color:var(--green4);background:#F7FAF6}
+.bp-sec-name{font-size:13.5px;font-weight:600;color:var(--ink)}
+.bp-sec-desc{font-size:12px;color:var(--muted);margin-top:2px}
+.bp-tick{width:20px;height:20px;border-radius:50%;border:2px solid #CBD5C5;flex-shrink:0;position:relative}
+.bp-tick.on{background:var(--green);border-color:var(--green)}
+.bp-tick.on:after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.bp-steps{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:18px}
+.bp-step{font:inherit;font-size:12px;font-weight:600;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:20px;padding:6px 13px;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+.bp-step:hover{border-color:var(--green4)}
+.bp-step.on{background:var(--green);color:#fff;border-color:var(--green)}
+.bp-step-dot{width:6px;height:6px;border-radius:50%;background:#CBD5C5}
+.bp-step.done .bp-step-dot{background:var(--green4)}
+.bp-step.on .bp-step-dot{background:#fff}
+.bp-why{background:#EEF4FB;border:1px solid #D4E3F3;border-radius:11px;padding:13px 15px;font-size:12.5px;color:#2c4a66;line-height:1.6;margin-bottom:20px}
+.bp-q{font-size:14px;font-weight:600;color:var(--ink);margin:20px 0 4px}
+.bp-q:first-of-type{margin-top:4px}
+.bp-hint{font-size:12px;color:var(--muted);margin-bottom:11px;line-height:1.5}
+.bp-chips{display:flex;flex-wrap:wrap;gap:8px}
+.bp-chip{font:inherit;font-size:12.5px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:20px;padding:7px 14px;cursor:pointer;transition:all .12s}
+.bp-chip:hover{border-color:var(--green4)}
+.bp-chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.bp-input,.bp-textarea,.bp-num,.bp-sel{font:inherit;font-size:13px;width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
+.bp-textarea{min-height:96px;resize:vertical;line-height:1.6}
+.bp-row{display:flex;gap:12px;flex-wrap:wrap}
+.bp-row>div{flex:1;min-width:150px}
+.bp-num-wrap{position:relative}
+.bp-num-wrap .bp-cur{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;pointer-events:none}
+.bp-num-wrap .bp-num{padding-left:23px}
+.bp-derived{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:13px 16px;display:flex;gap:28px;flex-wrap:wrap;margin-top:8px}
+.bp-deri-l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.bp-deri-v{font-family:'Fraunces',serif;font-size:21px;font-weight:600;color:var(--ink);margin-top:3px}
+.bp-calc-link{font-size:12px;color:var(--muted);margin-top:7px;line-height:1.5}
+.bp-calc-link a{color:var(--green6);text-decoration:underline;cursor:pointer}
+.bp-nav{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:22px;flex-wrap:wrap}
+.bp-btn{font:inherit;font-size:13px;font-weight:600;border-radius:9px;padding:10px 18px;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.bp-btn:hover{border-color:var(--green4)}
+.bp-btn.primary{background:var(--green);color:#fff;border-color:var(--green)}
+.bp-btn.ghost{background:none;color:var(--muted)}
+.bp-mile{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--line)}
+.bp-mile:last-child{border-bottom:0}
+.bp-mile-check{width:20px;height:20px;border-radius:50%;border:2px solid #CBD5C5;flex-shrink:0;cursor:pointer;position:relative}
+.bp-mile-check.on{background:var(--green);border-color:var(--green)}
+.bp-mile-check.on:after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.bp-mile.done .bp-mile-t{color:var(--muted);text-decoration:line-through}
+.bp-mile-t{font-size:13px;color:var(--ink);flex:1}
 </style>
 </head>
 <body>
@@ -791,6 +843,8 @@ function handleData(data) {
   if (!roundsBoard.placeholders || typeof roundsBoard.placeholders !== 'object') roundsBoard.placeholders = {};
   // Per-user to-do list: adopt the saved server copy, or seed the server from local on first run.
   todoBoot(data);
+  // Per-user business plan: adopt the saved server copy once per session.
+  bpBoot(data);
 
   rawJobs.forEach(j => {
     j._amount = parseAmount(j['Amount (£)']);
@@ -2330,7 +2384,7 @@ function stackedServiceSVG(top, colorOf) {
   return '<div class="svg-wrap"><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">' + grid + bars + xl + '</svg></div>' + legend;
 }
 
-const tabList = ["Overview","To-do","Leads","Calls","Revenue","Customers","Regulars","Missing Prices"];
+const tabList = ["Overview","To-do","Plan","Leads","Calls","Revenue","Customers","Regulars","Missing Prices"];
 function renderTabs() {
   document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+t+'</button>').join('');
 }
@@ -3277,6 +3331,216 @@ function todoAddFormHTML(){
     + '<label class="td-chk-lab"><input type="checkbox" id="tdUrgent"'+(urgent?' checked':'')+'> Mark as urgent</label>'
     + '<button class="td-save" onclick="todoSaveTask()">'+(e?'Save changes':'Add task')+'</button></div>';
 }
+/* ===================== Business plan ===================== */
+const BP_OPTS = {
+  why:['Love of outdoor work','Be my own boss','Build a reliable income','Flexible hours','Job security','Stay fit and active'],
+  benefits:['Financial security','Physical fitness and outdoor work','Mental wellbeing','Community connection','Independence','A better work-life balance'],
+  channels:['Customer referrals','Social media','Door drops and flyers','Local SEO and Google','Nextdoor','Vehicle livery','Local Facebook groups'],
+  offered:['Lawn mowing','Border maintenance','Weeding','Hedge trimming','Pruning','Planting','Leaf clearance','Pressure washing','Garden clearance','Waste removal','Lawn care treatments','Lawn renovations'],
+  skills:['PA1/PA6 licence','Chainsaw tickets','Tree surgery experience','Hard landscaping','Garden design','Horticultural qualification','RHS qualification']
+};
+const BP_FUNDING=['Personal savings','Business loan','A mix of both'];
+const BP_D30=['Get your first 5-star review','Complete your first \u00a3200+ job','Serve your first referred job','Complete your first \u00a3500 job','Reach \u00a32,000 in revenue'];
+const BP_D90=['Reach 25 five-star reviews across platforms','Hit \u00a33,000 revenue in one calendar month','Sign up your first 10 regular maintenance customers','Deliver 100+ leaflets with a quote in your area','Post before and after photos regularly to social and Google'];
+const BP_SECTIONS=[
+  {key:'motivation', group:'Foundation', title:'Your motivation', desc:'Understand your why and what drives you.', why:'Your core motivations are the anchor for every decision. When challenges come, your why keeps you focused and resilient.'},
+  {key:'vision', group:'Foundation', title:'Your vision', desc:'Set your five-year, one-year and three-month goals.', why:'A clear picture of where you are heading turns day-to-day work into progress towards something you actually want.'},
+  {key:'income', group:'Targets and finances', title:'Income and targets', desc:'Set your income needs and the rates to hit them.', why:'Knowing the numbers you need protects your time. Price below them and you work hard for too little.'},
+  {key:'startup', group:'Targets and finances', title:'Startup costs', desc:'Plan your one-off investment to get going.', why:'A realistic startup budget means you launch with enough behind you and no nasty surprises.'},
+  {key:'market', group:'Market', title:'Territory and marketing', desc:'Define your area, your customers and how you reach them.', why:'Focus beats spread. A tight area and two or three channels you do well will out-perform trying to be everywhere.'},
+  {key:'services', group:'Operations', title:'Services and skills', desc:'Choose what you offer and where you will grow.', why:'A sensible mix of regular and one-off work keeps income steady and the days varied. Knowing your gaps tells you where to grow.'},
+  {key:'ops', group:'Operations', title:'Operations', desc:'Plan your working pattern across the year.', why:'A clear pattern helps you protect earning time in season and use the quieter months for planning and rest.'},
+  {key:'action', group:'Action', title:'Action plan', desc:'Your first 30 and 90 day milestones.', why:'A plan becomes real when it turns into commitments with a deadline. These early wins build momentum.'}
+];
+let bpMode='overview', bpSection=0;
+let bpState={}, bpSaveTimer=null, bpBootedFor=null;
+function bpDefault(){ return { v:1, updatedAt:0, reviewEvery:'quarter',
+  motivation:{why:[],benefits:[],lifestyle:''},
+  vision:{fiveYear:'',yearOne:'',ninetyDay:''},
+  income:{monthly:'',rate:'',breakeven:'',turnover:'',costs:''},
+  startup:{tools:'',vehicle:'',uniform:'',setup:'',other:'',funding:'Personal savings'},
+  market:{territory:'',alsoCover:'',channels:[],edge:''},
+  services:{offered:[],skills:[],develop:''},
+  ops:{peak:{start:'09:00',finish:'18:00',days:5,holiday:2}, off:{start:'09:30',finish:'16:30',days:5,holiday:4}},
+  action:{ d30:BP_D30.map(t=>({t:t,done:false})), d90:BP_D90.map(t=>({t:t,done:false})) }
+}; }
+function bpCacheKey(){ return 'mtg_bizplan_'+((typeof auth!=='undefined'&&auth&&auth.user)?String(auth.user).toLowerCase():'anon'); }
+function bpEnsure(){
+  const d=bpDefault();
+  if(!bpState||typeof bpState!=='object') bpState={};
+  if(!bpState.v) bpState.v=1;
+  if(!bpState.reviewEvery) bpState.reviewEvery='quarter';
+  ['motivation','vision','income','startup','market','services'].forEach(k=>{ bpState[k]=Object.assign({}, d[k], bpState[k]||{}); });
+  bpState.ops = bpState.ops||{}; bpState.ops.peak=Object.assign({}, d.ops.peak, bpState.ops.peak||{}); bpState.ops.off=Object.assign({}, d.ops.off, bpState.ops.off||{});
+  bpState.action = bpState.action||{};
+  if(!Array.isArray(bpState.action.d30)||!bpState.action.d30.length) bpState.action.d30=d.action.d30;
+  if(!Array.isArray(bpState.action.d90)||!bpState.action.d90.length) bpState.action.d90=d.action.d90;
+}
+function bpLoadCache(){ try{ const raw=localStorage.getItem(bpCacheKey()); if(raw){ bpState=JSON.parse(raw)||{}; return true; } }catch(e){} return false; }
+function bpWriteCache(){ try{ localStorage.setItem(bpCacheKey(), JSON.stringify(bpState)); }catch(e){} }
+function bpLoad(){ const had=bpLoadCache(); if(!had) bpState=bpDefault(); bpEnsure(); }
+function bpSaveServerNow(){ try{ if(typeof auth!=='undefined'&&auth) apiCall({ action:'saveDoc', doc:'bizplan', data: JSON.stringify(bpState) }); }catch(e){} }
+function bpSave(){ bpState.updatedAt=Date.now(); bpWriteCache(); clearTimeout(bpSaveTimer); bpSaveTimer=setTimeout(bpSaveServerNow,800); }
+// Adopt the saved server copy once per user per session; a full reload re-pulls across devices.
+function bpBoot(data){
+  const u=(typeof auth!=='undefined'&&auth&&auth.user)?String(auth.user).toLowerCase():'anon';
+  if(bpBootedFor===u) return; bpBootedFor=u;
+  const had=bpLoadCache();
+  const srv=data&&data.bizplan;
+  if(srv&&typeof srv==='object'&&srv.v){ bpState=srv; bpEnsure(); bpWriteCache(); }
+  else { if(!had) bpState=bpDefault(); bpEnsure(); }
+  if(activeTab==='Plan') bpRerender();
+}
+function bpNum(v){ const n=parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,'')); return isNaN(n)?0:n; }
+function bpProfit(){ return bpNum(bpState.income.turnover)-bpNum(bpState.income.costs); }
+function bpMargin(){ const t=bpNum(bpState.income.turnover); return t>0?Math.round(bpProfit()/t*1000)/10:0; }
+function bpStartupTotal(){ const s=bpState.startup; return bpNum(s.tools)+bpNum(s.vehicle)+bpNum(s.uniform)+bpNum(s.setup)+bpNum(s.other); }
+function bpOpsWeeks(){ return Math.max(0, 52 - bpNum(bpState.ops.peak.holiday) - bpNum(bpState.ops.off.holiday)); }
+function bpOpsDays(){ const pk=Math.max(0,(40-bpNum(bpState.ops.peak.holiday)))*bpNum(bpState.ops.peak.days); const of=Math.max(0,(12-bpNum(bpState.ops.off.holiday)))*bpNum(bpState.ops.off.days); return Math.round(pk+of); }
+function bpDone(i){
+  const k=BP_SECTIONS[i].key, s=bpState;
+  if(k==='motivation') return (s.motivation.why||[]).length>0;
+  if(k==='vision') return !!(s.vision.fiveYear||'').trim();
+  if(k==='income') return bpNum(s.income.rate)>0 || bpNum(s.income.monthly)>0;
+  if(k==='startup') return bpStartupTotal()>0;
+  if(k==='market') return !!(s.market.territory||'').trim();
+  if(k==='services') return (s.services.offered||[]).length>0;
+  if(k==='ops') return !!(s.ops.peak.start&&s.ops.peak.finish);
+  if(k==='action') return (s.action.d30||[]).some(m=>m.done)||(s.action.d90||[]).some(m=>m.done);
+  return false;
+}
+function bpProgress(){ let n=0; for(let i=0;i<BP_SECTIONS.length;i++) if(bpDone(i)) n++; return {done:n, total:BP_SECTIONS.length}; }
+function bpNextReview(){ if(!bpState.updatedAt) return null; const d=new Date(bpState.updatedAt); const add=bpState.reviewEvery==='month'?1:(bpState.reviewEvery==='half'?6:3); d.setMonth(d.getMonth()+add); return d; }
+function bpFmtDate(d){ if(!d) return '\u2014'; const m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return d.getDate()+' '+m[d.getMonth()]+' '+d.getFullYear(); }
+function bpEsc(s){ return escAttr(s==null?'':s); }
+// setters
+function bpSet(sec, field, val){ if(!bpState[sec]) bpState[sec]={}; bpState[sec][field]=val; bpSave(); }
+function bpSetOps(sub, field, val){ bpState.ops[sub][field]=val; bpSave(); }
+function bpSetOpsNum(sub, field, val){ bpState.ops[sub][field]=val; bpSave(); const w=document.getElementById('bpOpsWk'), d=document.getElementById('bpOpsDy'); if(w)w.textContent=bpOpsWeeks(); if(d)d.textContent=bpOpsDays(); }
+function bpIncomeOnInput(field, val){ bpState.income[field]=val; bpSave(); const p=document.getElementById('bpProfitV'), m=document.getElementById('bpMarginV'); if(p)p.textContent=fmt(bpProfit()); if(m)m.textContent=bpMargin()+'%'; }
+function bpToggleOpt(sec, field, optsKey, idx){ const o=BP_OPTS[optsKey][idx]; const arr=bpState[sec][field]||[]; const j=arr.indexOf(o); if(j===-1) arr.push(o); else arr.splice(j,1); bpState[sec][field]=arr; bpSave(); bpRerender(); }
+function bpToggleMile(key, idx){ const m=bpState.action[key][idx]; if(m){ m.done=!m.done; bpSave(); bpRerender(); } }
+function bpDelMile(key, idx){ bpState.action[key].splice(idx,1); bpSave(); bpRerender(); }
+function bpAddMile(key){ const t=prompt('New milestone'); if(t&&t.trim()){ bpState.action[key].push({t:t.trim(),done:false}); bpSave(); bpRerender(); } }
+function bpSetReview(v){ bpState.reviewEvery=v; bpSave(); bpRerender(); }
+function bpGoResources(){ if(typeof tabList!=='undefined' && tabList.indexOf('Resources')!==-1){ setTab('Resources'); } else { alert('The rate calculator will live in the Resources section, coming soon.'); } }
+// field builders
+function bpChipsHTML(sec, field, optsKey){ const opts=BP_OPTS[optsKey], sel=bpState[sec][field]||[]; return '<div class="bp-chips">'+opts.map(function(o,i){ const on=sel.indexOf(o)!==-1; return '<button class="bp-chip'+(on?' on':'')+'" onclick="bpToggleOpt(\''+sec+'\',\''+field+'\',\''+optsKey+'\','+i+')">'+bpEsc(o)+'</button>'; }).join('')+'</div>'; }
+function bpTextHTML(sec, field, ph, multiline){ const v=bpEsc(bpState[sec][field]||''); if(multiline) return '<textarea class="bp-textarea" placeholder="'+bpEsc(ph)+'" oninput="bpSet(\''+sec+'\',\''+field+'\',this.value)">'+v+'</textarea>'; return '<input class="bp-input" placeholder="'+bpEsc(ph)+'" value="'+v+'" oninput="bpSet(\''+sec+'\',\''+field+'\',this.value)">'; }
+function bpNumHTML(sec, field, ph, derived){ const v=bpEsc(bpState[sec][field]||''); const oi=derived?("bpIncomeOnInput('"+field+"',this.value)"):("bpSet('"+sec+"','"+field+"',this.value)"); return '<div class="bp-num-wrap"><span class="bp-cur">\u00a3</span><input class="bp-num" inputmode="decimal" placeholder="'+bpEsc(ph||'0')+'" value="'+v+'" oninput="'+oi+'"></div>'; }
+function bpSelHTML(sec, field, opts){ const cur=bpState[sec][field]; return '<select class="bp-sel" onchange="bpSet(\''+sec+'\',\''+field+'\',this.value)">'+opts.map(function(o){ return '<option'+(o===cur?' selected':'')+'>'+bpEsc(o)+'</option>'; }).join('')+'</select>'; }
+function bpOpsTime(sub, field){ return '<input class="bp-input" type="time" value="'+bpEsc(bpState.ops[sub][field])+'" oninput="bpSetOps(\''+sub+'\',\''+field+'\',this.value)">'; }
+function bpOpsFields(){
+  function pat(sub,label,note){ const p=bpState.ops[sub]; return '<div class="card" style="margin-bottom:14px"><div class="bp-q" style="margin-top:0">'+label+'</div><div class="bp-hint">'+note+'</div>'
+    + '<div class="bp-row"><div><span class="bp-deri-l">Start time</span>'+bpOpsTime(sub,'start')+'</div><div><span class="bp-deri-l">Finish time</span>'+bpOpsTime(sub,'finish')+'</div>'
+    + '<div><span class="bp-deri-l">Days per week</span><input class="bp-input" type="number" min="1" max="7" value="'+bpEsc(p.days)+'" oninput="bpSetOpsNum(\''+sub+'\',\'days\',this.value)"></div>'
+    + '<div><span class="bp-deri-l">Holiday weeks</span><input class="bp-input" type="number" min="0" max="20" value="'+bpEsc(p.holiday)+'" oninput="bpSetOpsNum(\''+sub+'\',\'holiday\',this.value)"></div></div></div>'; }
+  return '<div class="bp-hint">Your working pattern across the year. Peak season is the long days from spring to autumn; off-season is the quieter winter months.</div>'
+    + pat('peak','Peak season pattern','Mid-March to mid-November, roughly 40 weeks. Your main earning window.')
+    + pat('off','Off-season pattern','December to February, roughly 12 weeks. Good for admin, planning and holidays.')
+    + '<div class="bp-derived"><div><span class="bp-deri-l">Working weeks a year</span><span class="bp-deri-v" id="bpOpsWk">'+bpOpsWeeks()+'</span></div><div><span class="bp-deri-l">Working days a year (approx)</span><span class="bp-deri-v" id="bpOpsDy">'+bpOpsDays()+'</span></div></div>';
+}
+function bpActionFields(){
+  function list(key,label,sub){ const arr=bpState.action[key]||[]; return '<div class="bp-q">'+label+'</div><div class="bp-hint">'+sub+'</div>'+arr.map(function(m,i){ return '<div class="bp-mile'+(m.done?' done':'')+'"><button class="bp-mile-check'+(m.done?' on':'')+'" onclick="bpToggleMile(\''+key+'\','+i+')"></button><span class="bp-mile-t">'+bpEsc(m.t)+'</span><button class="td-mini" title="Remove" onclick="bpDelMile(\''+key+'\','+i+')">\u2715</button></div>'; }).join('')+'<div style="margin-top:10px"><button class="bp-btn ghost" onclick="bpAddMile(\''+key+'\')">+ Add a milestone</button></div>'; }
+  return '<div class="bp-hint">Turn your plan into commitments. Tick these off as you hit them.</div>'+list('d30','First 30 days','Prove the concept and get moving.')+'<div style="height:20px"></div>'+list('d90','First 90 days','Let your area know you are in business.');
+}
+function bpSectionFields(i){
+  const k=BP_SECTIONS[i].key;
+  if(k==='motivation') return '<div class="bp-q">Why do you want to run your own gardening business?</div><div class="bp-hint">Pick the reasons that resonate most. Your why keeps you focused when things get tough.</div>'+bpChipsHTML('motivation','why','why')
+    + '<div class="bp-q">What benefits do you hope to gain?</div><div class="bp-hint">Think about the practical and the personal.</div>'+bpChipsHTML('motivation','benefits','benefits')
+    + '<div class="bp-q">What lifestyle goals could this business help you reach?</div><div class="bp-hint">Your business should serve your life. What does success look like beyond the work?</div>'+bpTextHTML('motivation','lifestyle','For example, a house deposit in a few years, time for family at weekends, a stable income.',true);
+  if(k==='vision') return '<div class="bp-q">Where do you see your business in five years?</div>'+bpTextHTML('vision','fiveYear','Income, team size, customer base, the kind of work you want to be doing.',true)
+    + '<div class="bp-q">What does year one success look like?</div>'+bpTextHTML('vision','yearOne','Turnover, regular customers, reviews, confidence running the business.',true)
+    + '<div class="bp-q">What will you focus on in the next three months?</div>'+bpTextHTML('vision','ninetyDay','The first concrete steps: training, foundations, first customers.',true);
+  if(k==='income') return '<div class="bp-row"><div><div class="bp-q">Target monthly income</div>'+bpNumHTML('income','monthly','3000')+'</div>'
+    + '<div><div class="bp-q">Required hourly rate</div>'+bpNumHTML('income','rate','33')+'<div class="bp-calc-link">Not sure of your number? The rate calculator will live in <a onclick="bpGoResources()">Resources</a> (coming soon).</div></div>'
+    + '<div><div class="bp-q">Break-even rate</div>'+bpNumHTML('income','breakeven','27')+'</div></div>'
+    + '<div class="bp-row" style="margin-top:14px"><div><div class="bp-q">Target annual turnover</div>'+bpNumHTML('income','turnover','63000',true)+'</div><div><div class="bp-q">Annual running costs</div>'+bpNumHTML('income','costs','51000',true)+'</div></div>'
+    + '<div class="bp-derived"><div><span class="bp-deri-l">Annual profit</span><span class="bp-deri-v" id="bpProfitV">'+fmt(bpProfit())+'</span></div><div><span class="bp-deri-l">Profit margin</span><span class="bp-deri-v" id="bpMarginV">'+bpMargin()+'%</span></div></div>';
+  if(k==='startup') return '<div class="bp-hint">Your one-off costs to get started. Leave anything that does not apply at zero.</div>'
+    + '<div class="bp-row"><div><div class="bp-q">Tools and machinery</div>'+bpNumHTML('startup','tools','3000')+'</div><div><div class="bp-q">Vehicle</div>'+bpNumHTML('startup','vehicle','6000')+'</div></div>'
+    + '<div class="bp-row" style="margin-top:14px"><div><div class="bp-q">Uniform and PPE</div>'+bpNumHTML('startup','uniform','500')+'</div><div><div class="bp-q">Franchise or setup fee</div>'+bpNumHTML('startup','setup','0')+'</div></div>'
+    + '<div class="bp-row" style="margin-top:14px"><div><div class="bp-q">Other startup costs</div>'+bpNumHTML('startup','other','0')+'</div><div><div class="bp-q">How will you fund this?</div>'+bpSelHTML('startup','funding',BP_FUNDING)+'</div></div>'
+    + '<div class="bp-derived"><div><span class="bp-deri-l">Total startup investment</span><span class="bp-deri-v">'+fmt(bpStartupTotal())+'</span></div></div>';
+  if(k==='market') return '<div class="bp-q">Your primary territory</div><div class="bp-hint">Your main operating area.</div>'+bpTextHTML('market','territory','For example, Parkstone and Poole Central')
+    + '<div class="bp-q">Other areas you are willing to cover</div>'+bpTextHTML('market','alsoCover','Neighbouring areas you would take work in.')
+    + '<div class="bp-q">Which marketing channels will you focus on?</div><div class="bp-hint">Pick two or three to start with and master them before adding more.</div>'+bpChipsHTML('market','channels','channels')
+    + '<div class="bp-q">How will you stand out locally?</div>'+bpTextHTML('market','edge','What makes customers choose you: reliability, quality, communication, the My Tidy Garden brand.',true);
+  if(k==='services') return '<div class="bp-q">Which services will you offer?</div>'+bpChipsHTML('services','offered','offered')
+    + '<div class="bp-q">Specialist skills or qualifications</div><div class="bp-hint">These can unlock higher-value work and justify higher rates.</div>'+bpChipsHTML('services','skills','skills')
+    + '<div class="bp-q">Which skills would you most like to develop over the next year?</div>'+bpTextHTML('services','develop','Skills to improve or new ones to learn that could grow your business.',true);
+  if(k==='ops') return bpOpsFields();
+  if(k==='action') return bpActionFields();
+  return '';
+}
+function bpKpi(l,v,s,color){ return '<div class="card accent-top"><div class="kpi-l">'+l+'</div><div class="kpi-v"'+(color?' style="color:'+color+'"':'')+'>'+v+'</div><div class="kpi-s">'+s+'</div></div>'; }
+function bpOverviewHTML(){
+  const pr=bpProgress(), pct=Math.round(pr.done/pr.total*100), inc=bpState.income;
+  const head='<div class="bp-head"><div><div class="h" style="margin-bottom:4px">Business plan</div><div style="font-size:13px;color:var(--muted)">Plan your business, then revisit it as you learn and grow.</div></div>'
+    + '<div class="bp-modes"><button class="bp-mode-btn on">Overview</button><button class="bp-mode-btn" onclick="bpSetMode(\'edit\')">Edit plan</button><button class="bp-mode-btn" onclick="bpExport()">Export</button></div></div>';
+  const kpis='<div class="grid grid-4">'
+    + bpKpi('Required rate', inc.rate?'\u00a3'+bpNum(inc.rate)+'/hr':'\u2014','what you aim to charge')
+    + bpKpi('Break-even rate', inc.breakeven?'\u00a3'+bpNum(inc.breakeven)+'/hr':'\u2014','covers your costs')
+    + bpKpi('Target monthly income', inc.monthly?fmt(bpNum(inc.monthly)):'\u2014','take-home goal')
+    + bpKpi('Annual turnover', inc.turnover?fmt(bpNum(inc.turnover)):'\u2014','target')
+    + bpKpi('Annual costs', inc.costs?fmt(bpNum(inc.costs)):'\u2014','running costs')
+    + bpKpi('Annual profit', (inc.turnover||inc.costs)?fmt(bpProfit()):'\u2014','turnover minus costs', bpProfit()>=0?'var(--green6)':'var(--red)')
+    + bpKpi('Profit margin', inc.turnover?bpMargin()+'%':'\u2014','of turnover')
+    + '</div>';
+  const review=bpNextReview();
+  const meta='<div class="card" style="margin-bottom:20px"><div style="display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;align-items:center">'
+    + '<div style="flex:1;min-width:220px"><div class="bp-deri-l">Plan progress</div><div style="display:flex;align-items:center;gap:12px;margin-top:7px"><div class="td-prog-bar" style="flex:1;max-width:260px"><div class="td-prog-fill" style="width:'+pct+'%"></div></div><div style="font-size:13px;color:var(--muted)">'+pr.done+' of '+pr.total+' sections</div></div></div>'
+    + '<div><div class="bp-deri-l">Last updated</div><div style="font-size:14px;font-weight:600;margin-top:5px">'+(bpState.updatedAt?bpFmtDate(new Date(bpState.updatedAt)):'Not yet saved')+'</div></div>'
+    + '<div><div class="bp-deri-l">Next review</div><div style="font-size:14px;font-weight:600;margin-top:5px">'+bpFmtDate(review)+'</div></div>'
+    + '<div><div class="bp-deri-l">Review every</div><select class="bp-sel" style="width:auto;margin-top:5px" onchange="bpSetReview(this.value)">'+['month|Month','quarter|Quarter','half|Six months'].map(function(o){ const p=o.split('|'); return '<option value="'+p[0]+'"'+(bpState.reviewEvery===p[0]?' selected':'')+'>'+p[1]+'</option>'; }).join('')+'</select></div></div></div>';
+  let groups={}, order=[];
+  BP_SECTIONS.forEach(function(sec,i){ if(!groups[sec.group]){ groups[sec.group]=[]; order.push(sec.group); } groups[sec.group].push(i); });
+  let chk='<div class="card"><div class="h" style="margin-bottom:4px">Plan sections</div><div style="font-size:12.5px;color:var(--muted);margin-bottom:6px">Tap a section to open it.</div>';
+  order.forEach(function(g){ chk+='<div class="bp-grp-h">'+g+'</div>'; groups[g].forEach(function(i){ const sec=BP_SECTIONS[i], done=bpDone(i); chk+='<div class="bp-sec-row" onclick="bpGoSection('+i+')"><div><div class="bp-sec-name">'+bpEsc(sec.title)+'</div><div class="bp-sec-desc">'+bpEsc(sec.desc)+'</div></div><div class="bp-tick'+(done?' on':'')+'"></div></div>'; }); });
+  chk+='</div>';
+  return head+kpis+meta+chk;
+}
+function bpEditHTML(){
+  const pr=bpProgress(), pct=Math.round(pr.done/pr.total*100);
+  const head='<div class="bp-head"><div><div class="h" style="margin-bottom:4px">Business plan</div><div style="font-size:13px;color:var(--muted)">Section '+(bpSection+1)+' of '+BP_SECTIONS.length+'</div></div>'
+    + '<div class="bp-modes"><button class="bp-mode-btn" onclick="bpSetMode(\'overview\')">Overview</button><button class="bp-mode-btn on">Edit plan</button><button class="bp-mode-btn" onclick="bpExport()">Export</button></div></div>';
+  const prog='<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px"><div class="td-prog-bar" style="flex:1"><div class="td-prog-fill" style="width:'+pct+'%"></div></div><div style="font-size:12px;color:var(--muted);white-space:nowrap">'+pct+'% complete</div></div>';
+  const steps='<div class="bp-steps">'+BP_SECTIONS.map(function(sec,i){ return '<button class="bp-step'+(i===bpSection?' on':'')+(bpDone(i)?' done':'')+'" onclick="bpGoSection('+i+')"><span class="bp-step-dot"></span>'+bpEsc(sec.title)+'</button>'; }).join('')+'</div>';
+  const sec=BP_SECTIONS[bpSection];
+  const body='<div class="card"><div class="h" style="margin-bottom:6px">'+bpEsc(sec.title)+'</div><div style="font-size:13px;color:var(--muted);margin-top:-2px;margin-bottom:16px">'+bpEsc(sec.desc)+'</div>'+(sec.why?'<div class="bp-why"><b>Why this matters.</b> '+bpEsc(sec.why)+'</div>':'')+bpSectionFields(bpSection)+'</div>';
+  const isFirst=bpSection===0, isLast=bpSection===BP_SECTIONS.length-1;
+  const nav='<div class="bp-nav"><button class="bp-btn" onclick="'+(isFirst?'bpSetMode(\'overview\')':'bpGoSection('+(bpSection-1)+')')+'">\u2039 '+(isFirst?'Overview':'Back')+'</button>'
+    + '<button class="bp-btn ghost" onclick="bpSetMode(\'overview\')">Save and exit</button>'
+    + '<button class="bp-btn primary" onclick="'+(isLast?'bpSetMode(\'overview\')':'bpGoSection('+(bpSection+1)+')')+'">'+(isLast?'Finish':'Next \u203a')+'</button></div>';
+  return head+prog+steps+body+nav;
+}
+function renderPlanTab(){ return bpMode==='edit'?bpEditHTML():bpOverviewHTML(); }
+function bpRerender(){ const el=document.getElementById('content'); if(el && activeTab==='Plan') el.innerHTML=renderPlanTab(); }
+function bpSetMode(m){ bpMode=m; bpRerender(); window.scrollTo({top:0,behavior:'smooth'}); }
+function bpGoSection(i){ bpSection=i; bpMode='edit'; bpRerender(); window.scrollTo({top:0,behavior:'smooth'}); }
+function bpExport(){ const w=window.open('','_blank'); if(!w){ alert('Allow pop-ups to export your plan as a PDF.'); return; } w.document.write(bpPrintHTML()); w.document.close(); w.focus(); setTimeout(function(){ try{ w.print(); }catch(e){} }, 350); }
+function bpPrintHTML(){
+  const s=bpState, who=(typeof auth!=='undefined'&&auth&&auth.name)?auth.name:'';
+  const list=a=>(a&&a.length)?'<ul>'+a.map(x=>'<li>'+bpEsc(x)+'</li>').join('')+'</ul>':'<p class="muted">Not set.</p>';
+  const para=t=>t?('<p>'+bpEsc(t).replace(/\n/g,'<br>')+'</p>'):'<p class="muted">Not set.</p>';
+  const mile=arr=>(arr&&arr.length)?'<ul class="m">'+arr.map(m=>'<li>'+(m.done?'\u2611 ':'\u2610 ')+bpEsc(m.t)+'</li>').join('')+'</ul>':'';
+  const money=v=>v?fmt(bpNum(v)):'\u2014';
+  return '<!doctype html><html><head><meta charset="utf-8"><title>My Tidy Garden business plan</title><style>'
+    + 'body{font-family:Georgia,serif;color:#16241C;max-width:760px;margin:30px auto;padding:0 24px;line-height:1.55}'
+    + 'h1{font-size:25px;margin:0 0 4px}h2{font-size:16px;border-bottom:1px solid #cfd8cf;padding-bottom:5px;margin-top:26px}.sub{color:#666;font-size:13px;margin-bottom:8px}ul{margin:6px 0 10px 18px;padding:0}ul.m{list-style:none;margin-left:0}.muted{color:#999}table{border-collapse:collapse;margin:6px 0}td{padding:3px 22px 3px 0;vertical-align:top}b{display:inline-block;margin-top:6px}'
+    + '</style></head><body>'
+    + '<h1>My Tidy Garden business plan</h1><div class="sub">'+(who?bpEsc(who)+' \u00b7 ':'')+bpFmtDate(new Date())+'</div>'
+    + '<h2>1. Motivation</h2><b>Why</b>'+list(s.motivation.why)+'<b>Benefits</b>'+list(s.motivation.benefits)+'<b>Lifestyle goals</b>'+para(s.motivation.lifestyle)
+    + '<h2>2. Vision</h2><b>Five years</b>'+para(s.vision.fiveYear)+'<b>Year one</b>'+para(s.vision.yearOne)+'<b>Next three months</b>'+para(s.vision.ninetyDay)
+    + '<h2>3. Income and targets</h2><table><tr><td>Target monthly income</td><td>'+money(s.income.monthly)+'</td></tr><tr><td>Required hourly rate</td><td>'+(s.income.rate?'\u00a3'+bpNum(s.income.rate)+'/hr':'\u2014')+'</td></tr><tr><td>Break-even rate</td><td>'+(s.income.breakeven?'\u00a3'+bpNum(s.income.breakeven)+'/hr':'\u2014')+'</td></tr><tr><td>Annual turnover</td><td>'+money(s.income.turnover)+'</td></tr><tr><td>Annual costs</td><td>'+money(s.income.costs)+'</td></tr><tr><td>Annual profit</td><td>'+fmt(bpProfit())+'</td></tr><tr><td>Profit margin</td><td>'+bpMargin()+'%</td></tr></table>'
+    + '<h2>4. Startup costs</h2><table><tr><td>Tools and machinery</td><td>'+money(s.startup.tools)+'</td></tr><tr><td>Vehicle</td><td>'+money(s.startup.vehicle)+'</td></tr><tr><td>Uniform and PPE</td><td>'+money(s.startup.uniform)+'</td></tr><tr><td>Franchise or setup fee</td><td>'+money(s.startup.setup)+'</td></tr><tr><td>Other</td><td>'+money(s.startup.other)+'</td></tr><tr><td>Total</td><td>'+fmt(bpStartupTotal())+'</td></tr><tr><td>Funding</td><td>'+bpEsc(s.startup.funding||'')+'</td></tr></table>'
+    + '<h2>5. Territory and marketing</h2><b>Primary territory</b>'+para(s.market.territory)+'<b>Also covering</b>'+para(s.market.alsoCover)+'<b>Channels</b>'+list(s.market.channels)+'<b>How you stand out</b>'+para(s.market.edge)
+    + '<h2>6. Services and skills</h2><b>Services</b>'+list(s.services.offered)+'<b>Specialist skills</b>'+list(s.services.skills)+'<b>Skills to develop</b>'+para(s.services.develop)
+    + '<h2>7. Operations</h2><table><tr><td></td><td>Peak</td><td>Off-season</td></tr><tr><td>Start</td><td>'+bpEsc(s.ops.peak.start)+'</td><td>'+bpEsc(s.ops.off.start)+'</td></tr><tr><td>Finish</td><td>'+bpEsc(s.ops.peak.finish)+'</td><td>'+bpEsc(s.ops.off.finish)+'</td></tr><tr><td>Days per week</td><td>'+bpEsc(s.ops.peak.days)+'</td><td>'+bpEsc(s.ops.off.days)+'</td></tr><tr><td>Holiday weeks</td><td>'+bpEsc(s.ops.peak.holiday)+'</td><td>'+bpEsc(s.ops.off.holiday)+'</td></tr></table><p>Working weeks a year: '+bpOpsWeeks()+'. Working days a year (approx): '+bpOpsDays()+'.</p>'
+    + '<h2>8. Action plan</h2><b>First 30 days</b>'+mile(s.action.d30)+'<b>First 90 days</b>'+mile(s.action.d90)
+    + '</body></html>';
+}
+bpLoad();
 function renderTodoToday(nav, add){
   const info=todoTodayInfo();
   const due=todoDueByToday(), up=todoUpcoming();
@@ -3777,6 +4041,10 @@ function renderContent() {
 
   else if (activeTab==='To-do') {
     el.innerHTML = renderTodoTab();
+  }
+
+  else if (activeTab==='Plan') {
+    el.innerHTML = renderPlanTab();
   }
 
   else if (activeTab==='Regulars') {
