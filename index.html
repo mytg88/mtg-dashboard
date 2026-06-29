@@ -349,6 +349,35 @@ th.sortable:hover{color:var(--green)}
 @media(max-width:1100px){ .rb-wrap{flex-direction:column} .rb-tray{position:static;flex-basis:auto;width:100%;max-height:60vh} .rb-cols{grid-template-columns:repeat(4,minmax(0,1fr));width:100%} }
 @media(max-width:760px){ .rb-cols{grid-template-columns:repeat(3,minmax(0,1fr))} }
 @media(max-width:520px){ .rb-cols{grid-template-columns:repeat(2,minmax(0,1fr))} }
+.td-task{display:flex;align-items:flex-start;gap:11px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;margin-bottom:8px}
+.td-task.done{background:#F6F8F4;border-color:#E2E8DD}
+.td-check{flex-shrink:0;width:20px;height:20px;border-radius:50%;border:2px solid #CBD5C5;background:#fff;cursor:pointer;margin-top:1px;position:relative}
+.td-check:hover{border-color:var(--green4)}
+.td-check.on{background:var(--green);border-color:var(--green)}
+.td-check.on:after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.td-body{flex:1;min-width:0}
+.td-title{font-size:14px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.td-task.done .td-title{color:var(--muted);text-decoration:line-through}
+.td-desc{font-size:12.5px;color:var(--muted);line-height:1.5;margin-top:3px}
+.td-tag{font-size:10px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:#4a554c;background:var(--paper);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+.td-actions{display:flex;gap:2px;flex-shrink:0;opacity:0;transition:opacity .12s}
+.td-task:hover .td-actions{opacity:1}
+.td-mini{background:none;border:0;cursor:pointer;color:var(--muted);font-size:13px;padding:3px 5px;border-radius:6px;line-height:1}
+.td-mini:hover{background:var(--paper);color:var(--ink)}
+.td-block-h{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.td-block-title{font-family:'Fraunces',serif;font-size:17px;font-weight:600;color:var(--ink)}
+.td-prog{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);white-space:nowrap}
+.td-prog-bar{width:120px;height:6px;border-radius:3px;background:#E8ECE6;overflow:hidden}
+.td-prog-fill{height:100%;background:var(--green4);border-radius:3px;transition:width .25s}
+.td-add-btn{font:inherit;font-size:13px;font-weight:600;color:#2F6F3E;background:#fff;border:1px dashed #BFD8BF;border-radius:9px;padding:10px 14px;cursor:pointer}
+.td-add-btn:hover{background:#F0F6EE;border-color:#9FC8A0}
+.td-form{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:12px;display:flex;flex-direction:column;gap:10px;max-width:640px}
+.td-in,.td-sel{width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff}
+.td-row{display:flex;gap:10px;flex-wrap:wrap}
+.td-row>div{flex:1;min-width:130px}
+.td-lab{font-size:11px;color:var(--muted);margin-bottom:4px;display:block}
+.td-save{align-self:flex-start;font:inherit;font-size:13px;font-weight:600;color:#fff;background:var(--green);border:0;border-radius:8px;padding:9px 18px;cursor:pointer}
+.td-save:hover{filter:brightness(.96)}
 </style>
 </head>
 <body>
@@ -420,7 +449,7 @@ let roundsBoard = { assign:{}, rounds:{}, placeholders:{} };
 let leadStats=null, recurringStats=null, prevTotals=null;
 let rawCalls=[], callsStats=null, callsFilter='open', callsWho='', callSearch='', callType='all';
 let activeTab="Overview", custSegFilter="All", custSearch="";
-let regSub="Rounds"; // sub-view inside the Regulars tab: Rounds / Planner / Map / Scorecard
+let regSub="Map"; // sub-view inside the Regulars tab: Map / Planner / Rounds / Scorecard
 // Possible header names a customer phone number might live under, once it's added to the feed.
 const PHONE_HEADERS = ['Phone','Customer Phone','Mobile','Telephone','Phone Number','Contact Number','Cell','Tel'];
 // Reduce any stored format to the UK national significant number so they all compare equal:
@@ -1779,6 +1808,16 @@ function mapLegendHTML(){
   if(mapShowSuppliers) h+=ic('supplier',null,'Supplier');
   return h;
 }
+function regularsOverviewCards(){
+  const tile=(sub,title,desc,color)=>'<div onclick="setRegSub(\''+sub+'\')" style="flex:1;min-width:220px;cursor:pointer;border:1px solid var(--line);border-radius:10px;padding:16px 18px;border-left:4px solid '+color+'"><div style="font-weight:600;font-size:14px;color:var(--ink);margin-bottom:4px">'+title+' \u2192</div><div style="font-size:12px;color:var(--muted);line-height:1.5">'+desc+'</div></div>';
+  return '<div class="card" style="margin-bottom:20px"><div class="h" style="margin-bottom:6px">Regular customer management</div>'
+    + '<div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:700px;margin-bottom:16px">Your regulars are the backbone of the business, booked-in income and rounds that plan themselves. This is your home for them. The map below shows where they are. From here you can plan capacity, build the four-week rota and grade each customer.</div>'
+    + '<div style="display:flex;gap:14px;flex-wrap:wrap">'
+    + tile('Planner','Planner','See how many hours your regulars fill against your capacity, so you know when you have room to take on more or need to hire.','var(--green4)')
+    + tile('Rounds','Rounds','Build the four-week rota by day and area, group nearby jobs into rounds and get a route for each day, so the week plans itself.','#E07B1A')
+    + tile('Scorecard','Scorecard','Grade each regular on what matters and see value against quality, so you know who to look after and who to move on.','#1565C0')
+    + '</div></div>';
+}
 function renderMapTab(){
   const regs = allCustomers.filter(c=>c.s==='Recurring');
   const noPc = regs.filter(c=>!c.postcode).sort((a,b)=>b.r-a.r);
@@ -1805,7 +1844,7 @@ function renderMapTab(){
     + '<input id="npAddr" placeholder="Address or postcode" style="padding:7px 9px;border:1px solid var(--line);border-radius:7px;font:inherit;font-size:13px;flex:2;min-width:180px">'
     + '<button class="df-btn active" style="font-size:13px;padding:8px 16px" onclick="addPlace()">Add</button></div>'
     + '<div id="placeList">'+placesManageHTML()+'</div></div>';
-  return intro + map + manage + missing;
+  return regularsOverviewCards() + intro + map + manage + missing;
 }
 const PLAN_SEASON_WEEKS = 40, PLAN_OFF_WEEKS = 12, PLAN_TARGET = 1440;
 // Capacity is one gardener (PLAN_TARGET hours) by default; raise the head count to model more.
@@ -2276,7 +2315,7 @@ function stackedServiceSVG(top, colorOf) {
   return '<div class="svg-wrap"><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">' + grid + bars + xl + '</svg></div>' + legend;
 }
 
-const tabList = ["Overview","Leads","Calls","Revenue","Customers","Regulars","Missing Prices"];
+const tabList = ["Overview","To-do","Leads","Calls","Revenue","Customers","Regulars","Missing Prices"];
 function renderTabs() {
   document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+t+'</button>').join('');
 }
@@ -3043,6 +3082,135 @@ function rbInitGeocode(){
   })();
 }
 
+/* ===================== To-do list ===================== */
+const TODO_SEED = [
+  { id:'t-check-tools', tab:'workday', block:'start', recur:'daily', title:'Check tools & materials', desc:'Ensure mower, fuel, hand tools and PPE are ready.' },
+  { id:'t-review-schedule', tab:'workday', block:'start', recur:'daily', title:'Review today\u2019s schedule', desc:'Check your jobs for the day and estimated times.' },
+  { id:'t-wa-morning', tab:'workday', block:'start', recur:'daily', title:'Respond to WhatsApp & texts', desc:'Send quick acknowledgements to any overnight messages.' },
+  { id:'t-emails', tab:'workday', block:'start', recur:'daily', title:'Check & acknowledge emails and web forms', desc:'Review emails and web form submissions, confirm you will follow up.' },
+  { id:'t-calls-morning', tab:'workday', block:'start', recur:'daily', title:'Check & return missed calls and voicemails', desc:'Listen to voicemails and return any missed calls. If unsure about large commercial enquiries, consult franchisor resources.' },
+  { id:'t-wa-lunch', tab:'workday', block:'during', recur:'daily', title:'Quick WhatsApp check at lunch', desc:'Brief check of messages during your break.' },
+  { id:'t-log-jobs', tab:'workday', block:'during', recur:'daily', title:'Log jobs in the field app', desc:'Record start and finish times, photos and notes for each job.' },
+  { id:'t-ack-enquiries', tab:'workday', block:'during', recur:'daily', title:'Acknowledge new enquiries', desc:'Send a quick \u201cgot it, will reply this evening\u201d message.' },
+  { id:'t-site-visits', tab:'workday', block:'during', recur:'daily', title:'Plan any site visits or quotes', desc:'Schedule quote visits if needed for the day.' },
+  { id:'t-followups', tab:'workday', block:'end', recur:'daily', title:'List urgent follow-ups for tomorrow', desc:'Note quotes to send and call-backs to make.' },
+  { id:'t-log-expenses', tab:'workday', block:'end', recur:'daily', title:'Log expenses', desc:'Record fuel, tipping and material costs.' },
+  { id:'t-log-income', tab:'workday', block:'end', recur:'daily', title:'Log income & invoices', desc:'Record payments and send any outstanding invoices.' },
+  { id:'t-jobs-complete', tab:'workday', block:'end', recur:'daily', title:'Ensure all jobs marked complete', desc:'Verify all jobs have notes and photos added.' },
+  { id:'t-eod-report', tab:'workday', block:'end', recur:'daily', title:'Complete end-of-day report', desc:'Submit your daily summary with all job details.' },
+  { id:'t-availability', tab:'weekend', block:null, recur:'weekly', title:'Update availability & schedule', desc:'Optimise next week\u2019s route and availability.' },
+  { id:'t-tool-maint', tab:'weekend', block:null, recur:'weekly', title:'Tool maintenance & restock', desc:'Service equipment, sharpen blades, restock consumables.' },
+  { id:'t-reviews', tab:'weekend', block:null, recur:'weekly', title:'Review customer feedback and reviews', desc:'Check and respond to reviews, note any concerns.' },
+  { id:'t-quotes', tab:'weekend', block:null, recur:'weekly', title:'Send outstanding quotes', desc:'Follow up on site visits and send formal quotes.' },
+  { id:'t-marketing', tab:'weekend', block:null, recur:'weekly', title:'Plan marketing activity', desc:'Schedule social posts, flyer drops or promotions.' },
+  { id:'t-finances', tab:'weekend', block:null, recur:'weekly', title:'Review finances & targets', desc:'Check income against targets and review cash flow.' },
+  { id:'t-deep-upsell', tab:'weekend', block:null, recur:'fourweekly', title:'Deep review of customers for upsells', desc:'Every four weeks, go through the whole book for extra services to offer.' },
+  { id:'t-notify-cust', tab:'unplanned', block:null, recur:'contingency', title:'Notify affected customers of schedule changes', desc:'Contact all customers booked for today to inform them of rescheduling.' },
+  { id:'t-mark-unavail', tab:'unplanned', block:null, recur:'contingency', title:'Update availability in booking system', desc:'Mark yourself as unavailable in the booking system for today.' },
+  { id:'t-reschedule', tab:'unplanned', block:null, recur:'contingency', title:'Reschedule today\u2019s jobs', desc:'Move all affected bookings to new available dates.' },
+  { id:'t-ack-set', tab:'unplanned', block:null, recur:'contingency', title:'Acknowledge new enquiries and set expectations', desc:'Respond to any new enquiries letting them know when you will get back to them.' },
+  { id:'t-flyers', tab:'unplanned', block:null, recur:'contingency', title:'Hand out flyers in the local area', desc:'Distribute marketing materials in your territory if able.' },
+  { id:'t-training', tab:'unplanned', block:null, recur:'contingency', title:'Complete business training modules', desc:'Work through any outstanding training to sharpen your skills.' },
+  { id:'t-routes-upsell', tab:'unplanned', block:null, recur:'contingency', title:'Review customer routes for upsell opportunities', desc:'Look through your customer list for additional services you could offer.' },
+  { id:'t-social', tab:'unplanned', block:null, recur:'contingency', title:'Create social media content', desc:'Create posts for your social channels to boost visibility.' },
+  { id:'t-checkin', tab:'unplanned', block:null, recur:'contingency', title:'Check in with quiet customers', desc:'Send friendly messages to customers you have not contacted recently.' },
+  { id:'t-flag-issues', tab:'unplanned', block:null, recur:'contingency', title:'Flag issues early', desc:'Report any customer changes, access problems or delays.' }
+];
+let todoDay = 'workday';
+let todoState = { tasks:[], doneMap:{}, addOpen:false, editId:null };
+let todoSaveTimer = null;
+function todoLoad(){
+  try { const raw=localStorage.getItem('mtg_todo_v1'); if(raw){ const j=JSON.parse(raw); if(Array.isArray(j.tasks)) todoState.tasks=j.tasks; if(j.doneMap) todoState.doneMap=j.doneMap; } } catch(e){}
+  if(!todoState.tasks.length) todoState.tasks = TODO_SEED.map(t=>Object.assign({}, t));
+}
+function todoSave(){ clearTimeout(todoSaveTimer); todoSaveTimer=setTimeout(()=>{ try{ localStorage.setItem('mtg_todo_v1', JSON.stringify({ tasks:todoState.tasks, doneMap:todoState.doneMap })); }catch(e){} }, 250); }
+function todoWeekKey(d){
+  const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const day=(t.getUTCDay()+6)%7; t.setUTCDate(t.getUTCDate()-day+3);
+  const firstThu=new Date(Date.UTC(t.getUTCFullYear(),0,4));
+  const wk=1+Math.round(((t-firstThu)/86400000 - 3 + ((firstThu.getUTCDay()+6)%7))/7);
+  return t.getUTCFullYear()+'-W'+wk;
+}
+function todoPeriodKey(recur, ts){
+  const d=new Date(ts);
+  if(recur==='daily') return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
+  if(recur==='weekly') return todoWeekKey(d);
+  if(recur==='fourweekly'){ const epoch=Date.UTC(2026,0,5); const day=Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()); return 'C'+Math.floor((day-epoch)/(28*86400000)); }
+  return 'static';
+}
+// A task counts as done only within its current period, so a daily task reopens tomorrow,
+// a weekly one next week, and a four-weekly one next cycle. Contingency stays until unticked.
+function todoIsDone(t){ const ts=todoState.doneMap[t.id]; if(!ts) return false; if(t.recur==='contingency'||t.recur==='once') return true; return todoPeriodKey(t.recur,ts)===todoPeriodKey(t.recur,Date.now()); }
+function todoRerender(){ const el=document.getElementById('content'); if(el && activeTab==='To-do') el.innerHTML=renderTodoTab(); }
+function todoSetDay(d){ todoState.addOpen=false; todoState.editId=null; todoDay=d; todoRerender(); }
+function todoToggle(id){ const t=todoState.tasks.find(x=>x.id===id); if(!t) return; if(todoIsDone(t)) delete todoState.doneMap[id]; else todoState.doneMap[id]=Date.now(); todoSave(); todoRerender(); }
+function todoToggleAdd(){ todoState.addOpen=!todoState.addOpen; todoState.editId=null; todoRerender(); }
+function todoEdit(id){ todoState.editId=id; todoState.addOpen=true; todoRerender(); }
+function todoDelete(id){ const t=todoState.tasks.find(x=>x.id===id); if(!t) return; if(!confirm('Remove \u201c'+t.title+'\u201d?')) return; todoState.tasks=todoState.tasks.filter(x=>x.id!==id); delete todoState.doneMap[id]; todoSave(); todoRerender(); }
+function todoSaveTask(){
+  const g=id=>{ const e=document.getElementById(id); return e?e.value:''; };
+  const title=String(g('tdTitle')||'').trim(); if(!title){ alert('Give the task a title.'); return; }
+  const desc=String(g('tdDesc')||'').trim();
+  const tab=g('tdTab')||'workday';
+  const block=tab==='workday'?(g('tdBlock')||'start'):null;
+  const recur=tab==='unplanned'?'contingency':(g('tdRecur')||'daily');
+  if(todoState.editId){ const t=todoState.tasks.find(x=>x.id===todoState.editId); if(t){ t.title=title; t.desc=desc; t.tab=tab; t.block=block; t.recur=recur; } }
+  else { todoState.tasks.push({ id:'t-u'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), tab:tab, block:block, recur:recur, title:title, desc:desc, custom:true }); }
+  todoState.addOpen=false; todoState.editId=null; todoDay=tab; todoSave(); todoRerender();
+}
+function todoTaskHTML(t){
+  const done=todoIsDone(t);
+  const rl = t.recur==='daily'?'daily':(t.recur==='weekly'?'weekly':(t.recur==='fourweekly'?'4-weekly':''));
+  const tag = rl?'<span class="td-tag">'+rl+'</span>':'';
+  return '<div class="td-task'+(done?' done':'')+'">'
+    + '<button class="td-check'+(done?' on':'')+'" title="'+(done?'Done, click to undo':'Mark done')+'" onclick="todoToggle(\''+t.id+'\')"></button>'
+    + '<div class="td-body"><div class="td-title">'+escAttr(t.title)+tag+'</div>'+(t.desc?'<div class="td-desc">'+escAttr(t.desc)+'</div>':'')+'</div>'
+    + '<div class="td-actions"><button class="td-mini" title="Edit" onclick="todoEdit(\''+t.id+'\')">\u270e</button><button class="td-mini" title="Remove" onclick="todoDelete(\''+t.id+'\')">\u2715</button></div>'
+    + '</div>';
+}
+function todoTasksFor(tab){ return todoState.tasks.filter(t=>t.tab===tab); }
+function todoProg(tab){ const ts=todoTasksFor(tab); return { done:ts.filter(todoIsDone).length, total:ts.length }; }
+function todoBlockCard(b, lab){
+  const ts=todoState.tasks.filter(t=>t.tab==='workday' && t.block===b);
+  const done=ts.filter(todoIsDone).length, pct=ts.length?Math.round(done/ts.length*100):0;
+  return '<div class="card" style="margin-bottom:16px"><div class="td-block-h"><div class="td-block-title">'+lab+'</div>'
+    + '<div class="td-prog">'+done+'/'+ts.length+'<div class="td-prog-bar"><div class="td-prog-fill" style="width:'+pct+'%"></div></div></div></div>'
+    + (ts.length?ts.map(todoTaskHTML).join(''):'<div style="font-size:12.5px;color:var(--muted)">No tasks here yet.</div>')+'</div>';
+}
+function todoWeekendBanner(){ return '<div style="background:#EEF6EE;border:1px solid #CFE3CF;border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:13px;color:#33503a;line-height:1.6"><b>Rest, recover and stay sharp.</b> Weekends are for recharging, but a few focused jobs now keep the week ahead running smoothly. Keep your response times sharp, look after your body and enjoy the time off. You are the most important tool in the business.</div>'; }
+function todoUnplannedBanner(){ return '<div style="background:#FBF4E4;border:1px solid #EAD9B0;border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:13px;color:#6b5418;line-height:1.6"><b>Make the most of a day off the tools.</b> An unplanned day is still a chance to move the business forward through marketing, training, customer care and admin. Work through whatever fits, and contact the franchisor if you want more ideas.</div>'; }
+function todoAddFormHTML(){
+  const e=todoState.editId?todoState.tasks.find(t=>t.id===todoState.editId):null;
+  const tab=e?e.tab:todoDay, block=(e&&e.block)?e.block:'start', recur=e?e.recur:(tab==='unplanned'?'contingency':'daily');
+  const opt=(v,cur,lab)=>'<option value="'+v+'"'+(cur===v?' selected':'')+'>'+lab+'</option>';
+  return '<div class="td-form">'
+    + '<div><span class="td-lab">Task</span><input id="tdTitle" class="td-in" placeholder="What needs doing" value="'+(e?escAttr(e.title):'')+'"></div>'
+    + '<div><span class="td-lab">Note (optional)</span><input id="tdDesc" class="td-in" placeholder="A short description" value="'+(e&&e.desc?escAttr(e.desc):'')+'"></div>'
+    + '<div class="td-row">'
+      + '<div><span class="td-lab">Day type</span><select id="tdTab" class="td-sel">'+opt('workday',tab,'Workday')+opt('weekend',tab,'Weekend')+opt('unplanned',tab,'Unplanned')+'</select></div>'
+      + '<div><span class="td-lab">Time of day</span><select id="tdBlock" class="td-sel">'+opt('start',block,'Start of day')+opt('during',block,'During day')+opt('end',block,'End of day')+'</select></div>'
+      + '<div><span class="td-lab">Recurs</span><select id="tdRecur" class="td-sel">'+opt('daily',recur,'Daily')+opt('weekly',recur,'Weekly')+opt('fourweekly',recur,'Every 4 weeks')+'</select></div>'
+    + '</div>'
+    + '<div style="font-size:11.5px;color:var(--muted);line-height:1.5">Time of day applies to workday tasks. Unplanned tasks are a contingency checklist, so recurrence does not apply to them.</div>'
+    + '<button class="td-save" onclick="todoSaveTask()">'+(e?'Save changes':'Add task')+'</button></div>';
+}
+function renderTodoTab(){
+  const days=[['workday','Workday'],['weekend','Weekend'],['unplanned','Unplanned']];
+  const nav='<div class="filter-row" style="margin-bottom:16px">'+days.map(function(d){ return '<button class="filter-btn '+(todoDay===d[0]?'active':'')+'" onclick="todoSetDay(\''+d[0]+'\')">'+d[1]+'</button>'; }).join('')+'</div>';
+  const p=todoProg(todoDay), pct=p.total?Math.round(p.done/p.total*100):0;
+  const blurb = todoDay==='workday' ? 'Your daily admin routine, grouped by start, during and end of day. Tick things off as you go. Daily tasks reset each day and weekly ones each week, so the list always shows what is still outstanding.'
+    : todoDay==='weekend' ? 'A short weekend routine to keep next week running smoothly. These reset each week.'
+    : 'Contingency tasks for an unexpected day off the tools, illness, weather or a cancellation. Work through what applies.';
+  const intro='<div class="card" style="margin-bottom:16px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap"><div><div class="h" style="margin-bottom:6px">To-do</div><div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:700px">'+blurb+'</div></div>'
+    + '<div class="td-prog" style="font-size:13px">'+p.done+' of '+p.total+' done<div class="td-prog-bar" style="width:150px"><div class="td-prog-fill" style="width:'+pct+'%"></div></div></div></div></div>';
+  const add='<div style="margin-bottom:16px"><button class="td-add-btn" onclick="todoToggleAdd()">'+(todoState.addOpen?'\u00d7 Cancel':'+ Add a task')+'</button>'+(todoState.addOpen?todoAddFormHTML():'')+'</div>';
+  let body='';
+  if(todoDay==='workday'){ body=todoBlockCard('start','Start of day')+todoBlockCard('during','During day')+todoBlockCard('end','End of day'); }
+  else if(todoDay==='weekend'){ const ts=todoTasksFor('weekend'); body=todoWeekendBanner()+'<div class="card">'+(ts.length?ts.map(todoTaskHTML).join(''):'<div style="font-size:12.5px;color:var(--muted)">No weekend tasks yet.</div>')+'</div>'; }
+  else { const ts=todoTasksFor('unplanned'); body=todoUnplannedBanner()+'<div class="card">'+(ts.length?ts.map(todoTaskHTML).join(''):'<div style="font-size:12.5px;color:var(--muted)">No contingency tasks yet.</div>')+'</div>'; }
+  return intro+nav+add+body;
+}
+todoLoad();
 function renderRegularsTab(){
   const subs = ['Map','Planner','Rounds','Scorecard'];
   const nav = '<div class="filter-row" style="margin-bottom:18px">'+subs.map(s=>'<button class="filter-btn '+(regSub===s?'active':'')+'" onclick="setRegSub(\''+s+'\')">'+s+'</button>').join('')+'</div>';
@@ -3506,6 +3674,10 @@ function renderContent() {
     if (isMap) initLiveMap();
   }
 
+
+  else if (activeTab==='To-do') {
+    el.innerHTML = renderTodoTab();
+  }
 
   else if (activeTab==='Regulars') {
     el.innerHTML = renderRegularsTab();
