@@ -443,6 +443,27 @@ th.sortable:hover{color:var(--green)}
 .bp-mile-check.on:after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
 .bp-mile.done .bp-mile-t{color:var(--muted);text-decoration:line-through}
 .bp-mile-t{font-size:13px;color:var(--ink);flex:1}
+.res-intro{font-size:13px;color:var(--muted);line-height:1.6;max-width:760px}
+.res-grp-h{font-family:'Fraunces',serif;font-size:15px;font-weight:600;color:var(--ink);margin:22px 0 12px;letter-spacing:-.1px}
+.res-grp-h:first-of-type{margin-top:4px}
+.res-card{display:flex;align-items:flex-start;gap:14px;padding:16px 18px;border:1px solid var(--line);border-radius:12px;background:var(--card);margin-bottom:10px;transition:border-color .12s,box-shadow .12s}
+.res-card:hover{border-color:#C7D6C5;box-shadow:0 3px 12px rgba(20,40,30,.06)}
+.res-ic{flex-shrink:0;width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center}
+.res-ic svg{width:19px;height:19px}
+.res-body{flex:1;min-width:0}
+.res-title{font-size:14.5px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.res-kind{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:20px}
+.res-desc{font-size:12.5px;color:var(--muted);line-height:1.55;margin-top:4px}
+.res-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+.res-open{font-size:12.5px;font-weight:600;font-family:inherit;color:#fff;background:var(--green);border:none;border-radius:8px;padding:8px 15px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.res-open:hover{background:var(--green6)}
+.res-ver{font-size:12px;font-weight:600;color:var(--green6);text-decoration:none;border:1px solid #CFE0CB;border-radius:7px;padding:6px 11px;white-space:nowrap}
+.res-ver:hover{background:#E8F5E9}
+.res-soon{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--muted);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px 15px}
+.res-tool{border:1px solid var(--line);border-radius:14px;padding:22px 24px;background:var(--card);margin-bottom:14px}
+.res-tool.soon{border-style:dashed;background:#FAFBF9}
+.res-tool-h{font-family:'Fraunces',serif;font-size:17px;font-weight:600;color:var(--ink);margin-bottom:6px;display:flex;align-items:center;gap:10px}
+.res-tool-d{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px;max-width:620px}
 </style>
 </head>
 <body>
@@ -515,6 +536,7 @@ let leadStats=null, recurringStats=null, prevTotals=null;
 let rawCalls=[], callsStats=null, callsFilter='open', callsWho='', callSearch='', callType='all';
 let activeTab="Overview", custSegFilter="All", custSearch="";
 let regSub="Map"; // sub-view inside the Regulars tab: Map / Planner / Rounds / Scorecard
+let resSub="Plan"; // sub-view inside the Resources tab: Plan / Docs / Tools
 // Possible header names a customer phone number might live under, once it's added to the feed.
 const PHONE_HEADERS = ['Phone','Customer Phone','Mobile','Telephone','Phone Number','Contact Number','Cell','Tel'];
 // Reduce any stored format to the UK national significant number so they all compare equal:
@@ -2384,7 +2406,7 @@ function stackedServiceSVG(top, colorOf) {
   return '<div class="svg-wrap"><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">' + grid + bars + xl + '</svg></div>' + legend;
 }
 
-const tabList = ["Overview","To-do","Plan","Leads","Calls","Revenue","Customers","Regulars","Missing Prices"];
+const tabList = ["Overview","To-do","Resources","Leads","Calls","Revenue","Customers","Regulars","Missing Prices"];
 function renderTabs() {
   document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+t+'</button>').join('');
 }
@@ -2393,6 +2415,8 @@ function setView(v) { franchiseeView=v; applyFilters(); renderContent(); dfRende
 function goSeg(seg) { activeTab='Customers'; custSegFilter=seg; custSearch=''; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 function setRegSub(s){ regSub=s; renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 function goReg(sub){ activeTab='Regulars'; if(sub) regSub=sub; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
+function setResSub(s){ resSub=s; renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
+function goResources(sub){ activeTab='Resources'; if(sub) resSub=sub; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 // Re-rendering rebuilds the search box, which drops focus after each keystroke. Put it back.
 function onCustSearch(v, pos) {
   custSearch = v;
@@ -3413,7 +3437,7 @@ function bpBoot(data){
   const srv=data&&data.bizplan;
   if(srv&&typeof srv==='object'&&srv.v){ bpState=srv; bpEnsure(); bpWriteCache(); }
   else { if(!had){ const seed=BP_SEEDS[u]; bpState = seed?JSON.parse(JSON.stringify(seed)):bpDefault(); } bpEnsure(); bpWriteCache(); }
-  if(activeTab==='Plan') bpRerender();
+  bpRerender();
 }
 function bpNum(v){ const n=parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,'')); return isNaN(n)?0:n; }
 function bpProfit(){ return bpNum(bpState.income.turnover)-bpNum(bpState.income.costs); }
@@ -3475,7 +3499,7 @@ function bpModeBtns(active){
   return '<div class="bp-modes">'+b('overview','Overview')+b('edit','Edit plan')+b('history','History')+'<button class="bp-mode-btn" onclick="bpExport()">Export</button></div>';
 }
 function bpSetReview(v){ bpState.reviewEvery=v; bpSave(); bpRerender(); }
-function bpGoResources(){ if(typeof tabList!=='undefined' && tabList.indexOf('Resources')!==-1){ setTab('Resources'); } else { alert('The rate calculator will live in the Resources section, coming soon.'); } }
+function bpGoResources(){ goResources('Tools'); }
 // field builders
 function bpChipsHTML(sec, field, optsKey){ const opts=BP_OPTS[optsKey], sel=bpState[sec][field]||[]; return '<div class="bp-chips">'+opts.map(function(o,i){ const on=sel.indexOf(o)!==-1; return '<button class="bp-chip'+(on?' on':'')+'" onclick="bpToggleOpt(\''+sec+'\',\''+field+'\',\''+optsKey+'\','+i+')">'+bpEsc(o)+'</button>'; }).join('')+'</div>'; }
 function bpTextHTML(sec, field, ph, multiline){ const v=bpEsc(bpState[sec][field]||''); if(multiline) return '<textarea class="bp-textarea" placeholder="'+bpEsc(ph)+'" oninput="bpSet(\''+sec+'\',\''+field+'\',this.value)">'+v+'</textarea>'; return '<input class="bp-input" placeholder="'+bpEsc(ph)+'" value="'+v+'" oninput="bpSet(\''+sec+'\',\''+field+'\',this.value)">'; }
@@ -3610,7 +3634,61 @@ function bpHistoryHTML(){
   return head+save+listHtml;
 }
 function renderPlanTab(){ return bpMode==='edit'?bpEditHTML():(bpMode==='history'?bpHistoryHTML():bpOverviewHTML()); }
-function bpRerender(){ const el=document.getElementById('content'); if(el && activeTab==='Plan') el.innerHTML=renderPlanTab(); }
+function bpRerender(){ const el=document.getElementById('content'); if(!el) return; if(activeTab==='Resources' && resSub==='Plan') el.innerHTML=renderResourcesTab(); else if(activeTab==='Plan') el.innerHTML=renderPlanTab(); }
+
+/* ===================== Resources ===================== */
+// The franchise document library. Live Google Docs are linked so they stay editable at source;
+// the agreement and the polished guides are hosted in the repo under /resources and open in a new tab.
+// The agreement keeps every version: newest is the current open button, older ones list beneath, so
+// renewals just add a new entry to versions with the previous one retained.
+const RES_KIND = {
+  pdf:   { label:'PDF',        bg:'#FBE9E7', fg:'#C62828', glyph:'<path d="M6 2h7l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M13 2v5h5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>' },
+  doc:   { label:'Google Doc', bg:'#E8F0FE', fg:'#1565C0', glyph:'<path d="M6 2h7l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M13 2v5h5M8.5 12h7M8.5 15h7M8.5 9h3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>' },
+  guide: { label:'Guide',      bg:'#E8F5E9', fg:'#2E7D32', glyph:'<path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H11v17H5.5A1.5 1.5 0 0 1 4 18.5zM20 4.5A1.5 1.5 0 0 0 18.5 3H13v17h5.5A1.5 1.5 0 0 0 20 18.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>' }
+};
+const RES_DOCS = [
+  { group:'Agreement', items:[
+    { kind:'pdf', title:'Franchise agreement', desc:'The current My Tidy Garden franchise agreement: territory, fees, training and support, customer ownership, resale and exit terms.',
+      versions:[ { label:'Version 1 (current)', url:'resources/franchise-agreement-v1.pdf' } ] }
+  ]}
+];
+function resIcon(kind){ const k=RES_KIND[kind]||RES_KIND.doc; return '<span class="res-ic" style="background:'+k.bg+';color:'+k.fg+'"><svg viewBox="0 0 24 24">'+k.glyph+'</svg></span>'; }
+function resKindPill(kind){ const k=RES_KIND[kind]||RES_KIND.doc; return '<span class="res-kind" style="background:'+k.bg+';color:'+k.fg+'">'+k.label+'</span>'; }
+function resCardHTML(it){
+  let actions;
+  if(it.versions && it.versions.length){
+    const cur=it.versions[0];
+    actions='<a class="res-open" href="'+escAttr(cur.url)+'" target="_blank" rel="noopener">Open '+escAttr(cur.label)+' \u2197</a>'
+      + it.versions.slice(1).map(v=>'<a class="res-ver" href="'+escAttr(v.url)+'" target="_blank" rel="noopener">'+escAttr(v.label)+'</a>').join('');
+  } else {
+    actions='<a class="res-open" href="'+escAttr(it.url)+'" target="_blank" rel="noopener">Open \u2197</a>';
+  }
+  return '<div class="res-card">'+resIcon(it.kind)+'<div class="res-body"><div class="res-title">'+escAttr(it.title)+resKindPill(it.kind)+'</div>'
+    + '<div class="res-desc">'+escAttr(it.desc)+'</div><div class="res-actions">'+actions+'</div></div></div>';
+}
+function renderResourcesDocs(){
+  const intro='<div class="card" style="margin-bottom:18px"><div class="h" style="margin-bottom:6px">Documents and SOPs</div>'
+    + '<div class="res-intro">Your franchise library. The agreement opens as its own page in a new tab. More documents and guides will be added here as they are ready.</div></div>';
+  const body=RES_DOCS.map(g=>'<div class="res-grp-h">'+escAttr(g.group)+'</div>'+g.items.map(resCardHTML).join('')).join('');
+  return intro+'<div class="card">'+body+'</div>';
+}
+function renderResourcesTools(){
+  const intro='<div class="card" style="margin-bottom:18px"><div class="h" style="margin-bottom:6px">Tools</div>'
+    + '<div class="res-intro">Calculators and working tools for the business. More will land here over time.</div></div>';
+  const calc='<div class="res-tool soon"><div class="res-tool-h">Required rate calculator <span class="res-kind" style="background:var(--paper);color:var(--muted)">Coming soon</span></div>'
+    + '<div class="res-tool-d">Work out the hourly rate you need to charge to hit your income target, accounting for working weeks, costs and unbillable time. Your business plan\u2019s required-rate field will pull from this once it is built, so you set the number once.</div>'
+    + '<span class="res-soon">Building this next</span></div>';
+  return intro+calc;
+}
+function renderResourcesTab(){
+  const subs=[['Plan','Business plan'],['Docs','Documents and SOPs'],['Tools','Tools']];
+  const nav='<div class="filter-row" style="margin-bottom:18px">'+subs.map(s=>'<button class="filter-btn '+(resSub===s[0]?'active':'')+'" onclick="setResSub(\''+s[0]+'\')">'+s[1]+'</button>').join('')+'</div>';
+  let body;
+  if(resSub==='Docs') body=renderResourcesDocs();
+  else if(resSub==='Tools') body=renderResourcesTools();
+  else body=renderPlanTab();
+  return nav+body;
+}
 function bpSetMode(m){ bpMode=m; bpRerender(); window.scrollTo({top:0,behavior:'smooth'}); }
 function bpGoSection(i){ bpSection=i; bpMode='edit'; bpRerender(); window.scrollTo({top:0,behavior:'smooth'}); }
 function bpExport(){ const w=window.open('','_blank'); if(!w){ alert('Allow pop-ups to export your plan as a PDF.'); return; } w.document.write(bpPrintHTML()); w.document.close(); w.focus(); setTimeout(function(){ try{ w.print(); }catch(e){} }, 350); }
@@ -4138,8 +4216,8 @@ function renderContent() {
     el.innerHTML = renderTodoTab();
   }
 
-  else if (activeTab==='Plan') {
-    el.innerHTML = renderPlanTab();
+  else if (activeTab==='Resources') {
+    el.innerHTML = renderResourcesTab();
   }
 
   else if (activeTab==='Regulars') {
