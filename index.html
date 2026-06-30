@@ -565,6 +565,15 @@ th.sortable:hover{color:var(--green)}
 .perf-bd-bar > i{display:block;height:100%;border-radius:99px;transition:width .3s}
 .perf-bd-row .sc{flex:0 0 54px;text-align:right;font-size:13px;font-weight:700;color:var(--ink)}
 @media(max-width:600px){.perf-bd-row .nm{flex-basis:130px}}
+.fr-pick-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:600px){.fr-pick-grid{grid-template-columns:1fr}}
+.fr-pick{display:flex;flex-direction:column;align-items:flex-start;gap:7px;text-align:left;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px 20px;cursor:pointer;font-family:inherit;transition:all .15s;position:relative;overflow:hidden}
+.fr-pick:hover{border-color:var(--green4);box-shadow:0 5px 16px rgba(0,0,0,.06);transform:translateY(-1px)}
+.fr-pick:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,var(--green4),var(--green))}
+.fr-pick-top{margin-bottom:2px}
+.fr-pick-name{font-family:'Fraunces',serif;font-size:22px;font-weight:600;color:var(--ink);line-height:1}
+.fr-pick-sub{font-size:13px;color:var(--muted)}
+.fr-pick-go{font-size:13px;font-weight:700;color:var(--green);margin-top:5px}
 .brand{display:flex;align-items:center;gap:22px;min-width:0}.brand-logo{height:96px;width:auto;display:block;background:#fff;padding:12px 16px;border-radius:16px;box-shadow:0 3px 10px rgba(0,0,0,.22);margin:0;flex:none}.brand-title{font-family:'Fraunces',serif;font-size:34px;font-weight:600;letter-spacing:-0.5px;line-height:1.05}.brand-sub{font-size:16px;opacity:.6;margin-top:6px;letter-spacing:.3px}@media(max-width:560px){.header{padding:14px 18px}.brand{gap:14px}.brand-logo{height:58px;padding:9px 12px;border-radius:12px}.brand-title{font-size:23px}.brand-sub{font-size:13px}}
 </style>
 </head>
@@ -4017,9 +4026,24 @@ function renderPerfHistory(){
   return html;
 }
 function renderPerformanceTab(){
+  if(franchiseeView==='All') return frChooser('performance');
   const subs=[['History','History'],['Review','Review']];
   const nav='<div class="filter-row" style="margin-bottom:18px">'+subs.map(s=>'<button class="filter-btn '+(perfSub===s[0]?'active':'')+'" onclick="setPerfSub(\''+s[0]+'\')">'+s[1]+'</button>').join('')+'</div>';
   return nav+(perfSub==='Review'?renderPerfReview():renderPerfHistory());
+}
+function bpProgressFor(fr){ if(!bpAll||!bpAll[fr]) return {done:0,total:BP_SECTIONS.length}; var cur=bpState; bpState=bpAll[fr]; var p; try{ p=bpProgress(); } finally { bpState=cur; } return p; }
+function frPickStat(kind,name){ var fr=name.toLowerCase();
+  if(kind==='plan'){ var p=bpProgressFor(fr); return p.done+' of '+p.total+' sections done'; }
+  if(kind==='performance'){ try{ var d=perfNextDue(name); return 'next review '+d.quarter+' '+d.year; }catch(e){ return ''; } }
+  return ''; }
+function frChooser(kind){
+  var meta={ plan:{t:'Business plans',s:'Each franchisee keeps their own plan. Choose whose to open.',go:'plan'},
+             rounds:{t:'Rounds',s:'Rounds are planned per franchisee. Choose whose board to open.',go:'rounds'},
+             performance:{t:'Performance reviews',s:'Reviews are held per franchisee. Choose whose to open.',go:'reviews'} }[kind];
+  var people=[['Mike','Parkstone'],['Adam','Bournemouth']];
+  var cards=people.map(function(p){ var stat=frPickStat(kind,p[0]);
+    return '<button class="fr-pick" onclick="setView(\''+p[0]+'\')"><span class="fr-pick-top">'+badge(p[0])+'</span><span class="fr-pick-name">'+p[0]+'</span><span class="fr-pick-sub">'+p[1]+(stat?' \u00b7 '+stat:'')+'</span><span class="fr-pick-go">Open '+p[0]+'\u2019s '+meta.go+' \u2192</span></button>'; }).join('');
+  return '<div class="card"><div class="h" style="margin-bottom:4px">'+meta.t+'</div><div class="res-intro" style="margin-bottom:16px">'+meta.s+'</div><div class="fr-pick-grid">'+cards+'</div></div>';
 }
 function renderResourcesTab(){
   const subs=[['Plan','Business plan'],['Docs','Documents and SOPs'],['Tools','Tools'],['Missing','Missing prices']];
@@ -4028,7 +4052,7 @@ function renderResourcesTab(){
   if(resSub==='Docs') body=renderResourcesDocs();
   else if(resSub==='Tools') body=renderResourcesTools();
   else if(resSub==='Missing') body=renderMissingPricesTab();
-  else body=renderPlanTab();
+  else body=(typeof franchiseeView!=='undefined'&&franchiseeView==='All')?frChooser('plan'):renderPlanTab();
   return nav+body;
 }
 function bpSetMode(m){ bpMode=m; bpRerender(); window.scrollTo({top:0,behavior:'smooth'}); }
@@ -4097,7 +4121,7 @@ function renderRegularsTab(){
   if(regSub==='Planner') body=renderPlannerTab();
   else if(regSub==='Map') body=renderMapTab();
   else if(regSub==='Scorecard') body=renderScorecardTab();
-  else body=renderRoundsTab();
+  else body=(franchiseeView==='All')?frChooser('rounds'):renderRoundsTab();
   return nav+body;
 }
 function rtablize(root){
@@ -4117,7 +4141,7 @@ function initRtablize(){ var c=document.getElementById('content'); if(!c) return
 }
 function renderContent() {
   const el = document.getElementById('content');
-  document.body.classList.toggle('rb-wide', activeTab==='Regulars' && regSub==='Rounds');
+  document.body.classList.toggle('rb-wide', activeTab==='Regulars' && regSub==='Rounds' && franchiseeView!=='All');
   const histJobs = monthlyData.reduce((s,m)=>s+(m.hist&&m.j?m.j:0),0); // invoiced jobs pre-Oct-2024, in current period
   const totalJobs = jobs.length + histJobs;
   const totalRev = Math.round(monthlyData.reduce((s,m)=>s+m.r,0)); // override-aware: invoiced history + live Zenbooker
@@ -4585,7 +4609,7 @@ function renderContent() {
     el.innerHTML = renderRegularsTab();
     if(regSub==='Planner') recalcPlanner();
     else if(regSub==='Map') initLiveMap();
-    else if(regSub==='Rounds') rbInitGeocode();
+    else if(regSub==='Rounds' && franchiseeView!=='All') rbInitGeocode();
   }
   initRtablize();
 }
