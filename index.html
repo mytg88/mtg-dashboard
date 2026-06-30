@@ -3782,8 +3782,8 @@ const RES_KIND = {
 };
 const RES_DOCS = [
   { group:'Agreement', items:[
-    { kind:'pdf', title:'Franchise agreement', desc:'The current My Tidy Garden franchise agreement: territory, fees, training and support, customer ownership, resale and exit terms.',
-      versions:[ { label:'Version 1 (current)', url:'resources/franchise-agreement-v1.pdf' } ] }
+    { kind:'doc', title:'Franchise agreement', desc:'The current My Tidy Garden franchise agreement: territory, fees, training and support, customer ownership, resale and exit terms.',
+      versions:[ { label:'Version 1 (current)', url:'https://docs.google.com/document/d/1s5wI0Cg0qFuxHpY0jdioJpg_T4Sv8Oz2wrucR003LW0/preview' } ] }
   ]}
 ];
 function resIcon(kind){ const k=RES_KIND[kind]||RES_KIND.doc; return '<span class="res-ic" style="background:'+k.bg+';color:'+k.fg+'"><svg viewBox="0 0 24 24">'+k.glyph+'</svg></span>'; }
