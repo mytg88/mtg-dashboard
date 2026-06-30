@@ -520,6 +520,33 @@ th.sortable:hover{color:var(--green)}
 .perf-pill.done{background:var(--green2);color:var(--green6)}
 .perf-pill.draft{background:#fdf0d5;color:#9a6a00}
 .perf-gap{font-weight:700}
+.perf-progress{height:8px;background:var(--green2);border-radius:99px;overflow:hidden;margin-top:16px}
+.perf-progress > i{display:block;height:100%;background:linear-gradient(90deg,var(--green4),var(--green));border-radius:99px;transition:width .3s}
+.perf-sec-card{padding:20px 22px 10px;position:relative;overflow:hidden}
+.perf-sec-card:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,var(--green4),var(--green))}
+.perf-sec-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px}
+.perf-sec-head .t{font-family:'Fraunces',serif;font-size:20px;font-weight:600;color:var(--ink)}
+.perf-sec-count{font-size:12px;font-weight:700;color:var(--green6);background:var(--green2);padding:3px 11px;border-radius:99px;white-space:nowrap}
+.perf-side{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 13px}
+.perf-side.fee{background:#f3f8f3;border-color:#dcebdc}
+.perf-side.locked{opacity:.9}
+.perf-side-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}
+.perf-side-head .lk{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:var(--muted)}
+.perf-rate button:disabled{cursor:not-allowed;opacity:.5}
+.perf-rate button:disabled:hover{border-color:var(--line)}
+.perf-due{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:linear-gradient(120deg,var(--ink),#21392a);color:#fff;border-radius:14px;padding:18px 22px;margin-bottom:18px}
+.perf-due.ok{background:linear-gradient(120deg,#2f8f4e,#236f3c)}
+.perf-due .due-l{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:rgba(255,255,255,.6)}
+.perf-due .due-v{font-family:'Fraunces',serif;font-size:24px;font-weight:600;margin-top:3px}
+.perf-due .due-s{font-size:13px;color:rgba(255,255,255,.72);margin-top:4px}
+.perf-due-btn{background:#fff;color:var(--ink);border:none;border-radius:9px;padding:11px 20px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap}
+.perf-due-btn:hover{background:var(--green2)}
+.perf-bd-row{display:flex;align-items:center;gap:12px;margin-bottom:11px}
+.perf-bd-row .nm{flex:0 0 210px;font-size:13px;color:var(--ink)}
+.perf-bd-bar{flex:1;min-width:60px;height:10px;background:var(--paper);border:1px solid var(--line);border-radius:99px;overflow:hidden}
+.perf-bd-bar > i{display:block;height:100%;border-radius:99px;transition:width .3s}
+.perf-bd-row .sc{flex:0 0 54px;text-align:right;font-size:13px;font-weight:700;color:var(--ink)}
+@media(max-width:600px){.perf-bd-row .nm{flex-basis:130px}}
 .brand{display:flex;align-items:center;gap:22px;min-width:0}.brand-logo{height:96px;width:auto;display:block;background:#fff;padding:12px 16px;border-radius:16px;box-shadow:0 3px 10px rgba(0,0,0,.22);margin:0;flex:none}.brand-title{font-family:'Fraunces',serif;font-size:34px;font-weight:600;letter-spacing:-0.5px;line-height:1.05}.brand-sub{font-size:16px;opacity:.6;margin-top:6px;letter-spacing:.3px}@media(max-width:560px){.header{padding:14px 18px}.brand{gap:14px}.brand-logo{height:58px;padding:9px 12px;border-radius:12px}.brand-title{font-size:23px}.brand-sub{font-size:13px}}
 </style>
 </head>
@@ -1722,7 +1749,7 @@ function renderScorecardTab(){
 }
 // ---------- regulars map (Leaflet, lazy-loaded) ----------
 let liveMap=null, mapShowChurned=false, mapShowRepeat=false, mapShowOneOff=false, geoCache={}, placeGeo={};
-let mapShowStart=true, mapShowTips=true, mapShowSuppliers=true; // place layers default on, toggled for display only (never deletes)
+let mapShowStart=true, mapShowTips=false, mapShowSuppliers=false; // place layers: only start on by default, toggled for display only (never deletes)
 // The map now lives inside the Regulars tab as the "Map" view.
 function mapIsOpen(){ return activeTab==='Regulars' && regSub==='Map'; }
 function segColor(c){
@@ -3816,7 +3843,7 @@ const PERF_SEED=[{ id:'adam-2025-q2', franchisee:'Adam', territory:'Bournemouth'
   team_building:{f:5,r:3,fa:'',ra:'Start thinking ahead and getting everything sorted: tools, van, customers, ideally year-round and some larger gardens.'}
 }}];
 
-let perfSub='Review';
+let perfSub='History';
 let perfReviews=[];
 let perfEditing=null;
 let perfBootedFor=null;
@@ -3843,8 +3870,20 @@ function perfFind(f,q,y){ return perfReviews.find(r=>r.franchisee===f&&r.quarter
 function perfReviewId(f,q,y){ return (f+'-'+y+'-'+q).toLowerCase(); }
 function perfEnsureReview(){ const m=perfCurrentMeta(); let r=perfFind(m.franchisee,m.quarter,m.year); if(!r){ r={ id:perfReviewId(m.franchisee,m.quarter,m.year), franchisee:m.franchisee, territory:(m.franchisee==='Adam'?'Bournemouth':'Parkstone'), quarter:m.quarter, year:m.year, date:new Date().toISOString().slice(0,10), status:'draft', answers:{} }; perfReviews.push(r); } return r; }
 function perfAns(r,key){ if(!r.answers[key]) r.answers[key]={f:0,r:0,fa:'',ra:''}; return r.answers[key]; }
-function perfSetRating(key,who,val){ const r=perfEnsureReview(); const a=perfAns(r,key); a[who]=(a[who]===val?0:val); r.updatedAt=Date.now(); perfSave(); perfRerender(); }
-function perfSetAction(key,who,val){ const r=perfEnsureReview(); const a=perfAns(r,key); a[who]=val; r.updatedAt=Date.now(); perfSave(); }
+function perfIsFranchisor(){ return !!(typeof auth!=='undefined' && auth && auth.role==='All'); }
+function perfQuarterIndex(q){ return {Q1:0,Q2:1,Q3:2,Q4:3}[q]||0; }
+function perfNextDue(fr){
+  const list=perfReviews.filter(r=>r.franchisee===fr).sort((a,b)=>(b.year-a.year)||(perfQuarterIndex(b.quarter)-perfQuarterIndex(a.quarter)));
+  const lc=list.find(r=>r.status==='complete');
+  let q,y;
+  if(lc){ const qi=perfQuarterIndex(lc.quarter)+1; q='Q'+((qi%4)+1); y=lc.year+Math.floor(qi/4); }
+  else { q=perfCurrentQuarter(); y=new Date().getFullYear(); }
+  const curY=new Date().getFullYear(), curQi=perfQuarterIndex(perfCurrentQuarter());
+  if(y<curY || (y===curY && perfQuarterIndex(q)<curQi)){ q=perfCurrentQuarter(); y=curY; }
+  return { quarter:q, year:y };
+}
+function perfSetRating(key,who,val){ if(who==='r' && !perfIsFranchisor()) return; const r=perfEnsureReview(); const a=perfAns(r,key); a[who]=(a[who]===val?0:val); r.updatedAt=Date.now(); perfSave(); perfRerender(); }
+function perfSetAction(key,who,val){ if(who==='r' && !perfIsFranchisor()) return; const r=perfEnsureReview(); const a=perfAns(r,key); a[who]=val; r.updatedAt=Date.now(); perfSave(); }
 function perfSetMeta(field,val){ const m=perfCurrentMeta(); m[field]=(field==='year'?parseInt(val,10):val); perfRerender(); window.scrollTo({top:0,behavior:'smooth'}); }
 function perfMarkComplete(){ const r=perfEnsureReview(); r.status=(r.status==='complete'?'draft':'complete'); r.date=new Date().toISOString().slice(0,10); r.updatedAt=Date.now(); perfSave(); perfRerender(); }
 function perfAvg(r,who){ let s=0,n=0; PERF_SECTIONS.forEach(sec=>sec.keys.forEach(k=>{ const a=r.answers[k[0]]; if(a&&a[who]>0){ s+=a[who]; n++; } })); return n?s/n:0; }
@@ -3855,29 +3894,39 @@ function setPerfSub(s){ perfSub=s; perfRerender(); window.scrollTo({top:0,behavi
 function perfOpen(f,q,y){ perfEditing={franchisee:f,quarter:q,year:parseInt(y,10)}; perfSub='Review'; perfRerender(); window.scrollTo({top:0,behavior:'smooth'}); }
 function perfRerender(){ const el=document.getElementById('content'); if(el&&activeTab==='Performance') el.innerHTML=renderPerformanceTab(); }
 function perfSideHTML(key,who,a){
-  const lab=who==='f'?'Franchisee':'Franchisor'; const cur=a[who]||0;
-  let h='<div><div class="perf-side-lab">'+lab+' rating</div><div class="perf-rate">';
-  for(let v=1;v<=5;v++){ h+='<button class="'+(cur===v?'on':'')+'"'+(cur===v?' style="background:'+PERF_COLORS[v-1]+'"':'')+' onclick="perfSetRating(\''+key+'\',\''+who+'\','+v+')">'+v+'</button>'; }
+  const isFee=who==='f'; const lab=isFee?'Franchisee':'Franchisor'; const cur=a[who]||0;
+  const locked=!isFee && !perfIsFranchisor();
+  const lockIco='<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1a5 5 0 00-5 5v3H6a2 2 0 00-2 2v9a2 2 0 002 2h12a2 2 0 002-2v-9a2 2 0 00-2-2h-1V6a5 5 0 00-5-5zm3 8H9V6a3 3 0 116 0z"/></svg>';
+  let h='<div class="perf-side '+(isFee?'fee':'fr')+(locked?' locked':'')+'">';
+  h+='<div class="perf-side-head"><span class="perf-side-lab">'+lab+' rating</span>'+(locked?'<span class="lk">'+lockIco+' Mike only</span>':'')+'</div>';
+  h+='<div class="perf-rate">';
+  for(let v=1;v<=5;v++){ const on=cur===v; h+='<button class="'+(on?'on':'')+'"'+(on?' style="background:'+PERF_COLORS[v-1]+'"':'')+(locked?' disabled':' onclick="perfSetRating(\''+key+'\',\''+who+'\','+v+')"')+'>'+v+'</button>'; }
   h+='</div>';
-  const av=who==='f'?(a.fa||''):(a.ra||''); const ph=who==='f'?'One action the franchisee will take\u2026':'One action you would coach\u2026';
-  h+='<textarea class="perf-act" placeholder="'+ph+'" oninput="perfSetAction(\''+key+'\',\''+who+'\',this.value)">'+perfEsc(av)+'</textarea></div>';
+  const av=isFee?(a.fa||''):(a.ra||''); const ph=isFee?'One action the franchisee will take\u2026':'One action you would coach\u2026';
+  h+='<textarea class="perf-act" placeholder="'+ph+'"'+(locked?' readonly':' oninput="perfSetAction(\''+key+'\',\''+who+'\',this.value)"')+'>'+perfEsc(av)+'</textarea></div>';
   return h;
 }
 function renderPerfReview(){
-  const m=perfCurrentMeta(); const r=perfFind(m.franchisee,m.quarter,m.year); const ans=r?r.answers:{}; const done=r?perfDoneCount(r):0;
-  const fOpts=['Adam','Mike'].map(f=>'<option value="'+f+'" '+(m.franchisee===f?'selected':'')+'>'+f+'</option>').join('');
+  const owner=perfIsFranchisor(); const m=perfCurrentMeta();
+  if(!owner && auth && auth.name) m.franchisee=auth.name;
+  const r=perfFind(m.franchisee,m.quarter,m.year); const ans=r?r.answers:{}; const done=r?perfDoneCount(r):0; const pct=Math.round(done/PERF_KEYCOUNT*100);
+  const frList=owner?['Adam','Mike']:[m.franchisee];
+  const fOpts=frList.map(f=>'<option value="'+f+'" '+(m.franchisee===f?'selected':'')+'>'+f+'</option>').join('');
   const qOpts=['Q1','Q2','Q3','Q4'].map(q=>'<option '+(m.quarter===q?'selected':'')+'>'+q+'</option>').join('');
   const yNow=new Date().getFullYear(); let yOpts=''; for(let y=2025;y<=yNow+1;y++){ yOpts+='<option '+(String(m.year)===String(y)?'selected':'')+'>'+y+'</option>'; }
+  const frSel=owner?('<select onchange="perfSetMeta(\'franchisee\',this.value)">'+fOpts+'</select>'):('<select disabled>'+fOpts+'</select>');
   let html='<div class="card"><div class="h" style="margin-bottom:4px">Performance review</div>'
-    +'<div class="res-intro" style="margin-bottom:16px">Rate each area from one to five for both sides, and note the single action that would most improve it. Changes save automatically.</div>'
+    +'<div class="res-intro" style="margin-bottom:16px">Rate each area from one to five for both sides, and note the single action that would most improve it. Changes save automatically.'+(owner?'':' Franchisor ratings are set by Mike.')+'</div>'
     +'<div class="perf-meta">'
-    +'<div class="perf-fld"><label>Franchisee</label><select onchange="perfSetMeta(\'franchisee\',this.value)">'+fOpts+'</select></div>'
+    +'<div class="perf-fld"><label>Franchisee</label>'+frSel+'</div>'
     +'<div class="perf-fld"><label>Quarter</label><select onchange="perfSetMeta(\'quarter\',this.value)">'+qOpts+'</select></div>'
     +'<div class="perf-fld"><label>Year</label><select onchange="perfSetMeta(\'year\',this.value)">'+yOpts+'</select></div></div>'
-    +'<div class="perf-scale">'+PERF_SCALE.map((lab,i)=>'<div class="perf-scale-item"><span class="perf-dot" style="background:'+PERF_COLORS[i]+'">'+(i+1)+'</span>'+lab+'</div>').join('')+'</div></div>';
+    +'<div class="perf-scale">'+PERF_SCALE.map((lab,i)=>'<div class="perf-scale-item"><span class="perf-dot" style="background:'+PERF_COLORS[i]+'">'+(i+1)+'</span>'+lab+'</div>').join('')+'</div>'
+    +'<div class="perf-progress"><i style="width:'+pct+'%"></i></div>'
+    +'<div style="font-size:12px;color:var(--muted);margin-top:8px">'+done+' of '+PERF_KEYCOUNT+' areas fully rated \u00b7 '+pct+'%</div></div>';
   PERF_SECTIONS.forEach(sec=>{
     let secDone=0; sec.keys.forEach(k=>{ const a=ans[k[0]]; if(a&&a.f>0&&a.r>0) secDone++; });
-    html+='<div class="card" style="padding:18px"><div class="h" style="margin-bottom:2px">'+sec.title+'<span style="float:right;font-size:12px;color:var(--muted);font-weight:600">'+secDone+'/'+sec.keys.length+'</span></div>';
+    html+='<div class="card perf-sec-card"><div class="perf-sec-head"><span class="t">'+sec.title+'</span><span class="perf-sec-count">'+secDone+' / '+sec.keys.length+'</span></div>';
     sec.keys.forEach(k=>{ const a=ans[k[0]]||{f:0,r:0,fa:'',ra:''}; html+='<div class="perf-q"><div class="perf-q-t">'+k[1]+'</div><div class="perf-cols">'+perfSideHTML(k[0],'f',a)+perfSideHTML(k[0],'r',a)+'</div></div>'; });
     html+='</div>';
   });
@@ -3887,22 +3936,41 @@ function renderPerfReview(){
 }
 function renderPerfHistory(){
   const fv=(typeof franchiseeView!=='undefined')?franchiseeView:'All';
-  let list=perfReviews.slice(); if(fv==='Mike'||fv==='Adam') list=list.filter(r=>r.franchisee===fv);
-  list.sort((a,b)=> (b.year-a.year) || b.quarter.localeCompare(a.quarter));
+  const focusFr = fv==='Mike' ? 'Mike' : 'Adam';
+  let list=perfReviews.filter(r=>r.franchisee===focusFr).sort((a,b)=>(b.year-a.year)||(perfQuarterIndex(b.quarter)-perfQuarterIndex(a.quarter)));
   const complete=list.filter(r=>r.status==='complete');
   const latest=complete[0]||null; const headAvg=latest?perfAvg(latest,'r'):0; const grade=perfGrade(headAvg);
   const prev=complete[1]||null; const prevAvg=prev?perfAvg(prev,'r'):0;
   let trend='\u2013', tcol='var(--muted)';
   if(latest&&prev){ const d=headAvg-prevAvg; if(d>0.05){trend='\u25b2 +'+d.toFixed(2);tcol='#2f8f4e';} else if(d<-0.05){trend='\u25bc '+d.toFixed(2);tcol='#e5484d';} else {trend='Level';} }
-  let html='<div class="perf-stats">'
-    +'<div class="perf-stat"><div class="l">Total reviews</div><div class="v">'+complete.length+'</div><div class="s">'+(list.length>complete.length?(list.length-complete.length)+' in draft':'completed')+'</div></div>'
-    +'<div class="perf-stat"><div class="l">Average score</div><div class="v">'+(headAvg?headAvg.toFixed(2):'\u2013')+'</div><div class="s">franchisor, latest</div></div>'
+  const due=perfNextDue(focusFr);
+  const curY=new Date().getFullYear(); const curQi=perfQuarterIndex(perfCurrentQuarter());
+  const dueNow=(due.year<curY)||(due.year===curY && perfQuarterIndex(due.quarter)<=curQi);
+  const startMonth={Q1:'1 Jan',Q2:'1 Apr',Q3:'1 Jul',Q4:'1 Oct'}[due.quarter];
+  const draftExists=list.some(r=>r.quarter===due.quarter && String(r.year)===String(due.year) && r.status!=='complete');
+  const btnLabel=draftExists?'Continue review':(perfIsFranchisor()?'Start review':'Start self-assessment');
+  let html='<div class="perf-due'+(dueNow?'':' ok')+'">'
+    +'<div><div class="due-l">Next review due \u00b7 '+focusFr+'</div><div class="due-v">'+due.quarter+' '+due.year+'</div>'
+    +'<div class="due-s">'+(dueNow?'Due now':'Opens '+startMonth+' '+due.year)+(fv==='All'?' \u00b7 switch the view filter for Mike':'')+'</div></div>'
+    +'<button class="perf-due-btn" onclick="perfOpen(\''+focusFr+'\',\''+due.quarter+'\','+due.year+')">'+btnLabel+'</button></div>';
+  html+='<div class="perf-stats">'
+    +'<div class="perf-stat"><div class="l">Completed reviews</div><div class="v">'+complete.length+'</div><div class="s">'+focusFr+'</div></div>'
+    +'<div class="perf-stat"><div class="l">Latest score</div><div class="v">'+(headAvg?headAvg.toFixed(2):'\u2013')+'</div><div class="s">franchisor rating</div></div>'
     +'<div class="perf-stat"><div class="l">Current grade</div><div class="v"><span class="perf-grade" style="background:'+(grade==='-'?'#9aa39c':perfGradeColor(grade))+'">'+grade+'</span></div><div class="s">'+(latest?latest.quarter+' '+latest.year:'no reviews')+'</div></div>'
-    +'<div class="perf-stat"><div class="l">Score trend</div><div class="v" style="font-size:19px;color:'+tcol+'">'+trend+'</div><div class="s">vs previous</div></div></div>';
-  if(!list.length){ return html+'<div class="card"><div style="color:var(--muted);text-align:center;padding:40px">No reviews yet. Start one in the Review tab.</div></div>'; }
-  html+='<div class="card"><div class="h" style="margin-bottom:12px">Assessment history</div><div class="table-wrap"><table><thead><tr><th>Period</th><th>Franchisee</th><th class="r">Self avg</th><th class="r">Franchisor avg</th><th class="r">Gap</th><th>Grade</th><th>Status</th><th></th></tr></thead><tbody>';
+    +'<div class="perf-stat"><div class="l">Trend</div><div class="v" style="font-size:19px;color:'+tcol+'">'+trend+'</div><div class="s">vs previous</div></div></div>';
+  if(latest){
+    html+='<div class="card"><div class="h" style="margin-bottom:14px">'+latest.quarter+' '+latest.year+' breakdown</div>';
+    PERF_SECTIONS.forEach(sec=>{
+      let s=0,n=0; sec.keys.forEach(k=>{ const a=latest.answers[k[0]]; if(a&&a.r>0){s+=a.r;n++;} });
+      const avg=n?s/n:0; const col=PERF_COLORS[Math.max(0,Math.min(4,Math.round(avg)-1))]||'#ccc';
+      html+='<div class="perf-bd-row"><div class="nm">'+sec.title+'</div><div class="perf-bd-bar"><i style="width:'+(avg/5*100)+'%;background:'+col+'"></i></div><div class="sc">'+(avg?avg.toFixed(2):'\u2013')+'</div></div>';
+    });
+    html+='</div>';
+  }
+  if(!list.length){ return html+'<div class="card"><div style="color:var(--muted);text-align:center;padding:40px">No reviews yet for '+focusFr+'. Use the button above to start one.</div></div>'; }
+  html+='<div class="card"><div class="h" style="margin-bottom:12px">Review history</div><div class="table-wrap"><table><thead><tr><th>Period</th><th class="r">Self avg</th><th class="r">Franchisor avg</th><th class="r">Gap</th><th>Grade</th><th>Status</th><th></th></tr></thead><tbody>';
   list.forEach(r=>{ const fa=perfAvg(r,'f'), ra=perfAvg(r,'r'); const gap=(fa&&ra)?(fa-ra):0; const g=perfGrade(ra);
-    html+='<tr><td style="font-weight:600">'+r.quarter+' '+r.year+'</td><td>'+r.franchisee+'</td>'
+    html+='<tr><td style="font-weight:600">'+r.quarter+' '+r.year+'</td>'
       +'<td class="r">'+(fa?fa.toFixed(2):'\u2013')+'</td><td class="r">'+(ra?ra.toFixed(2):'\u2013')+'</td>'
       +'<td class="r perf-gap" style="color:'+(gap>0.5?'#e8833a':(gap<-0.01?'#2f8f4e':'var(--muted)'))+'">'+((fa&&ra)?((gap>0?'+':'')+gap.toFixed(2)):'\u2013')+'</td>'
       +'<td>'+(ra?'<span class="perf-grade" style="background:'+perfGradeColor(g)+';min-width:24px;height:24px;font-size:13px">'+g+'</span>':'\u2013')+'</td>'
@@ -3913,9 +3981,9 @@ function renderPerfHistory(){
   return html;
 }
 function renderPerformanceTab(){
-  const subs=[['Review','Review'],['History','History']];
+  const subs=[['History','History'],['Review','Review']];
   const nav='<div class="filter-row" style="margin-bottom:18px">'+subs.map(s=>'<button class="filter-btn '+(perfSub===s[0]?'active':'')+'" onclick="setPerfSub(\''+s[0]+'\')">'+s[1]+'</button>').join('')+'</div>';
-  return nav+(perfSub==='History'?renderPerfHistory():renderPerfReview());
+  return nav+(perfSub==='Review'?renderPerfReview():renderPerfHistory());
 }
 function renderResourcesTab(){
   const subs=[['Plan','Business plan'],['Docs','Documents and SOPs'],['Tools','Tools'],['Missing','Missing prices']];
