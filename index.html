@@ -464,6 +464,20 @@ th.sortable:hover{color:var(--green)}
 .res-tool.soon{border-style:dashed;background:#FAFBF9}
 .res-tool-h{font-family:'Fraunces',serif;font-size:17px;font-weight:600;color:var(--ink);margin-bottom:6px;display:flex;align-items:center;gap:10px}
 .res-tool-d{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:14px;max-width:620px}
+.navwrap{display:flex;align-items:center;background:var(--card);border-bottom:1px solid var(--line)}
+.navwrap .tabs{flex:1;min-width:0;border-bottom:none;background:none}
+.period-ctl{flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 28px 0 14px;border-left:1px solid var(--line);align-self:stretch}
+.period-lab{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+.period-select{appearance:none;-webkit-appearance:none;background:var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2316241C' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 11px center;border:1px solid var(--line);color:var(--ink);font-family:inherit;font-size:12.5px;font-weight:600;padding:8px 30px 8px 13px;border-radius:8px;cursor:pointer}
+.period-select:hover{border-color:var(--green4)}
+.period-select:focus{outline:none;border-color:var(--green)}
+.df-strip{display:none;align-items:center;gap:8px;background:var(--card);border-bottom:1px solid var(--line);padding:11px 28px}
+.df-strip.show{display:flex}
+.period-to{font-size:11px;color:var(--muted)}
+.df-apply{font-family:inherit;font-size:12px;font-weight:600;color:#fff;background:var(--green);border:none;border-radius:7px;padding:7px 14px;cursor:pointer}
+.df-apply:hover{background:var(--green6)}
+@media(max-width:900px){.period-ctl .df-summary{display:none}}
+@media(max-width:640px){.period-ctl{padding:0 16px 0 12px}.df-strip{padding:11px 16px}}
 </style>
 </head>
 <body>
@@ -497,26 +511,29 @@ th.sortable:hover{color:var(--green)}
   </div>
 </div>
 
-<div class="df-bar" id="dfBar">
-  <span class="df-label">Period</span>
-  <button class="df-btn" data-range="this-month">This month</button>
-  <button class="df-btn" data-range="last-month">Last month</button>
-  <button class="df-btn" data-range="ytd">YTD</button>
-  <button class="df-btn" data-range="tax-year">Tax year</button>
-  <button class="df-btn" data-range="last-tax-year">Last tax year</button>
-  <button class="df-btn" data-range="last-12mo">Last 12 mo</button>
-  <button class="df-btn active" data-range="all">All time</button>
-  <button class="df-btn" data-range="custom">Custom</button>
-  <div class="df-custom" id="dfCustom">
-    <input type="date" id="dfFrom" class="df-date">
-    <span style="font-size:11px;color:var(--muted)">to</span>
-    <input type="date" id="dfTo" class="df-date">
-    <button class="df-btn" id="dfApply" style="background:var(--green);color:#fff;border-color:var(--green)">Apply</button>
+<div class="navwrap">
+  <div class="tabs" id="tabs"></div>
+  <div class="period-ctl">
+    <span class="df-summary" id="dfSummary"></span>
+    <label class="period-lab" for="periodSelect">Period</label>
+    <select id="periodSelect" class="period-select" onchange="onPeriodChange(this.value)" aria-label="Time period">
+      <option value="this-month">This month</option>
+      <option value="last-month">Last month</option>
+      <option value="ytd">Year to date</option>
+      <option value="tax-year">Tax year</option>
+      <option value="last-tax-year">Last tax year</option>
+      <option value="last-12mo">Last 12 months</option>
+      <option value="all" selected>All time</option>
+      <option value="custom">Custom range&hellip;</option>
+    </select>
   </div>
-  <div class="df-summary" id="dfSummary"></div>
 </div>
-
-<div class="tabs" id="tabs"></div>
+<div class="df-strip" id="dfCustom">
+  <input type="date" id="dfFrom" class="df-date">
+  <span class="period-to">to</span>
+  <input type="date" id="dfTo" class="df-date">
+  <button class="df-apply" id="dfApply">Apply</button>
+</div>
 <div class="content" id="content"><div class="loading">Loading data from MTG app...</div></div>
 <div class="chart-tip" id="chartTip"></div>
 
@@ -2406,7 +2423,7 @@ function stackedServiceSVG(top, colorOf) {
   return '<div class="svg-wrap"><svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">' + grid + bars + xl + '</svg></div>' + legend;
 }
 
-const tabList = ["Overview","To-do","Resources","Leads","Calls","Revenue","Customers","Regulars","Missing Prices"];
+const tabList = ["Overview","To-do","Calls","Leads","Customers","Regulars","Revenue","Resources"];
 function renderTabs() {
   document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+t+'</button>').join('');
 }
@@ -2432,7 +2449,7 @@ function onCallSearch(v, pos) {
 }
 
 function dfRender() {
-  document.querySelectorAll('#dfBar .df-btn[data-range]').forEach(btn => btn.classList.toggle('active', btn.dataset.range === dfRange));
+  const ps = document.getElementById('periodSelect'); if (ps) ps.value = dfRange;
   const vs = document.getElementById('viewSelect'); if (vs) vs.value = franchiseeView;
   document.getElementById('dfCustom').classList.toggle('show', dfRange === 'custom');
   const b = dfBounds(); const summary = document.getElementById('dfSummary');
@@ -2440,13 +2457,11 @@ function dfRender() {
   if (!b.from || !b.to) summary.innerHTML = 'Showing <b>'+(franchiseeView==='All'?'all jobs':franchiseeView+'\u2019s jobs')+'</b> &nbsp;\u2022&nbsp; <b>'+jobs.length+'</b> total';
   else summary.innerHTML = fmtDateLong(b.from)+' \u2192 '+fmtDateLong(b.to)+who+' &nbsp;\u2022&nbsp; <b>'+jobs.length+'</b> jobs';
 }
-document.querySelectorAll('#dfBar .df-btn[data-range]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    dfRange = btn.dataset.range;
-    if (dfRange === 'custom' && !dfFrom) { const ty = ukTaxYearBounds(); document.getElementById('dfFrom').valueAsDate = ty.from; document.getElementById('dfTo').valueAsDate = new Date(); }
-    applyFilters(); renderContent(); dfRender();
-  });
-});
+function onPeriodChange(v) {
+  dfRange = v;
+  if (dfRange === 'custom' && !dfFrom) { const ty = ukTaxYearBounds(); document.getElementById('dfFrom').valueAsDate = ty.from; document.getElementById('dfTo').valueAsDate = new Date(); }
+  applyFilters(); renderContent(); dfRender();
+}
 document.getElementById('dfApply').addEventListener('click', () => {
   const f = document.getElementById('dfFrom'), t = document.getElementById('dfTo');
   if (f.value) dfFrom = new Date(f.value);
@@ -3680,12 +3695,22 @@ function renderResourcesTools(){
     + '<span class="res-soon">Building this next</span></div>';
   return intro+calc;
 }
+function renderMissingPricesTab(){
+  return `<div class="card"><div class="h" style="color:var(--amber)">Jobs missing a price (\u00a30)</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:16px">${missingPriceData.reduce((s,c)=>s+c.z,0)} jobs at \u00a30 (free assessment visits excluded). Run Fix Missing Prices from the MTG app menu to auto-fix where possible.</div>
+      ${missingPriceData.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No missing prices in this period.</div>':
+      '<div class="table-wrap"><table><thead><tr>'+sortTh('Missing Prices','n','Customer')+sortTh('Missing Prices','z','\u00a30 Jobs','r')+sortTh('Missing Prices','a','Avg When Priced','r')+sortTh('Missing Prices','est','Est. Missing','r')+'<th>Service</th></tr></thead>'+
+      '<tbody>'+sortRows(missingPriceData,missSort.k,missSort.d).map(c=>{const e=c.est;return'<tr><td style="font-weight:500">'+c.n+'</td><td class="r" style="font-weight:600;color:var(--amber)">'+c.z+'</td><td class="r">'+(c.a>0?fmt(c.a):'Never priced')+'</td><td class="r" style="font-weight:600;color:'+(e>0?'var(--green6)':'#ccc')+'">'+(e>0?'~'+fmt(e):'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+(c.svc||'\u2014')+'</td></tr>'}).join('')+'</tbody></table></div>'+
+      '<div class="ib io"><b>Action:</b> update recurring booking prices in the MTG app for customers showing "Never priced". These are active regulars with no pricing set.</div>'}
+    </div>`;
+}
 function renderResourcesTab(){
-  const subs=[['Plan','Business plan'],['Docs','Documents and SOPs'],['Tools','Tools']];
+  const subs=[['Plan','Business plan'],['Docs','Documents and SOPs'],['Tools','Tools'],['Missing','Missing prices']];
   const nav='<div class="filter-row" style="margin-bottom:18px">'+subs.map(s=>'<button class="filter-btn '+(resSub===s[0]?'active':'')+'" onclick="setResSub(\''+s[0]+'\')">'+s[1]+'</button>').join('')+'</div>';
   let body;
   if(resSub==='Docs') body=renderResourcesDocs();
   else if(resSub==='Tools') body=renderResourcesTools();
+  else if(resSub==='Missing') body=renderMissingPricesTab();
   else body=renderPlanTab();
   return nav+body;
 }
@@ -3813,7 +3838,7 @@ function renderContent() {
     if (segPassed) mix.push({ label:'Passed to Adam', n:segPassed, seg:'Passed to Adam', color:'#3949AB' });
     el.innerHTML = `
     <div class="attn">
-      ${attnCards.map(c=>{ const click = c.tab==='Calls' ? "callsFilter='open';setTab('Calls')" : "setTab('"+c.tab+"')"; return '<div class="attn-card '+(c.warn?'':'ok')+'" onclick="'+click+'"><div class="attn-n" style="color:'+(c.warn?'var(--accent)':'var(--green4)')+'">'+c.n+'</div><div><div class="attn-t">'+c.t+'</div><div class="attn-d">'+c.d+'</div></div></div>'; }).join('')}
+      ${attnCards.map(c=>{ const click = c.tab==='Calls' ? "callsFilter='open';setTab('Calls')" : (c.tab==='Missing Prices' ? "goResources('Missing')" : "setTab('"+c.tab+"')"); return '<div class="attn-card '+(c.warn?'':'ok')+'" onclick="'+click+'"><div class="attn-n" style="color:'+(c.warn?'var(--accent)':'var(--green4)')+'">'+c.n+'</div><div><div class="attn-t">'+c.t+'</div><div class="attn-d">'+c.d+'</div></div></div>'; }).join('')}
     </div>
     <div class="grid grid-4">
       <div class="card accent-top"><div class="kpi-l">Revenue</div><div class="kpi-v">${fmt(totalRev)}${deltaChip(totalRev, prevTotals?prevTotals.rev:0, cmpLabel)}</div><div class="kpi-s">recorded</div></div>
@@ -4225,16 +4250,6 @@ function renderContent() {
     if(regSub==='Planner') recalcPlanner();
     else if(regSub==='Map') initLiveMap();
     else if(regSub==='Rounds') rbInitGeocode();
-  }
-
-  else if (activeTab==='Missing Prices') {
-    el.innerHTML = `<div class="card"><div class="h" style="color:var(--amber)">Jobs missing a price (\u00a30)</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:16px">${missingPriceData.reduce((s,c)=>s+c.z,0)} jobs at \u00a30 (free assessment visits excluded). Run Fix Missing Prices from the MTG app menu to auto-fix where possible.</div>
-      ${missingPriceData.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No missing prices in this period.</div>':
-      '<div class="table-wrap"><table><thead><tr>'+sortTh('Missing Prices','n','Customer')+sortTh('Missing Prices','z','\u00a30 Jobs','r')+sortTh('Missing Prices','a','Avg When Priced','r')+sortTh('Missing Prices','est','Est. Missing','r')+'<th>Service</th></tr></thead>'+
-      '<tbody>'+sortRows(missingPriceData,missSort.k,missSort.d).map(c=>{const e=c.est;return'<tr><td style="font-weight:500">'+c.n+'</td><td class="r" style="font-weight:600;color:var(--amber)">'+c.z+'</td><td class="r">'+(c.a>0?fmt(c.a):'Never priced')+'</td><td class="r" style="font-weight:600;color:'+(e>0?'var(--green6)':'#ccc')+'">'+(e>0?'~'+fmt(e):'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+(c.svc||'\u2014')+'</td></tr>'}).join('')+'</tbody></table></div>'+
-      '<div class="ib io"><b>Action:</b> update recurring booking prices in the MTG app for customers showing "Never priced". These are active regulars with no pricing set.</div>'}
-    </div>`;
   }
 }
 
