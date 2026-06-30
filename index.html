@@ -477,6 +477,25 @@ th.sortable:hover{color:var(--green)}
 .df-apply{font-family:inherit;font-size:12px;font-weight:600;color:#fff;background:var(--green);border:none;border-radius:7px;padding:7px 14px;cursor:pointer}
 .df-apply:hover{background:var(--green6)}
 @media(max-width:900px){.period-ctl .df-summary{display:none}}
+.tab-select-wrap{display:none;flex:1;min-width:0;padding:9px 12px}
+.tab-select{width:100%;font-size:14px;font-weight:700;color:var(--green);background-color:var(--paper)}
+@media(max-width:760px){
+  .navwrap .tabs{display:none}
+  .tab-select-wrap{display:block}
+  .period-ctl{padding:0 12px 0 4px;gap:6px}
+  .period-lab{display:none}
+  #content .table-wrap{max-height:none;overflow:visible;border:none;border-radius:0}
+  #content .table-wrap table{display:block;width:100%}
+  #content .table-wrap thead{display:none}
+  #content .table-wrap tbody{display:block}
+  #content .table-wrap tr{display:block;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 15px;margin-bottom:10px}
+  #content .table-wrap td{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:6px 0;border:none !important;text-align:right}
+  #content .table-wrap td:before{content:attr(data-label);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);text-align:left;flex:0 0 auto;white-space:nowrap}
+  #content .table-wrap td:empty{display:none}
+  #content .table-wrap td:first-child{justify-content:flex-start;text-align:left;font-size:15px;font-weight:700;color:var(--ink);border-bottom:1px solid var(--line) !important;padding-bottom:9px;margin-bottom:5px}
+  #content .table-wrap td:first-child:before{display:none}
+  #content .table-wrap td input,#content .table-wrap td select{max-width:55%}
+}
 @media(max-width:640px){.period-ctl{padding:0 16px 0 12px}.df-strip{padding:11px 16px}}
 /* performance review */
 .perf-meta{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:18px}
@@ -585,6 +604,7 @@ th.sortable:hover{color:var(--green)}
 
 <div class="navwrap">
   <div class="tabs" id="tabs"></div>
+  <div class="tab-select-wrap"><select id="tabSelect" class="period-select tab-select" onchange="setTab(this.value)" aria-label="Section"></select></div>
   <div class="period-ctl">
     <span class="df-summary" id="dfSummary"></span>
     <label class="period-lab" for="periodSelect">Period</label>
@@ -2500,6 +2520,7 @@ function stackedServiceSVG(top, colorOf) {
 const tabList = ["Overview","To-do","Calls","Leads","Customers","Regulars","Revenue","Performance","Resources"];
 function renderTabs() {
   document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+t+'</button>').join('');
+  var ts=document.getElementById('tabSelect'); if(ts) ts.innerHTML = tabList.map(t => '<option value="'+t+'"'+(t===activeTab?' selected':'')+'>'+t+'</option>').join('');
 }
 function setTab(t) { activeTab=t; custSegFilter="All"; custSearch=""; callSearch=""; callType="all"; scoreEditFor=null; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 function setView(v) { franchiseeView=v; applyFilters(); renderContent(); dfRender(); }
@@ -4064,6 +4085,21 @@ function renderRegularsTab(){
   else body=renderRoundsTab();
   return nav+body;
 }
+function rtablize(root){
+  var scope=root||document; var tables=scope.querySelectorAll('.table-wrap table');
+  for(var ti=0;ti<tables.length;ti++){ var t=tables[ti]; var ths=t.querySelectorAll('thead th'); if(!ths.length) continue;
+    var labels=[]; for(var i=0;i<ths.length;i++) labels.push((ths[i].textContent||'').trim());
+    var rows=t.querySelectorAll('tbody tr');
+    for(var r=0;r<rows.length;r++){ var cells=rows[r].children;
+      for(var c=0;c<cells.length;c++){ var lab=labels[c]||''; if(cells[c].getAttribute('data-label')!==lab) cells[c].setAttribute('data-label',lab); } }
+  }
+}
+var _rtObs=null,_rtT=null;
+function initRtablize(){ var c=document.getElementById('content'); if(!c) return; rtablize(c);
+  if(_rtObs||typeof MutationObserver==='undefined') return;
+  _rtObs=new MutationObserver(function(){ if(_rtT) return; _rtT=setTimeout(function(){ _rtT=null; rtablize(c); },120); });
+  _rtObs.observe(c,{childList:true,subtree:true});
+}
 function renderContent() {
   const el = document.getElementById('content');
   document.body.classList.toggle('rb-wide', activeTab==='Regulars' && regSub==='Rounds');
@@ -4536,6 +4572,7 @@ function renderContent() {
     else if(regSub==='Map') initLiveMap();
     else if(regSub==='Rounds') rbInitGeocode();
   }
+  initRtablize();
 }
 
 function showLogin(msg) {
