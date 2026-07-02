@@ -507,6 +507,42 @@ th.sortable:hover{color:var(--green)}
 .df-apply{font-family:inherit;font-size:12px;font-weight:600;color:#fff;background:var(--green);border:none;border-radius:var(--r-sm);padding:7px 14px;cursor:pointer}
 .df-apply:hover{background:var(--green6)}
 @media(max-width:900px){.period-ctl .df-summary{display:none}}
+/* customer detail sheet: full screen on mobile, centred card on desktop */
+.cm-ov{position:fixed;inset:0;z-index:140;background:rgba(22,36,28,.5);display:none}
+.cm-ov.show{display:block}
+.cm{position:fixed;z-index:141;background:var(--card);display:none;flex-direction:column;overflow:hidden}
+.cm.show{display:flex}
+@media(min-width:761px){.cm{top:50%;left:50%;transform:translate(-50%,-50%);width:min(620px,92vw);max-height:88vh;border-radius:var(--r-md);box-shadow:var(--sh-2)}}
+@media(max-width:760px){.cm{inset:0;border-radius:0}}
+.cm-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 20px 14px;border-bottom:1px solid var(--line);flex:none}
+.cm-name{font-family:'Fraunces',serif;font-size:22px;font-weight:600;color:var(--ink);line-height:1.15;word-break:break-word}
+.cm-badges{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap}
+.cm-x{flex:none;width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--card);font-size:17px;color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit}
+.cm-x:active{transform:scale(.95)}
+.cm-body{overflow-y:auto;padding:18px 20px calc(28px + env(safe-area-inset-bottom,0px));-webkit-overflow-scrolling:touch}
+.cm-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:6px}
+.cm-stat{background:var(--paper);border:1px solid var(--line);border-radius:var(--r-sm);padding:11px 6px;text-align:center}
+.cm-stat b{display:block;font-family:'Fraunces',serif;font-size:16px;font-weight:600;color:var(--ink);white-space:nowrap}
+.cm-stat span{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+.cm-sec{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:18px 0 6px}
+.cm-row{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink)}
+.cm-row svg{width:17px;height:17px;color:var(--muted);flex:none}
+.cm-row a{color:var(--green);font-weight:600;text-decoration:none;word-break:break-all}
+.cm-row .na{color:var(--muted);font-style:italic}
+.cm-acts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0 2px}
+.cm-act{display:flex;flex-direction:column;align-items:center;gap:5px;padding:12px 6px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--card);color:var(--ink);font-size:12px;font-weight:600;text-decoration:none;cursor:pointer;font-family:inherit;text-align:center}
+.cm-act svg{width:19px;height:19px}
+.cm-act.wa svg{color:#128C4B}
+.cm-act:active{transform:scale(.97)}
+.cm-act.off{opacity:.35;pointer-events:none}
+.cm-note{width:100%;border:1px solid var(--line);border-radius:var(--r-sm);padding:10px 12px;font-family:inherit;font-size:14px;min-height:74px;resize:vertical;background:var(--card);color:var(--ink)}
+.cm-rem{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;margin-top:8px}
+.cm-rem input[type=date]{border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 10px;font-family:inherit;font-size:14px;background:var(--card);color:var(--ink)}
+.cm-rem-btn{background:var(--green);color:#fff;border:none;border-radius:var(--r-sm);padding:10px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.cm-rem-btn:active{transform:scale(.97)}
+.cm-rem-on{display:flex;align-items:center;gap:9px;background:var(--t-green-bg);color:var(--t-green-fg);border-radius:var(--r-sm);padding:10px 13px;font-size:13px;font-weight:600;margin-top:8px}
+.cm-rem-x{background:none;border:none;color:inherit;cursor:pointer;font-weight:700;font-size:15px;margin-left:auto;font-family:inherit}
+.table-wrap tbody tr[data-cust]{cursor:pointer}
 /* bottom navigation (mobile only) */
 .hdr-period{display:none;align-items:center;flex:none;min-width:0}
 .hdr-period .period-ctl{border-left:none;padding:0;gap:0;align-self:center}
@@ -518,7 +554,9 @@ th.sortable:hover{color:var(--green)}
 .bn-item svg{width:21px;height:21px;flex:none}
 .bn-item.active{color:var(--green)}
 .bn-item.active .bn-ic{background:var(--t-green-bg)}
-.bn-ic{display:flex;align-items:center;justify-content:center;width:44px;height:26px;border-radius:var(--r-pill);transition:background .12s}
+.bn-ic{display:flex;align-items:center;justify-content:center;width:44px;height:26px;border-radius:var(--r-pill);transition:background .12s;position:relative}
+.bn-badge{position:absolute;top:-5px;right:1px;min-width:16px;height:16px;padding:0 4px;border-radius:var(--r-pill);background:var(--red);color:#fff;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;line-height:1;border:2px solid var(--card);box-sizing:content-box}
+.tab-badge{display:inline-flex;align-items:center;justify-content:center;min-width:15px;height:15px;padding:0 4px;margin-left:6px;border-radius:var(--r-pill);background:var(--red);color:#fff;font-size:10px;font-weight:800;line-height:1;vertical-align:1px}
 .bn-item:active{transform:scale(.95)}
 .bn-sheet-ov{display:none;position:fixed;inset:0;z-index:115;background:rgba(22,36,28,.42)}
 .bn-sheet{display:none;position:fixed;left:0;right:0;bottom:0;z-index:116;background:var(--card);border-radius:var(--r-md) var(--r-md) 0 0;padding:10px 14px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:var(--sh-2)}
@@ -688,6 +726,7 @@ button{-webkit-tap-highlight-color:transparent}
           </select>
         </div>
         <button class="logout-btn" id="logoutBtn" onclick="doLogout()" style="display:none">Log out</button>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer;padding-top:2px"><input type="checkbox" id="notifChk" onchange="setNotify(this.checked)" style="accent-color:var(--green)"> Notify me about new calls &amp; leads</label>
       </div>
     </details>
   </div>
@@ -720,6 +759,8 @@ button{-webkit-tap-highlight-color:transparent}
 <nav class="bottom-nav" id="bottomNav" aria-label="Sections"></nav>
 <div class="bn-sheet-ov" id="bnSheetOv" onclick="closeBnSheet()"></div>
 <div class="bn-sheet" id="bnSheet" role="menu"><div class="bn-sheet-grab"></div><div id="bnSheetList"></div></div>
+<div class="cm-ov" id="cmOv" onclick="closeCustomer()"></div>
+<div class="cm" id="custModal" role="dialog" aria-modal="true"></div>
 <div class="sync-pill" id="syncPill"><span class="sync-dot"></span><span id="syncText"></span></div>
 <div class="chart-tip" id="chartTip"></div>
 
@@ -737,6 +778,7 @@ let jobsPeriod=[], jobs=[], prevJobs=[], allCustomers=[], churnedList=[], monthl
 let roundsBoard = { assign:{}, rounds:{}, placeholders:{} };
 let leadStats=null, recurringStats=null, prevTotals=null;
 let rawCalls=[], callsStats=null, callsFilter='open', callsWho='', callSearch='', callType='all';
+let custContact={};   // name -> {phone, addr, pc} for the customer detail sheet
 let activeTab="Overview", custSegFilter="All", custSearch="";
 let regSub="Map"; // sub-view inside the Regulars tab: Map / Planner / Rounds / Scorecard
 let resSub="Overview"; // sub-view inside the Resources tab: Overview / Plan / Docs / Tools / Missing
@@ -1043,6 +1085,43 @@ function clearDataCache() {
   } catch (_) {}
 }
 
+/* ===== Notifications =====
+   Opt-in browser notifications, fired when a data refresh brings in calls or leads that
+   were not there last time. This works whenever the dashboard refreshes (on open, on
+   Refresh); it is not background push, which needs a service worker and a push server. */
+function notifyKey(){ return 'mtg_notify_' + (auth ? auth.user : ''); }
+function notifyEnabled(){
+  try { return localStorage.getItem(notifyKey())==='1' && 'Notification' in window && Notification.permission==='granted'; } catch(_){ return false; }
+}
+function setNotify(on){
+  const chk=document.getElementById('notifChk');
+  if(!on){ try{ localStorage.setItem(notifyKey(),'0'); }catch(_){} return; }
+  if(!('Notification' in window)){ alert('This browser does not support notifications.'); if(chk) chk.checked=false; return; }
+  Notification.requestPermission().then(p=>{
+    if(p==='granted'){ try{ localStorage.setItem(notifyKey(),'1'); }catch(_){} }
+    else { if(chk) chk.checked=false; try{ localStorage.setItem(notifyKey(),'0'); }catch(_){} }
+  });
+}
+function syncNotifyChk(){
+  const chk=document.getElementById('notifChk');
+  if(chk){ chk.checked = (function(){ try{ return localStorage.getItem(notifyKey())==='1'; }catch(_){ return false; } })(); }
+}
+function maybeNotify(){
+  if(!auth) return;
+  const counts = navBadgeCounts();
+  const seenKey='mtg_seen_'+auth.user;
+  let seen={}; try{ seen=JSON.parse(localStorage.getItem(seenKey)||'{}'); }catch(_){ seen={}; }
+  if(notifyEnabled()){
+    const msgs=[];
+    const dc=counts['Calls']-(seen.calls||0), dl=counts['Leads']-(seen.leads||0);
+    if(dc>0) msgs.push(dc+' new call'+(dc>1?'s':''));
+    if(dl>0) msgs.push(dl+' new lead'+(dl>1?'s':''));
+    if(msgs.length){ try{ new Notification('My Tidy Garden', { body: msgs.join(' \u00b7 ')+' waiting in the dashboard', tag:'mtg-new-items' }); }catch(_){} }
+  }
+  try{ localStorage.setItem(seenKey, JSON.stringify({ calls:counts['Calls'], leads:counts['Leads'] })); }catch(_){}
+}
+document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ closeCustomer(); closeBnSheet(); } });
+
 function loadData() {
   if (!auth) { showLogin(''); return; }
   if (API_URL.indexOf('PASTE_') === 0) {
@@ -1089,6 +1168,7 @@ function handleData(data, fromCache) {
     } catch (_) {}
     paintedFromCache = false;
     syncPill('');
+    setTimeout(function(){ try{ maybeNotify(); }catch(_){} }, 200);
   }
   rawJobs = data.jobs || [];
   rawLeads = data.leads || [];
@@ -1256,6 +1336,7 @@ function applyFilters() {
   let pj = (pb.from && pb.to) ? rawJobs.filter(j => j._date && j._date >= pb.from && j._date <= pb.to) : [];
   prevJobs = franchiseeView === 'All' ? pj : pj.filter(j => j._franchisee === franchiseeView);
   processData();
+  try{ renderTabs(); }catch(_){}
   processPrev();
   processLeads(b);
   processRecurring(b);
@@ -1467,6 +1548,31 @@ function processData() {
   rawRecurring.forEach(r => _linkPhone(r._cust, col(r, PHONE_HEADERS)));
   rawLeads.forEach(l => _linkPhone(l._name, col(l, PHONE_HEADERS)));
   rawJobs.forEach(j => _linkPhone(col(j, ['Customer Name','Customer','Name']), col(j, PHONE_HEADERS)));
+
+  // Name -> contact details for the customer detail sheet: phone from any source row,
+  // address and postcode from the most recent job or booking that carries one.
+  custContact = {};
+  const _linkContact = (nm, ph, addr, pc) => {
+    if (!nm) return;
+    const k = norm(nm);
+    if (!custContact[k]) custContact[k] = { phone:'', addr:'', pc:'' };
+    const cc = custContact[k];
+    if (!cc.phone) { const p = normNum(ph); if (p) cc.phone = p; }
+    if (!cc.addr && addr) cc.addr = String(addr).trim();
+    if (!cc.pc && pc) cc.pc = String(pc).trim();
+  };
+  rawLeads.forEach(l => _linkContact(l._name, col(l, PHONE_HEADERS), '', ''));
+  rawRecurring.forEach(r => _linkContact(r._cust, col(r, PHONE_HEADERS), r.address, r.postcode));
+  rawJobs.forEach(j => _linkContact(col(j, ['Customer Name','Customer','Name']), col(j, PHONE_HEADERS), j.address, j.postcode));
+  // Manual caller names map number -> name; fold them back in as a fallback phone source.
+  try {
+    Object.keys(manualNames || {}).forEach(num => {
+      const nm = manualNames[num]; if (!nm) return;
+      const k = norm(String(nm));
+      if (!custContact[k]) custContact[k] = { phone:'', addr:'', pc:'' };
+      if (!custContact[k].phone) custContact[k].phone = normNum(num) || String(num);
+    });
+  } catch(_) {}
 
   const monthMap = {};
   jobs.forEach(j => {
@@ -2464,6 +2570,118 @@ function custName(c) {
     ? ' <span class="badge b-inherited" title="Customer handed to Adam when he became a franchisee">inherited</span>'
     : '');
 }
+
+/* ===== Customer detail sheet =====
+   Tap any customer row to open a full-screen sheet (mobile) or centred card (desktop)
+   with contact details, quick actions, the shared note, and a follow-up reminder that
+   lands in the To-do list as a dated task. */
+let custModalFor = null;
+function custNorm(n){ return String(n||'').trim().toLowerCase(); }
+function custByName(name){ const k=custNorm(name); return allCustomers.find(c=>custNorm(c.n)===k) || (churnedList||[]).find(c=>custNorm(c.n)===k) || null; }
+function custContactOf(name){ return custContact[custNorm(name)] || { phone:'', addr:'', pc:'' }; }
+function waNumber(p){ let d=String(p||'').replace(/\D/g,''); if(!d) return ''; if(d.indexOf('00')===0) d=d.slice(2); if(d.charAt(0)==='0') d='44'+d.slice(1); else if(d.indexOf('44')!==0 && d.length===10) d='44'+d; return d; }
+function fmtPhone(p){ if(!p) return ''; let d=String(p).replace(/\D/g,''); if(d.indexOf('44')===0) d='0'+d.slice(2); else if(d.length===10 && d.charAt(0)!=='0') d='0'+d; return d.length===11 ? d.slice(0,5)+' '+d.slice(5) : d; }
+function custRemId(name){ return 'cust-rem-'+custNorm(name).replace(/[^a-z0-9]+/g,'-'); }
+function custReminder(name){ if(typeof todoState==='undefined'||!Array.isArray(todoState.tasks)) return null; const id=custRemId(name); const t=todoState.tasks.find(x=>x.id===id); if(!t) return null; if(todoState.doneMap && todoState.doneMap[t.id+':'+t.due]) return null; return t; }
+function openCustomerFromRow(ev, name){ if(ev && ev.target && ev.target.closest && ev.target.closest('input,select,button,a,textarea,.sc-pill')) return; if(name) openCustomer(name); }
+const cmIcons = {
+  phone:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.08 4.18 2 2 0 0 1 4.06 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.22a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
+  mail:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>',
+  pin:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+  wa:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>',
+  nav:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>',
+  star:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'
+};
+function openCustomer(name){
+  const c = custByName(name);
+  if(!c) return;
+  custModalFor = c.n;
+  const cc = custContactOf(c.n);
+  const tel = cc.phone ? 'tel:0'+cc.phone.replace(/^0+/,'') : '';
+  const wa  = cc.phone ? 'https://wa.me/'+waNumber(cc.phone) : '';
+  const dirQ = cc.addr || cc.pc || '';
+  const dir = dirQ ? 'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(dirQ) : '';
+  const life = fmt(c.ltv!=null?c.ltv:c.r);
+  const rem = custReminder(c.n);
+  const remBlock = rem
+    ? '<div class="cm-rem-on">Reminder set for '+todoDueLabel(rem.due).toLowerCase()+' ('+rem.due.split('-').reverse().join('/')+')<button class="cm-rem-x" onclick="cmClearReminder()" aria-label="Remove reminder">\u00d7</button></div>'
+    : '<div class="cm-rem"><input type="date" id="cmRemDate" min="'+todoYmd(0)+'" value="'+todoYmd(1)+'"><button class="cm-rem-btn" onclick="cmSetReminder()">Add to To-do</button></div>'
+      + '<div style="font-size:12px;color:var(--muted);margin-top:7px">Creates a dated task in your To-do list. The note above is used as the task detail.</div>';
+  const cmArg = n => JSON.stringify(String(n)).replace(/"/g,'&quot;');
+  const scoreBtn = c.s==='Recurring'
+    ? '<button class="cm-act" onclick="closeCustomer();openScorecard('+cmArg(c.n)+')">'+cmIcons.star+'Scorecard</button>' : '';
+  document.getElementById('custModal').innerHTML =
+    '<div class="cm-head"><div><div class="cm-name">'+escAttr(c.n)+'</div><div class="cm-badges">'+badge(c.s)+badge(c.f)+(c.freq?'<span class="badge" style="background:var(--t-neutral-bg);color:var(--t-neutral-fg)">'+escAttr(c.freq)+'</span>':'')+'</div></div>'
+    + '<button class="cm-x" onclick="closeCustomer()" aria-label="Close">\u00d7</button></div>'
+    + '<div class="cm-body">'
+    + '<div class="cm-stats">'
+      + '<div class="cm-stat"><b>'+c.j+'</b><span>Jobs</span></div>'
+      + '<div class="cm-stat"><b>'+life+'</b><span>Lifetime</span></div>'
+      + '<div class="cm-stat"><b>'+(c.a>0?fmt(c.a):'\u2014')+'</b><span>Avg</span></div>'
+      + '<div class="cm-stat"><b>'+(c.daysSince!=null&&c.daysSince<999?c.daysSince+'d':'\u2014')+'</b><span>Since visit</span></div>'
+    + '</div>'
+    + '<div class="cm-acts">'
+      + (tel?'<a class="cm-act" href="'+tel+'">'+cmIcons.phone+'Call</a>':'<span class="cm-act off">'+cmIcons.phone+'Call</span>')
+      + (wa?'<a class="cm-act wa" href="'+wa+'" target="_blank" rel="noopener">'+cmIcons.wa+'WhatsApp</a>':'<span class="cm-act off">'+cmIcons.wa+'WhatsApp</span>')
+      + (dir?'<a class="cm-act" href="'+dir+'" target="_blank" rel="noopener">'+cmIcons.nav+'Directions</a>':'<span class="cm-act off">'+cmIcons.nav+'Directions</span>')
+      + scoreBtn
+    + '</div>'
+    + '<div class="cm-sec">Contact</div>'
+    + '<div class="cm-row">'+cmIcons.phone+(tel?'<a href="'+tel+'">'+fmtPhone(cc.phone)+'</a>':'<span class="na">Phone not on file</span>')+'</div>'
+    + '<div class="cm-row">'+cmIcons.mail+'<span class="na">Email not on file</span></div>'
+    + '<div class="cm-row">'+cmIcons.pin+(dirQ?'<span>'+escAttr(cc.addr||'')+(cc.pc?(cc.addr?', ':'')+escAttr(cc.pc):'')+'</span>':'<span class="na">Address not on file</span>')+'</div>'
+    + '<div class="cm-sec">History</div>'
+    + '<div class="cm-row"><span style="color:var(--muted)">First visit</span><span style="margin-left:auto;font-weight:600">'+fmtDate(c.first)+'</span></div>'
+    + '<div class="cm-row"><span style="color:var(--muted)">Last visit</span><span style="margin-left:auto;font-weight:600">'+fmtDate(c.last)+'</span></div>'
+    + (c.svc?'<div class="cm-row"><span style="color:var(--muted)">Services</span><span style="margin-left:auto;font-weight:600;text-align:right">'+escAttr(c.svc)+'</span></div>':'')
+    + '<div class="cm-sec">Note</div>'
+    + '<textarea class="cm-note" id="cmNote" placeholder="Add a note about this customer..." onchange="cmSaveNote(this.value)">'+escAttr(c.note||'')+'</textarea>'
+    + '<div class="cm-sec">Follow-up reminder</div>'
+    + remBlock
+    + '</div>';
+  document.getElementById('cmOv').classList.add('show');
+  document.getElementById('custModal').classList.add('show');
+  document.body.style.overflow='hidden';
+}
+function closeCustomer(){
+  custModalFor=null;
+  document.getElementById('cmOv').classList.remove('show');
+  document.getElementById('custModal').classList.remove('show');
+  document.body.style.overflow='';
+}
+function cmSaveNote(v){
+  if(!custModalFor) return;
+  saveCustomerNoteText(custModalFor, v);
+  const c=custByName(custModalFor); if(c) c.note=v;
+}
+function cmSetReminder(){
+  if(!custModalFor) return;
+  const dEl=document.getElementById('cmRemDate');
+  const due=dEl?dEl.value:'';
+  if(!due){ alert('Pick a date for the reminder.'); return; }
+  const noteEl=document.getElementById('cmNote');
+  const c=custByName(custModalFor);
+  const patch={ id:custRemId(custModalFor), custom:true, kind:'dated', tab:null, due:due, block:null, recur:'once', urgent:false,
+    title:'Follow up: '+custModalFor, desc:(noteEl&&noteEl.value?noteEl.value:('Check in with '+custModalFor+(c&&c.svc?' \u00b7 '+c.svc:''))) };
+  if(typeof todoState!=='undefined' && Array.isArray(todoState.tasks)){
+    const ex=todoState.tasks.find(x=>x.id===patch.id);
+    if(ex) Object.assign(ex, patch); else todoState.tasks.push(patch);
+    if(todoState.doneMap) delete todoState.doneMap[patch.id+':'+patch.due];
+    if(typeof todoSave==='function') todoSave();
+  }
+  openCustomer(custModalFor);
+  try{ renderTabs(); }catch(_){}
+}
+function cmClearReminder(){
+  if(!custModalFor) return;
+  const id=custRemId(custModalFor);
+  if(typeof todoState!=='undefined' && Array.isArray(todoState.tasks)){
+    todoState.tasks=todoState.tasks.filter(x=>x.id!==id);
+    if(typeof todoSave==='function') todoSave();
+  }
+  openCustomer(custModalFor);
+  try{ renderTabs(); }catch(_){}
+}
 function statusBadge(s) {
   s = (s||'').trim().toUpperCase();
   if (s === 'ACTIVE') return '<span class="badge b-active">ACTIVE</span>';
@@ -2710,25 +2928,39 @@ const bnIcons = {
   'Resources':  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
   'More':       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>'
 };
+// Attention counts for the navigation badges: open 'New' calls and leads in the current
+// view, and dated To-do tasks due today or overdue. Recomputed on every nav render.
+function navBadgeCounts(){
+  const vf = r => franchiseeView==='All' || String(r['Franchisee']||'')===franchiseeView;
+  let callsN=0, leadsN=0, todoN=0;
+  try { callsN=(rawCalls||[]).filter(c=>vf(c) && String(c['Status']||'').trim()==='New').length; } catch(_){}
+  try { leadsN=(rawLeads||[]).filter(l=>vf(l) && String(l['Status']||'').trim().toLowerCase()==='new').length; } catch(_){}
+  try { todoN=todoDueByToday().length; } catch(_){}
+  return { 'Calls':callsN, 'Leads':leadsN, 'To-do':todoN };
+}
+function badgeHtml(n, cls){ if(!n) return ''; return '<span class="'+cls+'">'+(n>9?'9+':n)+'</span>'; }
+
 function renderBottomNav() {
   const nav = document.getElementById('bottomNav');
   if (!nav) return;
+  const counts = navBadgeCounts();
   const rest = tabList.filter(t => bnMain.indexOf(t) === -1);
   const moreActive = rest.indexOf(activeTab) !== -1;
   nav.innerHTML = bnMain.map(t =>
-    '<button class="bn-item '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')"><span class="bn-ic">'+bnIcons[t]+'</span>'+tabLabel(t)+'</button>'
+    '<button class="bn-item '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')"><span class="bn-ic">'+bnIcons[t]+badgeHtml(counts[t],'bn-badge')+'</span>'+tabLabel(t)+'</button>'
   ).join('') +
   '<button class="bn-item '+(moreActive?'active':'')+'" onclick="openBnSheet()"><span class="bn-ic">'+bnIcons['More']+'</span>More</button>';
   const list = document.getElementById('bnSheetList');
   if (list) list.innerHTML = rest.map(t =>
-    '<button class="bn-sheet-item '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+(bnIcons[t]||'')+tabLabel(t)+'</button>'
+    '<button class="bn-sheet-item '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+(bnIcons[t]||'')+tabLabel(t)+badgeHtml(counts[t],'tab-badge')+'</button>'
   ).join('');
 }
 function openBnSheet(){ document.getElementById('bnSheet').classList.add('show'); document.getElementById('bnSheetOv').classList.add('show'); }
 function closeBnSheet(){ document.getElementById('bnSheet').classList.remove('show'); document.getElementById('bnSheetOv').classList.remove('show'); }
 
 function renderTabs() {
-  document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+tabLabel(t)+'</button>').join('');
+  const counts = navBadgeCounts();
+  document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+tabLabel(t)+badgeHtml(counts[t],'tab-badge')+'</button>').join('');
   renderBottomNav();
 }
 function setTab(t) { activeTab=t; custSegFilter="All"; custSearch=""; callSearch=""; callType="all"; scoreEditFor=null; closeBnSheet(); renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
@@ -2859,7 +3091,7 @@ function renderRecurringHub(){
     </div>
     <div class="card" style="margin-bottom:24px"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${recCusts.length} active recurring customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, from job history</div>
       <div class="table-wrap"><table><thead><tr>${sortTh('Recurring','n','Customer')}<th class="c">Owner</th><th>Frequency</th>${sortTh('Recurring','visit','Avg/visit','r')}${sortTh('Recurring','j','Jobs','r')}${sortTh('Recurring','ltv','Lifetime','r')}${sortTh('Recurring','first','First')}${sortTh('Recurring','last','Last visit')}<th>Score</th><th>Note</th></tr></thead>
-      <tbody>${sortRows(recCusts,recSort.k,recSort.d).map(c=>'<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.freq||'\u2014')+'</td><td class="r">'+(c.visit>0?fmt(c.visit):'\u2014')+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.ltv!=null?c.ltv:c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td>'+scorePill(c)+'</td><td><input class="note-in" placeholder="Add a note" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>').join('')}</tbody></table></div>
+      <tbody>${sortRows(recCusts,recSort.k,recSort.d).map(c=>'<tr data-cust="'+escAttr(c.n)+'" onclick="openCustomerFromRow(event, this.dataset.cust)"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.freq||'\u2014')+'</td><td class="r">'+(c.visit>0?fmt(c.visit):'\u2014')+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.ltv!=null?c.ltv:c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td>'+scorePill(c)+'</td><td><input class="note-in" placeholder="Add a note" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>').join('')}</tbody></table></div>
     </div>
     ${moves.length ? '<div class="card"><div class="h">Recent schedule changes (live app log)</div><div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th>Service</th><th>Frequency</th><th class="r">Value</th><th class="c">Status</th><th>Created</th><th>Cancelled</th></tr></thead><tbody>'+moves.map(x=>'<tr><td style="font-weight:500">'+(x._cust||'\u2014')+'</td><td class="c">'+(x._franchisee?badge(x._franchisee):'\u2014')+'</td><td style="font-size:12px">'+(x._svc||'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+(x._freq||'\u2014')+'</td><td class="r">'+(x._value>0?fmt(x._value):'\u2014')+'</td><td class="c">'+statusBadge(x._status)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(x._created)+'</td><td style="color:var(--muted);font-size:12px">'+(x._canceled?fmtDate(x._canceled):'\u2014')+'</td></tr>').join('')+'</tbody></table></div></div>' : ''}
   `;
@@ -2882,7 +3114,7 @@ function renderChurnedHub(){
       ${churnedList.length ? churnReasonBreakdownHTML(churnedList) : ''}
       ${churnedList.length===0?emptyState('sun','No churned customers in this period','That is exactly what you want to see.'):
         '<div class="table-wrap"><table><thead><tr>'+sortTh('Churned','n','Customer')+'<th class="c">Owner</th>'+sortTh('Churned','j','Jobs','r')+sortTh('Churned','ltv','Lifetime','r')+sortTh('Churned','first','First','r')+sortTh('Churned','last','Last visit','r')+sortTh('Churned','daysSince','Days since last visit','r')+'<th>Reason &amp; note</th></tr></thead>'+
-        '<tbody>'+sortRows(churnedList,churnSort.k,churnSort.d).map(c=>'<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--red)">'+fmt(c.ltv!=null?c.ltv:c.r)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td class="r">'+c.daysSince+'</td><td><select class="disp-sel'+(c.disp?'':' unset')+'" onchange="setCustomerDisp(this.closest(\'tr\').dataset.cust, this.value)">'+dispOptions(c.disp)+'</select><input class="note-in" style="margin-top:5px" placeholder="Add a note" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>').join('')+'</tbody></table></div>'+
+        '<tbody>'+sortRows(churnedList,churnSort.k,churnSort.d).map(c=>'<tr data-cust="'+escAttr(c.n)+'" onclick="openCustomerFromRow(event, this.dataset.cust)"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--red)">'+fmt(c.ltv!=null?c.ltv:c.r)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td class="r">'+c.daysSince+'</td><td><select class="disp-sel'+(c.disp?'':' unset')+'" onchange="setCustomerDisp(this.closest(\'tr\').dataset.cust, this.value)">'+dispOptions(c.disp)+'</select><input class="note-in" style="margin-top:5px" placeholder="Add a note" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>').join('')+'</tbody></table></div>'+
         '<div class="ib ig"><b>Total lifetime value lost:</b> '+fmt(chTotal)+'. '+chWho+'. A re-engagement push targeting the biggest names could win back recurring revenue.</div>'}
     </div>`;
   return header + body;
@@ -2911,7 +3143,7 @@ function renderRepeatHub(){
   const search = `<input id="custSearchBox" class="search" placeholder="Search customers..." value="${custSearch}" oninput="onCustSearch(this.value, this.selectionStart)">`;
   const table = reps.length ? `<div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${reps.length} repeat customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, most valuable first</div>
     <div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th class="r">Jobs</th><th class="r">Lifetime</th><th>First</th><th>Last visit</th><th class="r">Days since</th><th>Note</th></tr></thead>
-    <tbody>${reps.map(c=>{const ds=dsOf(c);return '<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.ltv!=null?c.ltv:c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+(ds!=null?ds:'\u2014')+'</td><td><input class="note-in" placeholder="Plan the next visit, follow-up..." value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>';}).join('')}</tbody></table></div></div>`
+    <tbody>${reps.map(c=>{const ds=dsOf(c);return '<tr data-cust="'+escAttr(c.n)+'" onclick="openCustomerFromRow(event, this.dataset.cust)"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.ltv!=null?c.ltv:c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+(ds!=null?ds:'\u2014')+'</td><td><input class="note-in" placeholder="Plan the next visit, follow-up..." value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>';}).join('')}</tbody></table></div></div>`
     : '<div class="card">'+(custSearch?emptyState('search','No repeat customers match','Try a shorter search.'):emptyState('users','No repeat customers in this period','Second visits will move customers into this list.'))+'</div>';
   return head + search + table;
 }
@@ -2941,7 +3173,7 @@ function renderOneOffHub(){
   const search = `<input id="custSearchBox" class="search" placeholder="Search customers..." value="${custSearch}" oninput="onCustSearch(this.value, this.selectionStart)">`;
   const table = ones.length ? `<div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${ones.length} one-off customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, most valuable first</div>
     <div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th class="r">Value</th><th>Service</th><th>Visit date</th><th class="r">Days since</th><th>Note</th></tr></thead>
-    <tbody>${ones.map(c=>{const ds=dsOf(c);return '<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.ltv!=null?c.ltv:c.r)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.svc||'\u2014')+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+(ds!=null?ds:'\u2014')+'</td><td><input class="note-in" placeholder="Worth a follow-up? Mention maintenance?" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>';}).join('')}</tbody></table></div></div>`
+    <tbody>${ones.map(c=>{const ds=dsOf(c);return '<tr data-cust="'+escAttr(c.n)+'" onclick="openCustomerFromRow(event, this.dataset.cust)"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.ltv!=null?c.ltv:c.r)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.svc||'\u2014')+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+(ds!=null?ds:'\u2014')+'</td><td><input class="note-in" placeholder="Worth a follow-up? Mention maintenance?" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>';}).join('')}</tbody></table></div></div>`
     : '<div class="card">'+(custSearch?emptyState('search','No one-off customers match','Try a shorter search.'):emptyState('users','No one-off customers in this period','Single-visit customers land here for follow-up.'))+'</div>';
   return head + search + table;
 }
@@ -2968,7 +3200,7 @@ function renderPassedHub(){
   const search = '<input id="custSearchBox" class="search" placeholder="Search customers..." value="'+escAttr(custSearch)+'" oninput="onCustSearch(this.value, this.selectionStart)">';
   const table = ps.length ? '<div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">'+ps.length+' customers'+(franchiseeView!=='All'?' \u00b7 '+franchiseeView:'')+', most valuable first</div>'
     + '<div class="table-wrap"><table><thead><tr><th>Customer</th><th>Segment</th><th class="r">Jobs</th><th class="r">Revenue</th><th class="r">Avg</th><th class="c">Territory</th><th>First</th><th>Last</th></tr></thead>'
-    + '<tbody>'+ps.map(c=>'<tr><td style="font-weight:500">'+custName(c)+'</td><td>'+badge(c.s)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td class="r">'+fmt(c.a)+'</td><td class="c">'+badge(c.f)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')+'</tbody></table></div></div>'
+    + '<tbody>'+ps.map(c=>'<tr data-cust="'+escAttr(c.n)+'" onclick="openCustomerFromRow(event, this.dataset.cust)"><td style="font-weight:500">'+custName(c)+'</td><td>'+badge(c.s)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td class="r">'+fmt(c.a)+'</td><td class="c">'+badge(c.f)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')+'</tbody></table></div></div>'
     : '<div class="card">'+(custSearch
         ? emptyState('search','No customers match','Try a shorter search, or clear the segment filters above.')
         : emptyState('users','No customers here yet','Customers appear automatically as jobs and bookings come through.'))+'</div>';
@@ -3546,7 +3778,7 @@ function todoLoadCache(){
 function todoWriteCache(){ try { localStorage.setItem(todoCacheKey(), JSON.stringify({ tasks:todoState.tasks, doneMap:todoState.doneMap })); } catch(e){} }
 function todoLoad(){ const had=todoLoadCache(); if(!had && !todoState.tasks.length) todoSeed(); todoMigrate(); }
 function todoSaveServerNow(){ try { if(typeof auth!=='undefined' && auth) apiCall({ action:'saveDoc', doc:'todo', data: JSON.stringify({ tasks:todoState.tasks, doneMap:todoState.doneMap }) }); } catch(e){} }
-function todoSave(){ todoWriteCache(); clearTimeout(todoSaveTimer); todoSaveTimer=setTimeout(todoSaveServerNow, 800); }
+function todoSave(){ todoWriteCache(); clearTimeout(todoSaveTimer); todoSaveTimer=setTimeout(todoSaveServerNow, 800); try{ renderTabs(); }catch(_){} }
 // Reconcile against the server copy once boot data arrives, now that we know the user.
 // A saved server document wins (cross-device truth); if none exists yet, seed it from what we have.
 // We adopt the server copy once per user per session so a manual Refresh never overwrites
@@ -4380,7 +4612,7 @@ function renderRegularsTab(){
 function rtablize(root){
   var scope=root||document; var tables=scope.querySelectorAll('.table-wrap table');
   for(var ti=0;ti<tables.length;ti++){ var t=tables[ti]; var ths=t.querySelectorAll('thead th'); if(!ths.length) continue;
-    var labels=[]; for(var i=0;i<ths.length;i++) labels.push((ths[i].textContent||'').trim());
+    var labels=[]; for(var i=0;i<ths.length;i++) labels.push((ths[i].textContent||'').replace(/[\u25b4\u25be]/g,'').trim());
     var rows=t.querySelectorAll('tbody tr');
     for(var r=0;r<rows.length;r++){ var cells=rows[r].children;
       for(var c=0;c<cells.length;c++){ var lab=labels[c]||''; if(cells[c].getAttribute('data-label')!==lab) cells[c].setAttribute('data-label',lab); } }
@@ -4848,7 +5080,7 @@ function renderContent() {
             : emptyState('users','No customers in this segment','They will appear as jobs and bookings come through.'))+'</div>'
         : `<div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">Showing ${filtered.length} customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView+' only':''}</div>
         <div class="table-wrap"><table><thead><tr>${sortTh('Customers','n','Customer')}<th>Segment</th>${sortTh('Customers','j','Jobs','r')}${sortTh('Customers','r','Revenue','r')}${sortTh('Customers','a','Avg','r')}<th class="c">Territory</th>${sortTh('Customers','first','First')}${sortTh('Customers','last','Last')}</tr></thead>
-        <tbody>${sortRows(filtered,custSort.k,custSort.d).map(c=>'<tr><td style="font-weight:500">'+custName(c)+'</td><td>'+badge(c.s)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td class="r">'+fmt(c.a)+'</td><td class="c">'+badge(c.f)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div></div>`);
+        <tbody>${sortRows(filtered,custSort.k,custSort.d).map(c=>'<tr data-cust="'+escAttr(c.n)+'" onclick="openCustomerFromRow(event, this.dataset.cust)"><td style="font-weight:500">'+custName(c)+'</td><td>'+badge(c.s)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td class="r">'+fmt(c.a)+'</td><td class="c">'+badge(c.f)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div></div>`);
     }
     el.innerHTML = chips + body;
     if (isMap) initLiveMap();
@@ -4933,6 +5165,7 @@ function applyRole() {
   if (wi) wi.textContent = auth ? (auth.name + (auth.role !== 'All' ? ' \u00b7 ' + auth.role + ' only' : '')) : '';
   const ab = document.getElementById('acctBtn');
   if (ab) ab.textContent = auth && auth.name ? auth.name.charAt(0).toUpperCase() : '\u00b7';
+  try{ syncNotifyChk(); }catch(_){}
   const vs = document.getElementById('viewSelect');
   if (auth && auth.role !== 'All') {
     franchiseeView = auth.role;
