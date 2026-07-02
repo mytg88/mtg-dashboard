@@ -48,12 +48,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--paper);color:var(--ink);-
 .acct-menu[open] .acct-btn{box-shadow:0 0 0 2px rgba(255,255,255,.25)}
 .acct-panel{position:absolute;right:0;top:calc(100% + 8px);z-index:120;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--sh-2);padding:14px;min-width:224px;display:flex;flex-direction:column;gap:10px}
 .acct-who{font-size:13px;font-weight:700;color:var(--ink)}
-.acct-lab{font-size:10.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px}
+.acct-lab{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px}
 .acct-who .sub{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.5px}
 .view-select{appearance:none;-webkit-appearance:none;width:100%;background:var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2316241C' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center;border:1px solid var(--line);color:var(--ink);padding:9px 32px 9px 12px;border-radius:var(--r-sm);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer}
 .view-select option{color:#16241C}
 .chart-tip{position:fixed;pointer-events:none;display:none;z-index:50;background:var(--ink);color:#fff;padding:8px 12px;border-radius:var(--r-sm);font-size:12px;line-height:1.3;box-shadow:0 6px 18px rgba(0,0,0,.2)}
-.chart-tip .tt-m{opacity:.65;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px}
+.chart-tip .tt-m{opacity:.65;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
 .chart-tip .tt-v{font-family:'Fraunces',serif;font-weight:600;font-size:16px;margin-top:1px}
 .chart-tip .tt-s{opacity:.65;font-size:11px;margin-top:3px}
 .tabs{display:flex;gap:0;background:var(--card);border-bottom:1px solid var(--line);padding:0 28px;overflow-x:auto}
@@ -63,10 +63,20 @@ body{font-family:'DM Sans',sans-serif;background:var(--paper);color:var(--ink);-
 .content{padding:26px 36px 60px;max-width:1600px;margin:0}
 body.rb-wide .content{max-width:2100px}
 .loading{text-align:center;padding:70px;color:var(--muted);font-size:15px}
+.empty{display:flex;flex-direction:column;align-items:center;gap:5px;text-align:center;padding:42px 20px;color:var(--muted)}
+.empty svg{width:34px;height:34px;color:#B7C3B6;margin-bottom:7px}
+.empty-t{font-size:15px;font-weight:700;color:var(--ink)}
+.empty-s{font-size:13px;color:var(--muted);max-width:360px;line-height:1.5}
 .skel-line{border-radius:var(--r-sm);background:linear-gradient(90deg,#EAEEE7 25%,#F5F7F2 40%,#EAEEE7 60%);background-size:300% 100%;animation:skel 1.3s ease-in-out infinite}
 @keyframes skel{0%{background-position:100% 0}100%{background-position:-100% 0}}
 @media (prefers-reduced-motion:reduce){.skel-line{animation:none}}
 .skel-note{text-align:center;color:var(--muted);font-size:13px;margin-top:6px}
+.sync-pill{position:fixed;top:calc(var(--hdr-h) + 12px);left:50%;transform:translateX(-50%);z-index:130;background:var(--ink);color:#fff;font-size:12px;font-weight:600;padding:8px 15px;border-radius:var(--r-pill);box-shadow:var(--sh-2);display:none;align-items:center;gap:8px;white-space:nowrap}
+.sync-pill.show{display:flex}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--green4);animation:syncPulse 1.1s ease-in-out infinite;flex:none}
+@keyframes syncPulse{50%{opacity:.25}}
+.sync-pill.err .sync-dot{background:var(--accent);animation:none}
+@media (prefers-reduced-motion:reduce){.sync-dot{animation:none}}
 .grid{display:grid;gap:16px;margin-bottom:28px}
 .grid-4{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
 .grid-3{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
@@ -85,7 +95,7 @@ body.rb-wide .content{max-width:2100px}
 .attn-card:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(20,40,30,.08)}
 .attn-card.ok{border-left-color:var(--green4);opacity:.8}
 .attn-n{font-family:'Fraunces',serif;font-size:30px;font-weight:600;line-height:1;min-width:44px}
-.attn-t{font-size:12.5px;font-weight:600;color:var(--ink)}
+.attn-t{font-size:13px;font-weight:600;color:var(--ink)}
 .attn-d{font-size:11px;color:var(--muted);margin-top:2px}
 .badge{padding:2px 10px;border-radius:var(--r-pill);font-size:11px;font-weight:600;display:inline-block}
 .b-active{background:var(--t-green-bg);color:var(--t-green-fg)}.b-churned{background:var(--t-red-bg);color:var(--t-red-fg)}
@@ -133,8 +143,8 @@ tr:hover td{background:#FAFBF9}
 .disp-sel.unset{color:var(--muted)}
 .sc-q{padding:14px 0;border-bottom:1px solid #EEF1EC}
 .sc-q:last-child{border-bottom:none}
-.sc-qh{font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:11px;line-height:1.45;display:flex;align-items:flex-start;gap:9px;flex-wrap:wrap}
-.sc-w{font-size:9px;font-weight:800;color:var(--accent);background:#FBEEDD;padding:2px 8px;border-radius:var(--r-pill);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;margin-top:1px}
+.sc-qh{font-size:14px;font-weight:600;color:var(--ink);margin-bottom:11px;line-height:1.45;display:flex;align-items:flex-start;gap:9px;flex-wrap:wrap}
+.sc-w{font-size:10px;font-weight:800;color:var(--accent);background:#FBEEDD;padding:2px 8px;border-radius:var(--r-pill);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;margin-top:1px}
 .sc-opts{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .sc-opt{position:relative;text-align:left;background:#fff;border:1.5px solid var(--line);border-radius:var(--r-md);padding:12px 13px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:transform .08s,border-color .12s,background .12s,box-shadow .12s}
 .sc-opt:hover{border-color:#C2CFBE;box-shadow:0 3px 10px rgba(20,40,30,.08);transform:translateY(-1px)}
@@ -152,7 +162,7 @@ tr:hover td{background:#FAFBF9}
 .sc-opt[data-s="3"].on .sc-opt-l{background:var(--green6)}
 .sc-opt.on .sc-opt-d{color:var(--ink)}
 .sc-done{display:flex;align-items:center;gap:12px;padding:11px 14px;background:#F7F9F5;border:1px solid #E2E9DE;border-radius:var(--r-md)}
-.sc-done-q{flex:1;font-size:12.5px;color:#56615a;line-height:1.4}
+.sc-done-q{flex:1;font-size:13px;color:#56615a;line-height:1.4}
 .sc-done-pill{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;padding:4px 11px;border-radius:var(--r-pill);color:#fff;white-space:nowrap}
 .sc-change{font-size:12px;font-weight:600;color:var(--green6);background:none;border:none;cursor:pointer;font-family:inherit;white-space:nowrap;padding:2px 4px}
 .sc-change:hover{text-decoration:underline}
@@ -219,12 +229,12 @@ th.sortable:hover{color:var(--green)}
 .call-vm-full{margin-top:8px;padding:10px 12px;background:var(--paper);border-radius:var(--r-sm);color:#3c463d}
 .call-vm-none{font-size:12px;color:var(--muted);margin-bottom:10px}
 .call-head-actions{margin-left:auto;display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
-.call-set-btn{font-size:12.5px;font-weight:700;padding:8px 15px;border:none;border-radius:var(--r-sm);background:var(--ink);color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;box-shadow:0 1px 2px rgba(20,40,30,.18)}
+.call-set-btn{font-size:13px;font-weight:700;padding:8px 15px;border:none;border-radius:var(--r-sm);background:var(--ink);color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;box-shadow:0 1px 2px rgba(20,40,30,.18)}
 .call-set-btn:hover{background:#22372b}
 .call-menu{position:relative;display:inline-block}
 .call-menu>summary{list-style:none;cursor:pointer}
 .call-menu>summary::-webkit-details-marker{display:none}
-.call-menu-btn{display:inline-block;font-size:12.5px;font-weight:600;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 11px;white-space:nowrap}
+.call-menu-btn{display:inline-block;font-size:13px;font-weight:600;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 11px;white-space:nowrap}
 .call-menu-btn:hover{background:var(--paper)}
 .call-menu-btn.change{color:var(--green6);border-color:#CFE0CB}
 .call-menu-list{position:absolute;right:0;top:calc(100% + 5px);z-index:30;background:#fff;border:1px solid var(--line);border-radius:var(--r-md);box-shadow:0 10px 28px rgba(20,40,30,.18);padding:6px;min-width:212px;display:flex;flex-direction:column;gap:1px}
@@ -234,7 +244,7 @@ th.sortable:hover{color:var(--green)}
 .cmenu-item.on:before{content:"\2713  "}
 .cmenu-item.xfer{color:var(--blue);font-weight:600}
 .cmenu-div{height:1px;background:var(--line);margin:5px 2px}
-.call-pill{font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:var(--r-pill);white-space:nowrap}
+.call-pill{font-size:12px;font-weight:700;padding:5px 11px;border-radius:var(--r-pill);white-space:nowrap}
 .pill-green{background:var(--t-green-bg);color:var(--t-green-fg)}
 .pill-blue{background:var(--t-blue-bg);color:var(--t-blue-fg)}
 .pill-grey{background:var(--t-neutral-bg);color:var(--t-neutral-fg)}
@@ -281,18 +291,18 @@ th.sortable:hover{color:var(--green)}
 .rb-wrap{display:flex;gap:16px;align-items:flex-start}
 .rb-tray{flex:0 0 232px;position:sticky;top:12px;max-height:calc(100vh - 40px);overflow-y:auto;display:flex;flex-direction:column;background:#F7F9F5;border:1px solid var(--line);border-radius:var(--r-md);padding:12px}
 .rb-tray h4{font-family:'Fraunces',serif;font-size:15px;font-weight:600;margin:0 0 4px;color:var(--ink)}
-.rb-tray .rb-sub{font-size:11.5px;color:var(--muted);margin-bottom:10px;line-height:1.4}
-.rb-tray-search{width:100%;box-sizing:border-box;font:inherit;font-size:12.5px;padding:7px 10px;border:1px solid var(--line);border-radius:var(--r-sm);margin-bottom:10px;background:#fff}
+.rb-tray .rb-sub{font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.4}
+.rb-tray-search{width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:7px 10px;border:1px solid var(--line);border-radius:var(--r-sm);margin-bottom:10px;background:#fff}
 .rb-addph-btn{width:100%;box-sizing:border-box;font:inherit;font-size:12px;font-weight:600;color:#2F6F3E;background:#fff;border:1px dashed #BFD8BF;border-radius:var(--r-sm);padding:8px;cursor:pointer;margin-bottom:10px}
 .rb-addph-btn:hover{background:#F0F6EE;border-color:#9FC8A0}
 .rb-addform{background:#fff;border:1px solid var(--line);border-radius:var(--r-md);padding:10px;margin-bottom:10px;display:flex;flex-direction:column;gap:7px}
-.rb-addin{width:100%;box-sizing:border-box;font:inherit;font-size:12.5px;padding:7px 9px;border:1px solid var(--line);border-radius:var(--r-sm);background:#fff}
+.rb-addin{width:100%;box-sizing:border-box;font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--line);border-radius:var(--r-sm);background:#fff}
 .rb-addrow{display:flex;gap:7px}
 .rb-addrow .rb-addin{flex:1;min-width:0}
-.rb-addsave{width:100%;box-sizing:border-box;font:inherit;font-size:12.5px;font-weight:600;color:#fff;background:var(--green);border:0;border-radius:var(--r-sm);padding:8px;cursor:pointer;margin-top:2px}
+.rb-addsave{width:100%;box-sizing:border-box;font:inherit;font-size:13px;font-weight:600;color:#fff;background:var(--green);border:0;border-radius:var(--r-sm);padding:8px;cursor:pointer;margin-top:2px}
 .rb-addsave:hover{filter:brightness(.96)}
 .rb-viewtog{display:inline-flex;background:#EEF1EC;border:1px solid var(--line);border-radius:var(--r-sm);padding:3px;gap:2px}
-.rb-vt{font:inherit;font-size:12.5px;font-weight:600;color:var(--muted);background:none;border:0;border-radius:var(--r-sm);padding:5px 13px;cursor:pointer;line-height:1}
+.rb-vt{font:inherit;font-size:13px;font-weight:600;color:var(--muted);background:none;border:0;border-radius:var(--r-sm);padding:5px 13px;cursor:pointer;line-height:1}
 .rb-vt:hover{color:var(--ink)}
 .rb-vt.on{background:#fff;color:var(--green);box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .rb-tray-list{display:flex;flex-direction:column;gap:7px;padding-right:2px}
@@ -301,7 +311,7 @@ th.sortable:hover{color:var(--green)}
 .rb-rounds-panel{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
 .rb-rpanel{border:1px solid var(--line);border-left:4px solid #888;border-radius:var(--r-sm);padding:8px 9px;margin-bottom:8px;background:#fff}
 .rb-rpanel-h{display:flex;align-items:center;gap:6px}
-.rb-rname{flex:1;min-width:0;font:inherit;font-size:12.5px;font-weight:700;color:var(--ink);border:1px solid transparent;border-radius:var(--r-sm);padding:3px 5px;background:transparent}
+.rb-rname{flex:1;min-width:0;font:inherit;font-size:13px;font-weight:700;color:var(--ink);border:1px solid transparent;border-radius:var(--r-sm);padding:3px 5px;background:transparent}
 .rb-rname:hover{border-color:var(--line);background:#fff}
 .rb-rname:focus{outline:none;border-color:var(--green);background:#fff}
 .rb-rpanel-ungroup{font-size:11px;color:var(--muted);background:none;border:0;cursor:pointer;white-space:nowrap;padding:3px 6px;border-radius:var(--r-sm)}
@@ -324,7 +334,7 @@ th.sortable:hover{color:var(--green)}
 .rb-route:hover{background:var(--t-blue-bg)}
 .rb-route.off{color:var(--muted);border-color:var(--line);cursor:default;pointer-events:none}
 .rb-col-body{padding:8px;display:flex;flex-direction:column;gap:7px;flex:1}
-.rb-card{border:1px solid var(--line);border-radius:var(--r-sm);background:#FBFCFA;padding:7px 9px;cursor:grab;font-size:12.5px}
+.rb-card{border:1px solid var(--line);border-radius:var(--r-sm);background:#FBFCFA;padding:7px 9px;cursor:grab;font-size:13px}
 .rb-card:active{cursor:grabbing}
 .rb-card.sel{outline:2px solid var(--green);outline-offset:-2px;background:#EFF6EC}
 .rb-card.rb-drag{opacity:.45}
@@ -343,7 +353,7 @@ th.sortable:hover{color:var(--green)}
 .rb-round-h{padding:6px 8px;cursor:grab;display:flex;align-items:center;gap:6px}
 .rb-round-h:active{cursor:grabbing}
 .rb-round-name{font-weight:700;font-size:12px;color:var(--ink);flex:1;line-height:1.2;word-break:break-word}
-.rb-round-sub{font-size:10.5px;color:var(--muted)}
+.rb-round-sub{font-size:11px;color:var(--muted)}
 .rb-round-body{padding:0 8px 8px;display:flex;flex-direction:column;gap:5px}
 .rb-round .rb-card{background:#fff;cursor:default}
 .rb-chip{width:11px;height:11px;border-radius:3px;flex-shrink:0}
@@ -356,7 +366,7 @@ th.sortable:hover{color:var(--green)}
 .rb-menu-div{height:1px;background:var(--line);margin:3px 0}
 .rb-actionbar{position:sticky;bottom:0;z-index:6;display:flex;align-items:center;gap:10px;background:var(--ink);color:#fff;border-radius:var(--r-md);padding:10px 14px;margin-top:14px;box-shadow:0 6px 20px rgba(20,40,30,.22)}
 .rb-actionbar b{font-weight:700}
-.rb-ab-btn{font-size:12.5px;font-weight:700;padding:7px 13px;border:none;border-radius:var(--r-sm);background:#fff;color:var(--ink);cursor:pointer;font-family:inherit}
+.rb-ab-btn{font-size:13px;font-weight:700;padding:7px 13px;border:none;border-radius:var(--r-sm);background:#fff;color:var(--ink);cursor:pointer;font-family:inherit}
 .rb-ab-btn.ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5)}
 .rb-empty{font-size:11px;color:#aab3a6;text-align:center;padding:14px 4px;font-style:italic}
 .rb-weeks{flex:1;display:flex;flex-direction:column;gap:18px;min-width:0}
@@ -378,7 +388,7 @@ th.sortable:hover{color:var(--green)}
 .td-body{flex:1;min-width:0}
 .td-title{font-size:14px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .td-task.done .td-title{color:var(--muted);text-decoration:line-through}
-.td-desc{font-size:12.5px;color:var(--muted);line-height:1.5;margin-top:3px}
+.td-desc{font-size:13px;color:var(--muted);line-height:1.5;margin-top:3px}
 .td-tag{font-size:10px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:#4a554c;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-sm);padding:1px 6px}
 .td-actions{display:flex;flex-direction:column;gap:6px;flex-shrink:0;align-items:center}
 .td-actions .td-mini{font-size:16px;width:34px;height:34px;padding:0;border:1px solid var(--line);border-radius:var(--r-sm);display:inline-flex;align-items:center;justify-content:center}
@@ -413,13 +423,13 @@ th.sortable:hover{color:var(--green)}
 .td-dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:8px;vertical-align:middle}
 .bp-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:18px}
 .bp-modes{display:flex;gap:6px;flex-wrap:wrap}
-.bp-mode-btn{font:inherit;font-size:12.5px;font-weight:600;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 14px;cursor:pointer}
+.bp-mode-btn{font:inherit;font-size:13px;font-weight:600;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 14px;cursor:pointer}
 .bp-mode-btn:hover{border-color:var(--green4)}
 .bp-mode-btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .bp-grp-h{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:20px 0 9px}
 .bp-sec-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border:1px solid var(--line);border-radius:var(--r-md);background:#fff;cursor:pointer;margin-bottom:8px;transition:all .12s}
 .bp-sec-row:hover{border-color:var(--green4);background:#F7FAF6}
-.bp-sec-name{font-size:13.5px;font-weight:600;color:var(--ink)}
+.bp-sec-name{font-size:14px;font-weight:600;color:var(--ink)}
 .bp-sec-desc{font-size:12px;color:var(--muted);margin-top:2px}
 .bp-tick{width:20px;height:20px;border-radius:50%;border:2px solid #CBD5C5;flex-shrink:0;position:relative}
 .bp-tick.on{background:var(--green);border-color:var(--green)}
@@ -431,12 +441,12 @@ th.sortable:hover{color:var(--green)}
 .bp-step-dot{width:6px;height:6px;border-radius:50%;background:#CBD5C5}
 .bp-step.done .bp-step-dot{background:var(--green4)}
 .bp-step.on .bp-step-dot{background:#fff}
-.bp-why{background:#EEF4FB;border:1px solid #D4E3F3;border-radius:var(--r-md);padding:13px 15px;font-size:12.5px;color:#2c4a66;line-height:1.6;margin-bottom:20px}
+.bp-why{background:#EEF4FB;border:1px solid #D4E3F3;border-radius:var(--r-md);padding:13px 15px;font-size:13px;color:#2c4a66;line-height:1.6;margin-bottom:20px}
 .bp-q{font-size:14px;font-weight:600;color:var(--ink);margin:20px 0 4px}
 .bp-q:first-of-type{margin-top:4px}
 .bp-hint{font-size:12px;color:var(--muted);margin-bottom:11px;line-height:1.5}
 .bp-chips{display:flex;flex-wrap:wrap;gap:8px}
-.bp-chip{font:inherit;font-size:12.5px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:var(--r-pill);padding:7px 14px;cursor:pointer;transition:all .12s}
+.bp-chip{font:inherit;font-size:13px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:var(--r-pill);padding:7px 14px;cursor:pointer;transition:all .12s}
 .bp-chip:hover{border-color:var(--green4)}
 .bp-chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .bp-input,.bp-textarea,.bp-num,.bp-sel{font:inherit;font-size:13px;width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-sm);background:#fff;color:var(--ink)}
@@ -471,15 +481,15 @@ th.sortable:hover{color:var(--green)}
 .res-ic{flex-shrink:0;width:40px;height:40px;border-radius:var(--r-md);display:flex;align-items:center;justify-content:center}
 .res-ic svg{width:19px;height:19px}
 .res-body{flex:1;min-width:0}
-.res-title{font-size:14.5px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.res-title{font-size:15px;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 .res-kind{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:var(--r-pill)}
-.res-desc{font-size:12.5px;color:var(--muted);line-height:1.55;margin-top:4px}
+.res-desc{font-size:13px;color:var(--muted);line-height:1.55;margin-top:4px}
 .res-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
-.res-open{font-size:12.5px;font-weight:600;font-family:inherit;color:#fff;background:var(--green);border:none;border-radius:var(--r-sm);padding:8px 15px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.res-open{font-size:13px;font-weight:600;font-family:inherit;color:#fff;background:var(--green);border:none;border-radius:var(--r-sm);padding:8px 15px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .res-open:hover{background:var(--green6)}
 .res-ver{font-size:12px;font-weight:600;color:var(--green6);text-decoration:none;border:1px solid #CFE0CB;border-radius:var(--r-sm);padding:6px 11px;white-space:nowrap}
 .res-ver:hover{background:var(--t-green-bg)}
-.res-soon{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--muted);background:var(--paper);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 15px}
+.res-soon{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--muted);background:var(--paper);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 15px}
 .res-tool{border:1px solid var(--line);border-radius:var(--r-md);padding:22px 24px;background:var(--card);margin-bottom:14px}
 .res-tool.soon{border-style:dashed;background:#FAFBF9}
 .res-tool-h{font-family:'Fraunces',serif;font-size:17px;font-weight:600;color:var(--ink);margin-bottom:6px;display:flex;align-items:center;gap:10px}
@@ -488,7 +498,7 @@ th.sortable:hover{color:var(--green)}
 .navwrap .tabs{flex:1;min-width:0;border-bottom:none;background:none}
 .period-ctl{flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 28px 0 14px;border-left:1px solid var(--line);align-self:stretch}
 .period-lab{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
-.period-select{appearance:none;-webkit-appearance:none;background:var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2316241C' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 11px center;border:1px solid var(--line);color:var(--ink);font-family:inherit;font-size:12.5px;font-weight:600;padding:8px 30px 8px 13px;border-radius:var(--r-sm);cursor:pointer}
+.period-select{appearance:none;-webkit-appearance:none;background:var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2316241C' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 11px center;border:1px solid var(--line);color:var(--ink);font-family:inherit;font-size:13px;font-weight:600;padding:8px 30px 8px 13px;border-radius:var(--r-sm);cursor:pointer}
 .period-select:hover{border-color:var(--green4)}
 .period-select:focus{outline:none;border-color:var(--green)}
 .df-strip{display:none;align-items:center;gap:8px;background:var(--card);border-bottom:1px solid var(--line);padding:11px 28px}
@@ -499,7 +509,7 @@ th.sortable:hover{color:var(--green)}
 @media(max-width:900px){.period-ctl .df-summary{display:none}}
 /* bottom navigation (mobile only) */
 .bottom-nav{display:none;position:fixed;left:0;right:0;bottom:0;z-index:110;background:var(--card);border-top:1px solid var(--line);grid-template-columns:repeat(5,1fr);padding:5px 6px calc(5px + env(safe-area-inset-bottom,0px));box-shadow:0 -2px 14px rgba(20,40,30,.07)}
-.bn-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:52px;border:none;background:none;font-family:inherit;font-size:10.5px;font-weight:600;color:var(--muted);cursor:pointer;border-radius:var(--r-md);padding:5px 2px;transition:color .12s,background .12s;-webkit-tap-highlight-color:transparent}
+.bn-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:52px;border:none;background:none;font-family:inherit;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;border-radius:var(--r-md);padding:5px 2px;transition:color .12s,background .12s;-webkit-tap-highlight-color:transparent}
 .bn-item svg{width:21px;height:21px;flex:none}
 .bn-item.active{color:var(--green)}
 .bn-item.active .bn-ic{background:var(--t-green-bg)}
@@ -535,6 +545,8 @@ th.sortable:hover{color:var(--green)}
 @media(max-width:640px){.df-strip{padding:11px 16px}}
 /* touch ergonomics: comfortable tap sizes in the field, and visible press feedback */
 @media(max-width:760px){
+  /* 16px stops iOS Safari zooming the page when a text field gains focus */
+  input[type=text],input[type=password],input[type=search],textarea{font-size:16px}
   .filter-btn,.df-btn{padding:10px 16px;font-size:13px}
   .call-act{padding:11px 14px;font-size:13px}
   .call-set-btn,.call-menu-btn{padding:11px 15px}
@@ -551,7 +563,7 @@ button{-webkit-tap-highlight-color:transparent}
 .perf-fld label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
 .perf-fld select{appearance:none;-webkit-appearance:none;background:var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2316241C' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 11px center;border:1px solid var(--line);color:var(--ink);font-family:inherit;font-size:13px;font-weight:600;padding:9px 30px 9px 12px;border-radius:var(--r-sm);cursor:pointer;min-width:130px}
 .perf-scale{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px}
-.perf-scale-item{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted)}
+.perf-scale-item{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
 .perf-dot{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:11px}
 .perf-sec{border:1px solid var(--line);border-radius:var(--r-md);margin-bottom:14px;overflow:hidden}
 .perf-sec-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 16px;background:var(--paper);cursor:pointer;user-select:none}
@@ -560,15 +572,15 @@ button{-webkit-tap-highlight-color:transparent}
 .perf-sec-body{padding:4px 16px 8px}
 .perf-q{padding:16px 0;border-top:1px solid var(--line)}
 .perf-q:first-child{border-top:none}
-.perf-q-t{font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:12px}
+.perf-q-t{font-size:14px;font-weight:600;color:var(--ink);margin-bottom:12px}
 .perf-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 @media(max-width:760px){.perf-cols{grid-template-columns:1fr;gap:14px}}
-.perf-side-lab{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px}
+.perf-side-lab{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:6px}
 .perf-rate{display:flex;gap:6px;margin-bottom:10px}
 .perf-rate button{width:34px;height:34px;border:1px solid var(--line);background:var(--card);border-radius:var(--r-sm);font-family:inherit;font-weight:700;font-size:13px;color:var(--muted);cursor:pointer;transition:all .12s}
 .perf-rate button:hover{border-color:var(--green4)}
 .perf-rate button.on{color:#fff;border-color:transparent}
-.perf-act{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:12.5px;color:var(--ink);background:var(--card);resize:vertical;min-height:46px;line-height:1.5}
+.perf-act{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;color:var(--ink);background:var(--card);resize:vertical;min-height:46px;line-height:1.5}
 .perf-act:focus{outline:none;border-color:var(--green)}
 .perf-act::placeholder{color:#b9c2bb}
 .perf-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:6px}
@@ -583,7 +595,7 @@ button{-webkit-tap-highlight-color:transparent}
 .perf-stat .v{font-size:26px;font-weight:800;color:var(--ink);line-height:1}
 .perf-stat .s{font-size:12px;color:var(--muted);margin-top:5px}
 .perf-grade{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:30px;padding:0 8px;border-radius:var(--r-sm);color:#fff;font-weight:800;font-size:16px}
-.perf-pill{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:var(--r-pill);text-transform:uppercase;letter-spacing:.4px}
+.perf-pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:var(--r-pill);text-transform:uppercase;letter-spacing:.4px}
 .perf-pill.done{background:var(--green2);color:var(--green6)}
 .perf-pill.draft{background:#fdf0d5;color:#9a6a00}
 .perf-gap{font-weight:700}
@@ -699,6 +711,7 @@ button{-webkit-tap-highlight-color:transparent}
 <nav class="bottom-nav" id="bottomNav" aria-label="Sections"></nav>
 <div class="bn-sheet-ov" id="bnSheetOv" onclick="closeBnSheet()"></div>
 <div class="bn-sheet" id="bnSheet" role="menu"><div class="bn-sheet-grab"></div><div id="bnSheetList"></div></div>
+<div class="sync-pill" id="syncPill"><span class="sync-dot"></span><span id="syncText"></span></div>
 <div class="chart-tip" id="chartTip"></div>
 
 <script>
@@ -965,6 +978,21 @@ function applyHistoricalRevenue(){
 // ---------- fetch (JSONP from the private Apps Script endpoint) ----------
 function showMsg(html) { document.getElementById('content').innerHTML = '<div class="loading">'+html+'</div>'; }
 
+// Friendly empty states: an icon, a headline and a pointer to the next action.
+const emptyIcons = {
+  sun:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>',
+  phone:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.08 4.18 2 2 0 0 1 4.06 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.22a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
+  users:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  inbox:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>',
+  chart:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-6"/></svg>'
+};
+function emptyState(icon, title, sub) {
+  return '<div class="empty">' + (emptyIcons[icon] || emptyIcons.inbox) +
+    '<div class="empty-t">' + title + '</div>' +
+    (sub ? '<div class="empty-s">' + sub + '</div>' : '') + '</div>';
+}
+
 // Shimmer placeholders shaped like the Overview layout, shown while data loads.
 function skelCard(lines) {
   return '<div class="card">' + lines.map(w =>
@@ -982,29 +1010,76 @@ function showSkeleton() {
     '<div class="skel-note">Loading data from the MTG app&hellip;</div>';
 }
 
+// Instant paint: the last successful payload is kept per user, painted immediately on
+// open, then refreshed in the background. The pill shows sync state; errors keep the
+// saved view on screen instead of wiping it.
+let paintedFromCache = false;
+function dataCacheKey() { return 'mtg_data_' + (auth ? auth.user : ''); }
+function syncPill(txt, err) {
+  const p = document.getElementById('syncPill');
+  if (!p) return;
+  if (!txt) { p.classList.remove('show', 'err'); return; }
+  document.getElementById('syncText').textContent = txt;
+  p.classList.toggle('err', !!err);
+  p.classList.add('show');
+}
+function clearDataCache() {
+  try {
+    const kill = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf('mtg_data_') === 0) kill.push(k);
+    }
+    kill.forEach(k => localStorage.removeItem(k));
+  } catch (_) {}
+}
+
 function loadData() {
   if (!auth) { showLogin(''); return; }
   if (API_URL.indexOf('PASTE_') === 0) {
     showMsg('Almost there. Open this file and paste your Web App URL and token into the CONNECTION SETTINGS block near the top of the script, then redeploy.');
     return;
   }
-  showSkeleton();
+  // Paint the last saved payload straight away, if there is one for this user.
+  paintedFromCache = false;
+  let cached = null;
+  try { const raw = localStorage.getItem(dataCacheKey()); if (raw) cached = JSON.parse(raw); } catch (_) { cached = null; }
+  if (cached && !cached.error && cached.jobs) {
+    paintedFromCache = true;
+    handleData(cached, true);
+    syncPill('Updating\u2026');
+  } else {
+    showSkeleton();
+  }
   const cb = 'mtg_cb_' + Date.now();
   const s = document.createElement('script');
   let done = false;
   const cleanup = () => { try { delete window[cb]; } catch(_) { window[cb] = undefined; } if (s.parentNode) s.parentNode.removeChild(s); };
+  const failSoft = (msg) => {
+    if (paintedFromCache) { syncPill('Offline \u00b7 showing saved data', true); setTimeout(() => syncPill(''), 6000); }
+    else showMsg(msg);
+  };
   window[cb] = function(data) { done = true; cleanup(); handleData(data); };
-  s.onerror = function() { if (!done) { cleanup(); showMsg('Could not reach the MTG app. Check the Web App URL is correct and deployed with access set to "Anyone".'); } };
-  setTimeout(() => { if (!done) { cleanup(); showMsg('The MTG app did not respond. Check the Web App URL and token, then try Refresh.'); } }, 20000);
+  s.onerror = function() { if (!done) { cleanup(); failSoft('Could not reach the MTG app. Check the Web App URL is correct and deployed with access set to "Anyone".'); } };
+  setTimeout(() => { if (!done) { cleanup(); failSoft('The MTG app did not respond. Check the Web App URL and token, then try Refresh.'); } }, 20000);
   s.src = API_URL + (API_URL.indexOf('?') === -1 ? '?' : '&') + 'user=' + encodeURIComponent(auth.user) + '&pass=' + encodeURIComponent(auth.pass) + '&callback=' + cb;
   document.head.appendChild(s);
 }
 
-function handleData(data) {
+function handleData(data, fromCache) {
   if (!data || data.error) {
     if (data && /unauthor/i.test(String(data.error))) { doLogout(); showLogin('Your session ended. Please log in again.'); return; }
+    if (paintedFromCache && !fromCache) { syncPill('Could not refresh \u00b7 showing saved data', true); setTimeout(() => syncPill(''), 6000); return; }
     showMsg('The MTG app refused the request' + (data && data.error ? ' (' + data.error + ')' : '') + '.');
     return;
+  }
+  if (!fromCache) {
+    try {
+      const j = JSON.stringify(data);
+      if (j.length < 4500000) localStorage.setItem(dataCacheKey(), j);
+    } catch (_) {}
+    paintedFromCache = false;
+    syncPill('');
   }
   rawJobs = data.jobs || [];
   rawLeads = data.leads || [];
@@ -1829,7 +1904,7 @@ function renderScorecardTab(){
   const startBtn = regs.length ? '<div style="margin-top:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap"><button class="df-btn active" style="font-size:13px;padding:9px 18px" onclick="startScoring()">'+startLabel+' \u2192</button><span style="font-size:12px;color:var(--muted)">'+scored.length+' of '+regs.length+' scored</span></div>' : '';
   const intro='<div class="card" style="margin-bottom:20px"><div class="h">Regular customer scorecard</div><div style="font-size:13px;color:var(--muted);line-height:1.6">Every active regular is already loaded, so there is nothing to set up. Score each one against 20 questions covering money, reliability, the relationship, access and the work itself. The seven most important questions count double. You get a percentage and a grade (A from 80, B from 65, C from 50, anything lower flagged for review), plus a map of who is worth keeping and who costs more than they return. Scores save as you go, and you can move straight on to the next customer.</div>'+startBtn+'</div>';
   const quad='<div class="card" style="margin-bottom:20px"><div class="h">Value against quality</div>'
-    + (scored.length?scorecardQuadrantSVG(scored)+'<div style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.5">Each dot is a scored regular. Further right is a stronger relationship, higher up is more annual value. Top-right are your anchors; top-left earn their keep on value but need fixing or repricing; bottom-left cost more than they return. Click any dot to open that customer.</div>':'<div style="color:var(--muted);text-align:center;padding:30px">Score a few regulars to see the value and quality map.</div>')
+    + (scored.length?scorecardQuadrantSVG(scored)+'<div style="font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.5">Each dot is a scored regular. Further right is a stronger relationship, higher up is more annual value. Top-right are your anchors; top-left earn their keep on value but need fixing or repricing; bottom-left cost more than they return. Click any dot to open that customer.</div>':emptyState('chart','No scores yet','Score a few regulars to see the value and quality map.'))
     + '</div>';
   let weakest='';
   if(scored.length){
@@ -2793,7 +2868,7 @@ function renderChurnedHub(){
   const body = `<div class="card" style="margin-bottom:24px">
       <div style="font-size:13px;color:var(--muted);margin-bottom:12px">${churnedList.length} churned${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}. Was recurring or had 5+ jobs, then no visit for 90+ days.</div>
       ${churnedList.length ? churnReasonBreakdownHTML(churnedList) : ''}
-      ${churnedList.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No churned customers in this period.</div>':
+      ${churnedList.length===0?emptyState('sun','No churned customers in this period','That is exactly what you want to see.'):
         '<div class="table-wrap"><table><thead><tr>'+sortTh('Churned','n','Customer')+'<th class="c">Owner</th>'+sortTh('Churned','j','Jobs','r')+sortTh('Churned','ltv','Lifetime','r')+sortTh('Churned','first','First','r')+sortTh('Churned','last','Last visit','r')+sortTh('Churned','daysSince','Days since last visit','r')+'<th>Reason &amp; note</th></tr></thead>'+
         '<tbody>'+sortRows(churnedList,churnSort.k,churnSort.d).map(c=>'<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--red)">'+fmt(c.ltv!=null?c.ltv:c.r)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td class="r">'+c.daysSince+'</td><td><select class="disp-sel'+(c.disp?'':' unset')+'" onchange="setCustomerDisp(this.closest(\'tr\').dataset.cust, this.value)">'+dispOptions(c.disp)+'</select><input class="note-in" style="margin-top:5px" placeholder="Add a note" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>').join('')+'</tbody></table></div>'+
         '<div class="ib ig"><b>Total lifetime value lost:</b> '+fmt(chTotal)+'. '+chWho+'. A re-engagement push targeting the biggest names could win back recurring revenue.</div>'}
@@ -2825,7 +2900,7 @@ function renderRepeatHub(){
   const table = reps.length ? `<div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${reps.length} repeat customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, most valuable first</div>
     <div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th class="r">Jobs</th><th class="r">Lifetime</th><th>First</th><th>Last visit</th><th class="r">Days since</th><th>Note</th></tr></thead>
     <tbody>${reps.map(c=>{const ds=dsOf(c);return '<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.ltv!=null?c.ltv:c.r)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+(ds!=null?ds:'\u2014')+'</td><td><input class="note-in" placeholder="Plan the next visit, follow-up..." value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>';}).join('')}</tbody></table></div></div>`
-    : '<div class="card"><div style="color:var(--muted);text-align:center;padding:40px">No repeat customers'+(custSearch?' match your search':' in this period')+'.</div></div>';
+    : '<div class="card">'+(custSearch?emptyState('search','No repeat customers match','Try a shorter search.'):emptyState('users','No repeat customers in this period','Second visits will move customers into this list.'))+'</div>';
   return head + search + table;
 }
 function renderOneOffHub(){
@@ -2855,7 +2930,7 @@ function renderOneOffHub(){
   const table = ones.length ? `<div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${ones.length} one-off customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView:''}, most valuable first</div>
     <div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th class="r">Value</th><th>Service</th><th>Visit date</th><th class="r">Days since</th><th>Note</th></tr></thead>
     <tbody>${ones.map(c=>{const ds=dsOf(c);return '<tr data-cust="'+escAttr(c.n)+'"><td style="font-weight:500">'+custName(c)+'</td><td class="c">'+badge(c.f)+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.ltv!=null?c.ltv:c.r)+'</td><td style="font-size:12px;color:var(--muted)">'+(c.svc||'\u2014')+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td><td class="r" style="color:var(--muted);font-size:12px">'+(ds!=null?ds:'\u2014')+'</td><td><input class="note-in" placeholder="Worth a follow-up? Mention maintenance?" value="'+escAttr(c.note)+'" onchange="saveCustomerNoteText(this.closest(\'tr\').dataset.cust, this.value)"></td></tr>';}).join('')}</tbody></table></div></div>`
-    : '<div class="card"><div style="color:var(--muted);text-align:center;padding:40px">No one-off customers'+(custSearch?' match your search':' in this period')+'.</div></div>';
+    : '<div class="card">'+(custSearch?emptyState('search','No one-off customers match','Try a shorter search.'):emptyState('users','No one-off customers in this period','Single-visit customers land here for follow-up.'))+'</div>';
   return head + search + table;
 }
 function renderPassedHub(){
@@ -2882,7 +2957,9 @@ function renderPassedHub(){
   const table = ps.length ? '<div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">'+ps.length+' customers'+(franchiseeView!=='All'?' \u00b7 '+franchiseeView:'')+', most valuable first</div>'
     + '<div class="table-wrap"><table><thead><tr><th>Customer</th><th>Segment</th><th class="r">Jobs</th><th class="r">Revenue</th><th class="r">Avg</th><th class="c">Territory</th><th>First</th><th>Last</th></tr></thead>'
     + '<tbody>'+ps.map(c=>'<tr><td style="font-weight:500">'+custName(c)+'</td><td>'+badge(c.s)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td class="r">'+fmt(c.a)+'</td><td class="c">'+badge(c.f)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')+'</tbody></table></div></div>'
-    : '<div class="card"><div style="color:var(--muted);text-align:center;padding:40px">No customers'+(custSearch?' match your search':' here yet')+'.</div></div>';
+    : '<div class="card">'+(custSearch
+        ? emptyState('search','No customers match','Try a shorter search, or clear the segment filters above.')
+        : emptyState('users','No customers here yet','Customers appear automatically as jobs and bookings come through.'))+'</div>';
   return head + search + table;
 }
 function customerRegPointer(){
@@ -3931,7 +4008,7 @@ function renderResourcesTools(){
 function renderMissingPricesTab(){
   return `<div class="card"><div class="h" style="color:var(--amber)">Jobs missing a price (\u00a30)</div>
       <div style="font-size:13px;color:var(--muted);margin-bottom:16px">${missingPriceData.reduce((s,c)=>s+c.z,0)} jobs at \u00a30 (free assessment visits excluded). Run Fix Missing Prices from the MTG app menu to auto-fix where possible.</div>
-      ${missingPriceData.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No missing prices in this period.</div>':
+      ${missingPriceData.length===0?emptyState('sun','No missing prices in this period','Every completed job has a value recorded.'):
       '<div class="table-wrap"><table><thead><tr>'+sortTh('Missing Prices','n','Customer')+sortTh('Missing Prices','z','\u00a30 Jobs','r')+sortTh('Missing Prices','a','Avg When Priced','r')+sortTh('Missing Prices','est','Est. Missing','r')+'<th>Service</th></tr></thead>'+
       '<tbody>'+sortRows(missingPriceData,missSort.k,missSort.d).map(c=>{const e=c.est;return'<tr><td style="font-weight:500">'+c.n+'</td><td class="r" style="font-weight:600;color:var(--amber)">'+c.z+'</td><td class="r">'+(c.a>0?fmt(c.a):'Never priced')+'</td><td class="r" style="font-weight:600;color:'+(e>0?'var(--green6)':'#ccc')+'">'+(e>0?'~'+fmt(e):'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+(c.svc||'\u2014')+'</td></tr>'}).join('')+'</tbody></table></div>'+
       '<div class="ib io"><b>Action:</b> update recurring booking prices in the MTG app for customers showing "Never priced". These are active regulars with no pricing set.</div>'}
@@ -4126,7 +4203,7 @@ function renderPerfHistory(){
     });
     html+='</div>';
   }
-  if(!list.length){ return html+'<div class="card"><div style="color:var(--muted);text-align:center;padding:40px">No reviews yet for '+focusFr+'. Use the button above to start one.</div></div>'; }
+  if(!list.length){ return html+'<div class="card">'+emptyState('inbox','No reviews yet for '+focusFr,'Use the button above to start one.')+'</div>'; }
   html+='<div class="card"><div class="h" style="margin-bottom:12px">Review history</div><div class="table-wrap"><table><thead><tr><th>Period</th><th class="r">Self avg</th><th class="r">Franchisor avg</th><th class="r">Gap</th><th>Grade</th><th>Status</th><th></th></tr></thead><tbody>';
   list.forEach(r=>{ const fa=perfAvg(r,'f'), ra=perfAvg(r,'r'); const gap=(fa&&ra)?(fa-ra):0; const g=perfGrade(ra);
     html+='<tr><td style="font-weight:600">'+r.quarter+' '+r.year+'</td>'
@@ -4339,7 +4416,7 @@ function renderContent() {
   else if (activeTab==='Leads') {
     if (!leadStats || leadStats.total === 0) {
       const detected = leadStats && leadStats.headers.length ? '<div class="ib ig">Columns found in the Leads tab: <b>'+leadStats.headers.join(', ')+'</b></div>' : '';
-      el.innerHTML = `<div class="card"><div class="h">Leads</div><div style="color:var(--muted);text-align:center;padding:40px">No leads in this period${franchiseeView!=='All'?' for '+franchiseeView:''}.${rawLeads.length===0?' No lead data found yet.':''}</div>${detected}</div>`;
+      el.innerHTML = `<div class="card"><div class="h">Leads</div>${emptyState('inbox','No leads in this period'+(franchiseeView!=='All'?' for '+franchiseeView:''), rawLeads.length===0?'No lead data found yet. New enquiries land here from the website and calls.':'Try widening the period in the top right.')}${detected}</div>`;
     } else {
       const s = leadStats;
       const stages = [
@@ -4569,7 +4646,13 @@ function renderContent() {
           <button class="filter-btn ${callType==='novm'?'active':''}" onclick="callType='novm';renderContent()">No voicemail</button>
         </div>
       </div>
-      ${isEmpty ? '<div style="color:var(--muted);text-align:center;padding:40px">'+((cq||callType!=='all')?'No calls match your search or filter.':(callsFilter==='attention'?'No repeat callers waiting \u2014 everyone who called more than once has had a callback.':callsFilter==='ignored'?'Nothing has aged out \u2014 no unactioned missed calls older than 31 days.':'No calls to show'+(franchiseeView!=='All'?' for '+franchiseeView:'')))+'.</div>'
+      ${isEmpty ? ((cq||callType!=='all')
+          ? emptyState('search','No calls match','Try clearing the search box or the type filter above.')
+          : callsFilter==='attention'
+            ? emptyState('sun','All callers looked after','Everyone who rang more than once has had a callback.')
+            : callsFilter==='ignored'
+              ? emptyState('sun','Nothing has aged out','No unactioned missed calls older than 31 days.')
+              : emptyState('phone','No calls to show'+(franchiseeView!=='All'?' for '+franchiseeView:''),'New calls from the phone line land here automatically.'))
         : '<div class="call-list">'+cardsHtml+'</div>'}
       <div class="ib ig" style="margin-top:16px"><b>How the list works:</b> a call stays here until you give it an outcome. Hit <b>Set outcome</b> and pick what actually happened \u2014 job booked, resolved, called back, moved to WhatsApp or email, or not relevant \u2014 or transfer it to the other operator. <b>Needs another callback</b> and <b>Left a message</b> keep a call in the list. A missed call with no message that goes 31 days with no callback drops into <b>Ignored</b> on its own; voicemails always stay until you action them. Every change saves for everyone.</div>
     </div>`;
@@ -4609,7 +4692,7 @@ function renderContent() {
         const wk = weeklyRevenue(b);
         weekly = '<div class="card" style="margin-bottom:24px"><div class="h">Revenue by week</div>'
           + (wk.length ? hbarList(wk.map(w=>({label:w.label, r:w.r, sub:w.j+' job'+(w.j===1?'':'s'), hi:true})))
-                       : '<div style="color:var(--muted);text-align:center;padding:30px">No jobs yet this month.</div>')
+                       : emptyState('sun','No jobs yet this month','Completed jobs will appear here as they are logged.'))
           + '<div style="font-size:11px;color:var(--muted);margin-top:10px">Weeks run 1\u20137, 8\u201314 and so on within the month.</div></div>';
       } else {
         weekly = '<div class="card" style="margin-bottom:24px"><div class="h">Revenue by week</div><div class="ib ig" style="margin-top:0">This is an invoiced historical month, recorded as one monthly figure rather than week by week.</div></div>';
@@ -4626,7 +4709,7 @@ function renderContent() {
       compositionCard = `<div class="card" style="margin-bottom:24px"><div class="h">Revenue by service, month by month</div>${stackedServiceSVG(top, colorOf)}
         ${monthlyData.some(m=>m.m<=HIST_CUTOFF)?'<div style="font-size:11px;color:var(--muted);margin-top:10px;line-height:1.5">Months from 2026 are split by service from job records. Earlier invoiced months are shown as a single total, since a reliable service split isn\'t held for them.</div>':''}</div>`;
       timeDetail = `<div class="card" style="margin-bottom:24px"><div class="h">Month by month</div>
-        ${monthlyData.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No jobs in this period.</div>':
+        ${monthlyData.length===0?emptyState('chart','No jobs in this period','Try widening the period in the top right.'):
           monthlyData.map(m=>'<div class="bar-row"><span class="bar-l">'+shortMonth(m.m)+'</span><div class="bar-c"><div class="bar" style="width:'+(maxR>0?Math.round(m.r/maxR*100):0)+'%"></div><span class="bar-v">'+fmt(m.r)+'</span><span class="bar-s">'+(m.j==null?'invoiced':m.j+' jobs \u2022 '+m.c+' customers')+'</span></div></div>').join('')}
         <div class="ib ig"><b>Seasonal pattern:</b> peak May to October, winter dip December to February, spring bounce in March. Average job value has trended upward over time.</div>
       </div>`;
@@ -4638,7 +4721,7 @@ function renderContent() {
     const svcTotal = svcRanked.reduce((s,x)=>s+x.r,0) || 1;
     const svcMax = svcRanked.length ? svcRanked[0].r : 1;
     const serviceCard = `<div class="card" style="margin-bottom:24px"><div class="h">Revenue by service</div>
-      ${svcRanked.length===0?'<div style="color:var(--muted);text-align:center;padding:40px">No services in this period.</div>':
+      ${svcRanked.length===0?emptyState('chart','No services in this period','Try widening the period in the top right.'):
         svcRanked.map(s=>'<div class="sb"><div class="sb-h"><span class="sb-n">'+s.n+'</span><span class="sb-s">'+fmt(s.r)+' \u00b7 '+Math.round(s.r/svcTotal*100)+'% \u00b7 '+s.j+' jobs \u00b7 avg '+fmt(s.a)+'</span></div><div class="sb-t"><div class="sb-f" style="background:'+(svcColors[s.n]||'#9aa89c')+';width:'+Math.round(s.r/svcMax*100)+'%"></div></div></div>').join('')}
       <div class="ib ig"><b>Read it as:</b> the bar is each service\u2019s share of the period\u2019s revenue. Regular maintenance leads on volume; one-off jobs like tidy-ups, hedge cutting and clearances earn more per visit.</div>
     </div>`;
@@ -4697,10 +4780,13 @@ function renderContent() {
       if (custSearch) filtered = filtered.filter(c => c.n.toLowerCase().includes(custSearch.toLowerCase()));
       const intro = custSegFilter==='All' ? customerMixCard() : '';
       const searchBox = `<input id="custSearchBox" class="search" placeholder="Search customers..." value="${custSearch}" oninput="onCustSearch(this.value, this.selectionStart)">`;
-      body = intro + searchBox +
-        `<div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">Showing ${filtered.length} customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView+' only':''}</div>
+      body = intro + searchBox + (filtered.length===0
+        ? '<div class="card">'+(custSearch
+            ? emptyState('search','No customers match','Try a shorter search, or switch segment above.')
+            : emptyState('users','No customers in this segment','They will appear as jobs and bookings come through.'))+'</div>'
+        : `<div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">Showing ${filtered.length} customers${franchiseeView!=='All'?' \u00b7 '+franchiseeView+' only':''}</div>
         <div class="table-wrap"><table><thead><tr>${sortTh('Customers','n','Customer')}<th>Segment</th>${sortTh('Customers','j','Jobs','r')}${sortTh('Customers','r','Revenue','r')}${sortTh('Customers','a','Avg','r')}<th class="c">Territory</th>${sortTh('Customers','first','First')}${sortTh('Customers','last','Last')}</tr></thead>
-        <tbody>${sortRows(filtered,custSort.k,custSort.d).map(c=>'<tr><td style="font-weight:500">'+custName(c)+'</td><td>'+badge(c.s)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td class="r">'+fmt(c.a)+'</td><td class="c">'+badge(c.f)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div></div>`;
+        <tbody>${sortRows(filtered,custSort.k,custSort.d).map(c=>'<tr><td style="font-weight:500">'+custName(c)+'</td><td>'+badge(c.s)+'</td><td class="r">'+c.j+'</td><td class="r" style="font-weight:600;color:var(--green)">'+fmt(c.r)+'</td><td class="r">'+fmt(c.a)+'</td><td class="c">'+badge(c.f)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.first)+'</td><td style="color:var(--muted);font-size:12px">'+fmtDate(c.last)+'</td></tr>').join('')}</tbody></table></div></div>`);
     }
     el.innerHTML = chips + body;
     if (isMap) initLiveMap();
@@ -4775,6 +4861,7 @@ function doLogin() {
 function doLogout() {
   auth = null;
   try { localStorage.removeItem('mtg_auth'); sessionStorage.removeItem('mtg_auth'); } catch(_) {}
+  clearDataCache();
   showLogin('');
 }
 
