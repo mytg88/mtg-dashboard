@@ -779,6 +779,7 @@ let roundsBoard = { assign:{}, rounds:{}, placeholders:{} };
 let leadStats=null, recurringStats=null, prevTotals=null;
 let rawCalls=[], callsStats=null, callsFilter='open', callsWho='', callSearch='', callType='all';
 let custContact={};   // name -> {phone, addr, pc} for the customer detail sheet
+let numberNotes={};   // normalised number -> {note, by}: the per-caller note store
 let activeTab="Overview", custSegFilter="All", custSearch="";
 let regSub="Map"; // sub-view inside the Regulars tab: Map / Planner / Rounds / Scorecard
 let resSub="Overview"; // sub-view inside the Resources tab: Overview / Plan / Docs / Tools / Missing
@@ -1182,6 +1183,16 @@ function handleData(data, fromCache) {
     const num = normNum(ct.Number || ct.number);
     const nm = String(ct.Name || ct.name || '').trim();
     if (num && nm) manualNames[num] = { name: nm, by: String(ct['Updated By'] || '').trim() };
+  });
+
+  // Per-number call notes: one note per caller, keyed by normalised number. This is the
+  // note shown on a call card, so it stays with the number through transfers, outcomes
+  // and re-renders instead of living on whichever call row happened to be on top.
+  numberNotes = {};
+  (data.numberNotes || []).forEach(nn => {
+    const num = normNum(nn.Number || nn.number);
+    if (!num) return;
+    numberNotes[num] = { note: String(nn.Note || ''), by: String(nn['Updated By'] || '').trim() };
   });
 
   // Customer churn reasons + free notes, keyed by normalised customer name.
@@ -2513,6 +2524,16 @@ function updateCallNote(key, note) {
   // No re-render here, so the box keeps focus and the caret while typing; the change saves on blur.
   apiCall({ action:'updateCallNote', key:key, note:note, by:callsWho },
     function(d) { if (!d || d.error) alert('Could not save the note. Hit Refresh and check it saved.'); },
+    function() { alert('Could not reach the app to save the note. Hit Refresh and try again.'); });
+}
+/* Saves the per-number note. The optimistic local update means every card for this number
+   shows the same note straight away; the ok:true check catches an old backend that has not
+   been redeployed with the saveNumberNote action (it would echo the dataset instead). */
+function updateNumberNote(num, note) {
+  if (!callsWho) callsWho = (auth && auth.name) ? auth.name : 'Unknown';
+  numberNotes[num] = { note: note, by: callsWho };
+  apiCall({ action:'saveNumberNote', num:num, note:note, by:callsWho },
+    function(d) { if (!d || d.error || d.ok !== true) alert('Could not save the note'+(d && d.error ? ' ('+d.error+')' : '')+'. If this keeps happening, the Apps Script needs redeploying with the new saveNumberNote action.'); },
     function() { alert('Could not reach the app to save the note. Hit Refresh and try again.'); });
 }
 // Mobile flow: copy the caller number, open Gmail, paste it into the search box.
@@ -4826,7 +4847,19 @@ function renderContent() {
           gmailBtn+
         '</div>'
       ) : '';
-      const note = '<div class="call-note"><textarea rows="2" placeholder="Add a note or transcript correction\u2026" onchange="updateCallNote(\''+key+'\',this.value)">'+esc(c._note||'')+'</textarea></div>';
+      // The note belongs to the NUMBER, not to any one call row, so it survives transfers,
+      // outcomes and view switches. Before the one-time migration runs, fall back to the
+      // newest old-style row note in this number's history so nothing seems to vanish.
+      const noteNum = c._callerNorm || '';
+      let noteVal = (noteNum && numberNotes[noteNum]) ? numberNotes[noteNum].note : '';
+      if (!noteVal) {
+        const pool = (history && history.length ? history.slice() : [c]).sort((a,b) => (b._date||0) - (a._date||0));
+        const legacy = pool.map(x => String(x._note||'').trim()).filter(Boolean)[0];
+        if (legacy) noteVal = legacy;
+      }
+      const note = noteNum
+        ? '<div class="call-note"><textarea rows="2" placeholder="Add a note about this caller\u2026" onchange="updateNumberNote(\''+noteNum+'\',this.value)">'+esc(noteVal)+'</textarea></div>'
+        : '<div class="call-note"><textarea rows="2" placeholder="Add a note or transcript correction\u2026" onchange="updateCallNote(\''+key+'\',this.value)">'+esc(c._note||'')+'</textarea></div>';
       const by = c._by ? '<div class="call-by">Last updated by '+esc(c._by)+'</div>' : '';
       const nKey = c._callerNorm;
       const manual = nKey ? manualNames[nKey] : null;
@@ -4910,6 +4943,7 @@ function renderContent() {
         if (cqDigits && num.includes(cqDigits)) return true;
         const known = (manualNames[num] && manualNames[num].name) || (numToCust[num] && numToCust[num].name) || '';
         if (known.toLowerCase().includes(cq)) return true;
+        if (((numberNotes[num] && numberNotes[num].note) || '').toLowerCase().includes(cq)) return true;
         return u.calls.some(c => String(c._note||'').toLowerCase().includes(cq) || String(c._trans||'').toLowerCase().includes(cq));
       });
     }
