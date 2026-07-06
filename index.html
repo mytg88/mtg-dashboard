@@ -1236,6 +1236,8 @@ function handleData(data, fromCache) {
   roundsBoard = (data.rounds && typeof data.rounds === 'object') ? data.rounds : {};
   if (!roundsBoard.assign || typeof roundsBoard.assign !== 'object') roundsBoard.assign = {};
   if (!roundsBoard.rounds || typeof roundsBoard.rounds !== 'object') roundsBoard.rounds = {};
+  if (!roundsBoard.assignOff || typeof roundsBoard.assignOff !== 'object') roundsBoard.assignOff = {};
+  if (!roundsBoard.roundsOff || typeof roundsBoard.roundsOff !== 'object') roundsBoard.roundsOff = {};
   if (!roundsBoard.placeholders || typeof roundsBoard.placeholders !== 'object') roundsBoard.placeholders = {};
   // Per-user to-do list: adopt the saved server copy, or seed the server from local on first run.
   todoBoot(data);
@@ -2377,7 +2379,14 @@ function planFields(c){
   const pvDefault = Math.round(c.visit>0 ? c.visit : (c.j ? c.r/c.j : 0));
   const v4 = num(p.v4)!=='' ? num(p.v4) : planDefaultV4(c);
   const pv = num(p.pv)!=='' ? num(p.pv) : pvDefault;
-  const hv = num(p.hv);
+  let hv = num(p.hv);
+  // A live customer who hasn't been given hours in the planner yet inherits them from a
+  // same-named planned entry on the rounds board, so the handover from planned to live
+  // never drops the card back to "? h".
+  if(hv==='' && !c._ph && typeof rbPhByName==='function' && typeof roundsBoard==='object'){
+    const ph = rbPhByName(c.n);
+    if(ph && ph.hv!=='' && ph.hv!=null && !isNaN(+ph.hv)) hv = +ph.hv;
+  }
   const wOn = p.wOn !== undefined ? !!p.wOn : false;
   const wV = num(p.wV);
   const wPv = num(p.wPv)!=='' ? num(p.wPv) : (pv||'');
@@ -2472,8 +2481,34 @@ function renderPlannerTab(){
   const table = '<div class="card"><div class="h">Per customer ('+rows.length+')</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px">Visits per 4 weeks, hours per visit and pound per visit set the core season. Hrs is the TOTAL labour on the visit; Gdnrs is how many gardeners work it, so a 15h job done by 2 people still counts 15h here but shows as your 7.5h share on the rounds board. Tick winter and add the winter visit count and price for the off season. Everything recalculates and saves as you type.</div>'
     + '<div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th class="r">V/4wk</th><th class="r">Hrs</th><th class="r">Gdnrs</th><th class="r">\u00a3/visit</th><th class="c">Winter</th><th class="r">W visits</th><th class="r">W \u00a3</th><th class="r">Season</th><th class="r">Off</th><th class="r">Total</th><th class="r">Hours</th></tr></thead><tbody id="planBody">'
     + body + '</tbody></table></div></div>';
-  return intro + summary + bar + table;
+  return intro + summary + bar + table + plannerPhCard();
 }
+// Planned customers (rounds-board placeholders) surfaced in the Planner: edit their hours,
+// see who has become a duplicate of a live customer, and delete them once checked.
+function plannerPhCard(){
+  const phs = rbPhArr();
+  if(!phs.length) return '';
+  const liveKeys={}; allCustomers.forEach(c=>{ if(c.s==='Recurring') liveKeys[normName(c.n)]=1; });
+  const rows = phs.map(p=>{
+    const dup = !!liveKeys[normName(p.name)];
+    const tag = dup
+      ? '<span class="badge" style="background:#FDECEA;color:#C62828" title="A live customer with this name now exists, so the live record is used on the rounds board and has inherited this placement and hours. Delete this row once you have checked it is the same person.">duplicate</span>'
+      : '<span class="badge" style="background:#FFE7CC;color:#9A5410">planned</span>';
+    return '<tr>'
+      +'<td style="font-weight:500">'+escAttr(p.name)+' '+tag+'</td>'
+      +'<td class="c">'+badge(p.owner||'Mike')+'</td>'
+      +'<td class="r"><input type="number" step="0.25" min="0" value="'+(p.hv!==''&&p.hv!=null?escAttr(p.hv):'')+'" style="width:56px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px;text-align:right" onchange="plannerPhSet(\''+escAttr(p.id)+'\', this.value)"></td>'
+      +'<td class="r" style="color:var(--muted)">'+((+p.v4)>=4?'Weekly':((+p.v4)===2?'Fortnightly':'Every 4 weeks'))+'</td>'
+      +'<td class="r"><button class="rb-mini" title="Delete this planned customer" onclick="plannerPhRemove(\''+escAttr(p.id)+'\')">\u00d7</button></td>'
+      +'</tr>';
+  }).join('');
+  return '<div class="card" style="margin-top:18px"><div class="h">Planned customers (not yet live)</div>'
+    +'<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Added on the rounds board before they exist in Zenbooker. Hours set here feed the rounds board, and carry over automatically when the live customer appears. If Zenbooker creates the real customer under the same name, the row is flagged as a duplicate, check it is the same person and delete it here, the live record keeps the placement and hours.</div>'
+    +'<div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th class="r">Hrs</th><th class="r">Cadence</th><th class="r"></th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+}
+function plannerRerender_(){ const el=document.getElementById('content'); if(el && activeTab==='Regulars' && regSub==='Planner') el.innerHTML = renderRegularsTab(); }
+function plannerPhSet(id, val){ const p=(roundsBoard.placeholders||{})[id]; if(!p) return; p.hv=(val===''||val==null)?'':(+val); rbSave(); plannerRerender_(); }
+function plannerPhRemove(id){ const p=(roundsBoard.placeholders||{})[id]; if(!p) return; if(!confirm('Delete planned customer \u201c'+p.name+'\u201d?')) return; rbDeletePh_(id); rbSave(); plannerRerender_(); }
 function updateCallStatus(key, status) {
   if (!callsWho) callsWho = (auth && auth.name) ? auth.name : 'Unknown';
   const rec = rawCalls.find(c => c._key === key);
@@ -3252,6 +3287,13 @@ const RB_DAY_FULL = { Mon:'Monday', Tue:'Tuesday', Wed:'Wednesday', Thu:'Thursda
 const RB_TARGET_LO = 6, RB_TARGET_HI = 8;
 const RB_COLORS = ['#E07B1A','#1565C0','#0D9488','#7C3AED','#D64545','#2E7D32','#B26A00','#3949AB','#C2185B','#00838F'];
 let rbSel = {}, rbTraySearch = '', rbSaveTimer = null, rbDragData = null, rbAddOpen = false, rbEditPhId = null, rbViewOverride = 'All';
+// Which schedule the rounds board is editing: the core-season rota or the separate off-season
+// (winter) rota. Each has its own placements and rounds, saved side by side in the same board
+// document, so building the winter plan never disturbs the summer one.
+let rbSeasonMode = 'core';
+function rbA(){ if(rbSeasonMode==='off'){ if(!roundsBoard.assignOff || typeof roundsBoard.assignOff!=='object') roundsBoard.assignOff={}; return roundsBoard.assignOff; } if(!roundsBoard.assign || typeof roundsBoard.assign!=='object') roundsBoard.assign={}; return roundsBoard.assign; }
+function rbR(){ if(rbSeasonMode==='off'){ if(!roundsBoard.roundsOff || typeof roundsBoard.roundsOff!=='object') roundsBoard.roundsOff={}; return roundsBoard.roundsOff; } if(!roundsBoard.rounds || typeof roundsBoard.rounds!=='object') roundsBoard.rounds={}; return roundsBoard.rounds; }
+function rbSetSeason(m){ rbSeasonMode = (m==='off') ? 'off' : 'core'; rbSel={}; rbRerender(); }
 
 // Placeholder customers: planning-only entries that are not yet in the live system. They live
 // in the board document and behave like a recurring customer on the board (drag, group, hours,
@@ -3273,15 +3315,23 @@ function rbSetView(v){ rbViewOverride = v; rbSel = {}; rbRerender(); rbInitGeoco
 // The recurring customers this board plans, scoped to the current operator view, biggest value first.
 function rbCustomers(){
   const v = rbView();
-  const live = allCustomers.filter(c => c.s==='Recurring' && (v==='All' || c.f===v));
-  const ph = rbPhArr().map(rbPhToCust).filter(c => v==='All' || c.f===v);
+  let live = allCustomers.filter(c => c.s==='Recurring' && (v==='All' || c.f===v));
+  if(rbSeasonMode==='off') live = live.filter(c => !!planFields(c).wOn);   // winter plan ticked in the planner
+  // A placeholder shadowed by a live customer of the same name disappears: the live record
+  // wins (it is the real Zenbooker customer) and inherits the placement, since assignments
+  // are keyed by name. The planned entry stays in the Planner flagged as a duplicate to delete.
+  const liveKeys = {}; allCustomers.forEach(c => { if(c.s==='Recurring') liveKeys[normName(c.n)] = 1; });
+  const ph = rbPhArr().map(rbPhToCust).filter(c => (v==='All' || c.f===v) && !liveKeys[normName(c.n)]);
   return live.concat(ph).sort((a,b)=> (b.ltv||b.r||0) - (a.ltv||a.r||0));
 }
+// The planned (placeholder) entry with this name, if any.
+function rbPhByName(name){ const k=normName(name); return rbPhArr().find(p=>normName(p.name)===k) || null; }
 const RB_WEEKS = [1,2,3,4];
 function rbAssign(name){
   const k = normName(name);
-  let a = roundsBoard.assign[k];
-  if(!a){ a = { day:null, anchor:1, pinned:false, rounds:[] }; roundsBoard.assign[k] = a; }
+  const store = rbA();
+  let a = store[k];
+  if(!a){ a = { day:null, anchor:1, pinned:false, rounds:[] }; store[k] = a; }
   if(a.day===undefined) a.day=null;
   if(a.anchor===undefined || !a.anchor) a.anchor=1;
   if(a.pinned===undefined) a.pinned=false;
@@ -3290,8 +3340,8 @@ function rbAssign(name){
   if(!Array.isArray(a.rounds)) a.rounds=[];
   return a;
 }
-function rbRound(rid){ return roundsBoard.rounds[rid] || null; }
-function rbRoundsArr(){ return Object.keys(roundsBoard.rounds).map(id=>roundsBoard.rounds[id]); }
+function rbRound(rid){ return rbR()[rid] || null; }
+function rbRoundsArr(){ const r=rbR(); return Object.keys(r).map(id=>r[id]); }
 // The rounds a customer belongs to (pruned to ones that still exist).
 function rbCustRounds(c){ return (rbAssign(c.n).rounds||[]).filter(rid=>rbRound(rid)); }
 // Everyone who is ever a member of this round, regardless of which weeks it runs.
@@ -3319,6 +3369,13 @@ function rbCustAnchor(c){ const a=rbAssign(c.n); if(rbCadence(c)>1){ const rs=rb
 // Trust the planner's visits-per-4-weeks first, since that is the curated figure, then fall
 // back to the live booking frequency text.
 function rbCadence(c){
+  if(rbSeasonMode==='off'){
+    // Winter: spread the planner's winter visit count (wV) over the off season (~12 weeks,
+    // usually ~10 worked). E.g. 3 visits => every 4 weeks, 6 => fortnightly, 12 => weekly.
+    const wv = +planFields(c).wV || 0;
+    if(wv > 0) return Math.max(1, Math.min(4, Math.round(PLAN_OFF_WEEKS / wv)));
+    return 4;   // winter ticked but no visit count yet: assume every 4 weeks
+  }
   const v4 = +planFields(c).v4 || 0;
   if(v4 > 0) return Math.max(1, Math.min(4, Math.round(4 / v4)));
   const f = String(c.freq||'').toLowerCase();
@@ -3346,11 +3403,11 @@ function rbFreqTag(c){
 
 // Save the whole board, debounced. Empty rounds are pruned first so stale groups don't linger.
 function rbSave(){
-  Object.keys(roundsBoard.rounds).forEach(rid=>{ if(!rbAllRecurring().some(c=>(rbAssign(c.n).rounds||[]).indexOf(rid)!==-1)) delete roundsBoard.rounds[rid]; });
+  const rr=rbR(); Object.keys(rr).forEach(rid=>{ if(!rbAllRecurring().some(c=>(rbAssign(c.n).rounds||[]).indexOf(rid)!==-1)) delete rr[rid]; });
   if(rbSaveTimer) clearTimeout(rbSaveTimer);
   const msg=document.getElementById('rbSaveMsg'); if(msg){ msg.textContent='Saving\u2026'; msg.style.color='var(--muted)'; }
   rbSaveTimer = setTimeout(function(){
-    apiCall({ action:'saveRounds', board: JSON.stringify({ assign:roundsBoard.assign, rounds:roundsBoard.rounds, placeholders:roundsBoard.placeholders }) },
+    apiCall({ action:'saveRounds', board: JSON.stringify({ assign:roundsBoard.assign, rounds:roundsBoard.rounds, assignOff:roundsBoard.assignOff||{}, roundsOff:roundsBoard.roundsOff||{}, placeholders:roundsBoard.placeholders }) },
       function(d){ const m=document.getElementById('rbSaveMsg'); if(!m) return; if(!d||d.error){ m.textContent='Could not save, hit Refresh and check'; m.style.color='var(--red)'; } else { m.textContent='Saved'; m.style.color='var(--muted)'; } },
       function(){ const m=document.getElementById('rbSaveMsg'); if(m){ m.textContent='Could not reach the app to save'; m.style.color='var(--red)'; } });
   }, 350);
@@ -3381,7 +3438,7 @@ function rbJoinRound(name, rid){ const rd=rbRound(rid); if(!rd) return; const c=
 function rbEject(name, rid){ const a=rbAssign(name); if(!Array.isArray(a.rounds)) return; const rd=rbRound(rid); a.rounds=a.rounds.filter(r=>r!==rid); a.day=rd?rd.day:a.day; rbApply(); }
 function rbTogglePin(name){ const a=rbAssign(name); a.pinned=!a.pinned; rbApply(); }
 function rbTogglePinRound(rid){ const rd=rbRound(rid); if(rd){ rd.pinned=!rd.pinned; rbApply(); } }
-function rbUngroup(rid){ const rd=rbRound(rid); if(!rd) return; rbAllRecurring().forEach(c=>{ const a=rbAssign(c.n); if(Array.isArray(a.rounds) && a.rounds.indexOf(rid)!==-1){ a.rounds=a.rounds.filter(r=>r!==rid); a.day=rd.day; } }); delete roundsBoard.rounds[rid]; rbApply(); }
+function rbUngroup(rid){ const rd=rbRound(rid); if(!rd) return; rbAllRecurring().forEach(c=>{ const a=rbAssign(c.n); if(Array.isArray(a.rounds) && a.rounds.indexOf(rid)!==-1){ a.rounds=a.rounds.filter(r=>r!==rid); a.day=rd.day; } }); delete rbR()[rid]; rbApply(); }
 function rbRenameRound(rid){ const rd=rbRound(rid); if(!rd) return; const nm=prompt('Round name', rd.name||''); if(nm===null) return; const v=String(nm).trim(); if(v) rd.name=v; rbApply(); }
 function rbRenameRoundTo(rid, val){ const rd=rbRound(rid); if(!rd) return; const v=String(val||'').trim(); if(v) rd.name=v; rbApply(); }
 function rbMenuMove(btn){ rbMoveCardAll(btn.getAttribute('data-name'), btn.getAttribute('data-day')); }
@@ -3421,7 +3478,7 @@ function rbGroupSelected(){
   const used = rbRoundsArr().map(r=>r.color);
   const color = RB_COLORS.find(c=>used.indexOf(c)===-1) || RB_COLORS[rbRoundsArr().length % RB_COLORS.length];
   const name = rbSuggestRoundName(custs) || ('Round '+(rbRoundsArr().length+1));
-  roundsBoard.rounds[rid] = { id:rid, name:name, color:color, day:day, anchor:anchor, every:every, pinned:false };
+  rbR()[rid] = { id:rid, name:name, color:color, day:day, anchor:anchor, every:every, pinned:false };
   custs.forEach(c=>{ const a=rbAssign(c.n); if(!Array.isArray(a.rounds)) a.rounds=[]; if(a.rounds.indexOf(rid)===-1) a.rounds.push(rid); a.day=day; if(rbCadence(c)>1) a.anchor=anchor; delete a.ord; });
   rbSel={}; rbApply();
 }
@@ -3429,7 +3486,17 @@ function rbGroupSelected(){
 // Placeholder customers (not yet on the system) for planning.
 function rbToggleAdd(){ if(rbAddOpen){ rbAddOpen=false; rbEditPhId=null; } else { rbAddOpen=true; rbEditPhId=null; } rbRerender(); }
 function rbEditPlaceholder(id){ rbEditPhId=id; rbAddOpen=true; rbRerender(); const t=document.querySelector('.rb-tray'); if(t) t.scrollTop=0; }
-function rbRemovePlaceholder(id){ const p=(roundsBoard.placeholders||{})[id]; if(!p) return; if(!confirm('Remove placeholder \u201c'+p.name+'\u201d from the board?')) return; delete roundsBoard.assign[normName(p.name)]; delete roundsBoard.placeholders[id]; rbApply(); }
+// Delete a planned entry. If a live customer with the same name exists, the placement is
+// theirs now (assignments are keyed by name), so only the placeholder record goes; otherwise
+// the placement is cleared from both seasons too.
+function rbDeletePh_(id){
+  const p=(roundsBoard.placeholders||{})[id]; if(!p) return;
+  const k=normName(p.name);
+  const liveMatch = allCustomers.some(c=>c.s==='Recurring' && normName(c.n)===k);
+  if(!liveMatch){ if(roundsBoard.assign) delete roundsBoard.assign[k]; if(roundsBoard.assignOff) delete roundsBoard.assignOff[k]; }
+  delete roundsBoard.placeholders[id];
+}
+function rbRemovePlaceholder(id){ const p=(roundsBoard.placeholders||{})[id]; if(!p) return; if(!confirm('Remove placeholder \u201c'+p.name+'\u201d from the board?')) return; rbDeletePh_(id); rbApply(); }
 function rbSavePlaceholder(){
   const g = id => { const el=document.getElementById(id); return el?el.value:''; };
   const nm = String(g('rbPhName')||'').trim();
@@ -3533,7 +3600,7 @@ function rbDragEnd(ev){ if(ev.currentTarget&&ev.currentTarget.classList) ev.curr
 // Ordering within a day. A unit is a loose card or a whole round. Until a day is hand-arranged
 // units fall in value order; once you drag to reorder, every unit on that day gets an explicit
 // position and the day stays in the order you set, across all four weeks.
-function rbUnitOrd(u){ if(u.kind==='round'){ const rd=rbRound(u.id); return rd&&rd.ord!=null?rd.ord:null; } const a=roundsBoard.assign[normName(u.id)]; return (a&&a.ord!=null)?a.ord:null; }
+function rbUnitOrd(u){ if(u.kind==='round'){ const rd=rbRound(u.id); return rd&&rd.ord!=null?rd.ord:null; } const a=rbA()[normName(u.id)]; return (a&&a.ord!=null)?a.ord:null; }
 function rbUnitVal(u){ if(u.kind==='round'){ return rbRoundMembers(u.id).reduce((s,c)=>s+(c.ltv||c.r||0),0); } const c=rbCustByName(u.id); return c?(c.ltv||c.r||0):0; }
 // The day a customer's visit lands on in a given week: their active round's day that week, else
 // their own loose day. Keeps day stats correct even if a weekly customer rides two rounds.
@@ -3746,11 +3813,19 @@ function renderRoundsTab(){
   const ev = rbView();
   const op = ev==='All' ? '' : ev;
   const total = rbCustomers().length, placed = rbCustomers().filter(c=>rbCustDay(c)!=null).length;
-  const toggle = (franchiseeView==='All')
+  const seasonTog = '<div class="rb-viewtog">'
+    + '<button class="rb-vt'+(rbSeasonMode!=='off'?' on':'')+'" onclick="rbSetSeason(\'core\')">In season</button>'
+    + '<button class="rb-vt'+(rbSeasonMode==='off'?' on':'')+'" onclick="rbSetSeason(\'off\')">Off season</button>'
+    + '</div>';
+  const toggle = ((franchiseeView==='All')
     ? '<div class="rb-viewtog">'+['All','Mike','Adam'].map(v=>'<button class="rb-vt'+(rbViewOverride===v?' on':'')+'" onclick="rbSetView('+JSON.stringify(v)+')">'+v+'</button>').join('')+'</div>'
+    : '') + seasonTog;
+  const offNote = rbSeasonMode==='off'
+    ? '<div class="ib ib-blue" style="margin-top:12px;font-size:12.5px">Off-season rota: a separate winter plan that never touches your in-season board. Only customers with Winter ticked in the planner appear, and their cadence comes from their winter visit count spread over the '+PLAN_OFF_WEEKS+'-week off season (plan for roughly 10 worked weeks after Christmas and New Year). Placements, rounds and running order here save independently.</div>'
     : '';
-  const intro = '<div class="card" style="margin-bottom:16px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap"><div class="h">4-week rota board</div>'+toggle+'</div>'
-    + '<div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:900px">Your visit pattern across the full four-week cycle. Drag each recurring customer onto a day, and their cadence fills the rest, weekly shows every week, fortnightly every other, four-weekly once. The week you drop a non-weekly customer on sets which weeks they fall in, so drag a fortnightly job to the next week to flip it onto the other fortnight and balance the load. A weekly job can sit on a different day each fortnight: once placed, dragging its week 1 or 3 card moves only those weeks, and dragging its week 2 or 4 card moves only those, so week 1 can be Tuesday and week 2 Wednesday. Use the card\\u2019s \\u22ee menu to put every week back on one day. Aim for '+RB_TARGET_LO+' to '+RB_TARGET_HI+' billable hours a day. Tick two or more visits on the same day to group them into a round, ticking the specific week you mean. A weekly customer can ride two rounds, so to split them across alternating weeks, group the first week, then tick their other week and group that separately. Drag a job up or down within a day to set the running order, and the route follows the order you set. Each day\u2019s Route runs from your base. Hours come from the planner, so set hours per visit there for anyone showing \u201c? h\u201d. <span id="rbSaveMsg" style="color:var(--muted)"></span></div>'
+  const intro = '<div class="card" style="margin-bottom:16px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap"><div class="h">'+(rbSeasonMode==='off'?'Off-season rota board':'4-week rota board')+'</div>'+toggle+'</div>'
+    + offNote
+    + '<div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:900px">Your visit pattern across the full four-week cycle. Drag each recurring customer onto a day, and their cadence fills the rest, weekly shows every week, fortnightly every other, four-weekly once. The week you drop a non-weekly customer on sets which weeks they fall in, so drag a fortnightly job to the next week to flip it onto the other fortnight and balance the load. A weekly job can sit on a different day each fortnight: once placed, dragging its week 1 or 3 card moves only those weeks, and dragging its week 2 or 4 card moves only those, so week 1 can be Tuesday and week 2 Wednesday. Use the card\u2019s \u22ee menu to put every week back on one day. Aim for '+RB_TARGET_LO+' to '+RB_TARGET_HI+' billable hours a day. Tick two or more visits on the same day to group them into a round, ticking the specific week you mean. A weekly customer can ride two rounds, so to split them across alternating weeks, group the first week, then tick their other week and group that separately. Drag a job up or down within a day to set the running order, and the route follows the order you set. Each day\u2019s Route runs from your base. Hours come from the planner, so set hours per visit there for anyone showing \u201c? h\u201d. <span id="rbSaveMsg" style="color:var(--muted)"></span></div>'
     + (ev==='All'?'<div class="ib ib-blue" style="margin-top:12px;font-size:12.5px">Showing Mike and Adam together. Pick Mike or Adam above to build day routes and plan one person\u2019s week.</div>':'')
     + '<div style="font-size:12px;color:var(--muted);margin-top:10px">'+placed+' of '+total+' placed'+(ev!=='All'?' \u00b7 '+ev:'')+'</div></div>';
   const tray = '<div class="rb-tray" data-tray="1" ondragover="rbDragOver(event)" ondragleave="rbDragLeave(event)" ondrop="rbDropTray(event)">'
