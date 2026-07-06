@@ -3401,13 +3401,32 @@ function rbFreqTag(c){
   if(e===1) return 'wk'; if(e===2) return '2wk'; if(e===4) return '4wk'; return e+'wk';
 }
 
+// The board travels in a GET URL (JSONP), which Apps Script caps at roughly 8k characters.
+// rbAssign auto-creates a default record for every customer it renders, so without pruning
+// the payload bloats past the limit (especially after opening the off-season board, which
+// mints a default entry per winter customer). Strip pure-default entries and default fields;
+// rbAssign regenerates the defaults on demand after reload, so nothing is lost.
+function rbCompactAssign_(store){
+  const out={};
+  Object.keys(store||{}).forEach(k=>{
+    const a=store[k]||{}; const e={};
+    if(a.day!=null) e.day=a.day;
+    if(a.day2!=null) e.day2=a.day2;
+    if(a.anchor && a.anchor!==1) e.anchor=a.anchor;
+    if(a.pinned) e.pinned=true;
+    if(a.ord!=null) e.ord=a.ord;
+    if(Array.isArray(a.rounds) && a.rounds.length) e.rounds=a.rounds;
+    if(Object.keys(e).length) out[k]=e;
+  });
+  return out;
+}
 // Save the whole board, debounced. Empty rounds are pruned first so stale groups don't linger.
 function rbSave(){
   const rr=rbR(); Object.keys(rr).forEach(rid=>{ if(!rbAllRecurring().some(c=>(rbAssign(c.n).rounds||[]).indexOf(rid)!==-1)) delete rr[rid]; });
   if(rbSaveTimer) clearTimeout(rbSaveTimer);
   const msg=document.getElementById('rbSaveMsg'); if(msg){ msg.textContent='Saving\u2026'; msg.style.color='var(--muted)'; }
   rbSaveTimer = setTimeout(function(){
-    apiCall({ action:'saveRounds', board: JSON.stringify({ assign:roundsBoard.assign, rounds:roundsBoard.rounds, assignOff:roundsBoard.assignOff||{}, roundsOff:roundsBoard.roundsOff||{}, placeholders:roundsBoard.placeholders }) },
+    apiCall({ action:'saveRounds', board: JSON.stringify({ assign:rbCompactAssign_(roundsBoard.assign), rounds:roundsBoard.rounds, assignOff:rbCompactAssign_(roundsBoard.assignOff||{}), roundsOff:roundsBoard.roundsOff||{}, placeholders:roundsBoard.placeholders }) },
       function(d){ const m=document.getElementById('rbSaveMsg'); if(!m) return; if(!d||d.error){ m.textContent='Could not save, hit Refresh and check'; m.style.color='var(--red)'; } else { m.textContent='Saved'; m.style.color='var(--muted)'; } },
       function(){ const m=document.getElementById('rbSaveMsg'); if(m){ m.textContent='Could not reach the app to save'; m.style.color='var(--red)'; } });
   }, 350);
