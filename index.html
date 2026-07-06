@@ -3481,7 +3481,7 @@ function rbOrderStops(week, day, op){
     const stops=[];
     allUnits.forEach(u=>{
       if(u.kind==='round'){ rbRoundMembers(u.id).filter(c=>rbDueIn(c, week) && rbActiveRound(c, week)===u.id).forEach(c=>stops.push(c)); }
-      else { const c=rbCustByName(u.id); if(c && rbIsLooseIn(c, week)) stops.push(c); }
+      else { const c=rbCustByName(u.id); if(c && rbIsLooseIn(c, week) && rbVisitDay(c, week)===day) stops.push(c); }
     });
     return stops;
   }
@@ -3633,7 +3633,7 @@ function rbColBodyHTML(week, day){
   let html='';
   units.forEach(u=>{
     if(u.kind==='round'){ html += rbRoundHTML(u.id, week); }
-    else { const c=rbCustByName(u.id); if(c && rbIsLooseIn(c, week)) html += rbCardHTML(c, false, null, week); }
+    else { const c=rbCustByName(u.id); if(c && rbIsLooseIn(c, week) && rbVisitDay(c, week)===day) html += rbCardHTML(c, false, null, week); }
   });
   return html || '<div class="rb-empty">Drop here</div>';
 }
