@@ -3356,8 +3356,21 @@ function rbRenderTray(){ const el=document.getElementById('rbTrayList'); if(el) 
 
 // Mutations. A drop sets both the day and the anchor week, and cadence fills the rest of the cycle.
 function rbCustByName(name){ const k=normName(name); return allCustomers.find(c=>normName(c.n)===k) || rbPhArr().map(rbPhToCust).find(c=>normName(c.n)===k) || null; }
-function rbMoveCard(name, week, day){ const a=rbAssign(name); a.rounds=[]; a.day=day; a.anchor=week||1; delete a.ord; rbApply(); }
-function rbMoveToTray(name){ const a=rbAssign(name); a.rounds=[]; a.day=null; delete a.ord; rbApply(); }
+// Moving a WEEKLY customer who is already placed only moves the fortnight you dragged in:
+// a drop on week 1 or 3 sets the odd-week day, a drop on week 2 or 4 sets the even-week day
+// (stored as day2). The first drop from the tray still places all four weeks in one drag, and
+// non-weekly customers keep the original behaviour (one day, anchored to the week you drop on).
+function rbMoveCard(name, week, day){
+  const a=rbAssign(name); const c=rbCustByName(name); a.rounds=[];
+  const weekly = c && rbCadence(c)===1;
+  if(weekly && a.day!=null && week && (week%2===0)){ a.day2=day; }
+  else if(weekly && a.day!=null && week && (week%2===1)){ if(a.day2==null) a.day2=a.day; a.day=day; }
+  else { a.day=day; a.anchor=week||1; if(weekly) delete a.day2; }
+  delete a.ord; rbApply();
+}
+// Explicit whole-pattern move (the card's \u22ee menu): every week goes to this day.
+function rbMoveCardAll(name, day){ const a=rbAssign(name); a.rounds=[]; a.day=day; delete a.day2; delete a.ord; rbApply(); }
+function rbMoveToTray(name){ const a=rbAssign(name); a.rounds=[]; a.day=null; delete a.day2; delete a.ord; rbApply(); }
 function rbMoveRound(rid, week, day){ const rd=rbRound(rid); if(rd){ rd.day=day; rd.anchor=(day==null?rd.anchor:(week||1)); delete rd.ord; rbApply(); } }
 function rbJoinRound(name, rid){ const rd=rbRound(rid); if(!rd) return; const c=rbCustByName(name); const a=rbAssign(name); if(!Array.isArray(a.rounds)) a.rounds=[]; if(a.rounds.indexOf(rid)===-1) a.rounds.push(rid); a.day=rd.day; if(c && rbCadence(c)>1) a.anchor=rd.anchor||1; rbApply(); }
 function rbEject(name, rid){ const a=rbAssign(name); if(!Array.isArray(a.rounds)) return; const rd=rbRound(rid); a.rounds=a.rounds.filter(r=>r!==rid); a.day=rd?rd.day:a.day; rbApply(); }
@@ -3366,7 +3379,7 @@ function rbTogglePinRound(rid){ const rd=rbRound(rid); if(rd){ rd.pinned=!rd.pin
 function rbUngroup(rid){ const rd=rbRound(rid); if(!rd) return; rbAllRecurring().forEach(c=>{ const a=rbAssign(c.n); if(Array.isArray(a.rounds) && a.rounds.indexOf(rid)!==-1){ a.rounds=a.rounds.filter(r=>r!==rid); a.day=rd.day; } }); delete roundsBoard.rounds[rid]; rbApply(); }
 function rbRenameRound(rid){ const rd=rbRound(rid); if(!rd) return; const nm=prompt('Round name', rd.name||''); if(nm===null) return; const v=String(nm).trim(); if(v) rd.name=v; rbApply(); }
 function rbRenameRoundTo(rid, val){ const rd=rbRound(rid); if(!rd) return; const v=String(val||'').trim(); if(v) rd.name=v; rbApply(); }
-function rbMenuMove(btn){ const name=btn.getAttribute('data-name'); const c=rbCustByName(name); rbMoveCard(name, c?rbCustAnchor(c):1, btn.getAttribute('data-day')); }
+function rbMenuMove(btn){ rbMoveCardAll(btn.getAttribute('data-name'), btn.getAttribute('data-day')); }
 function rbMenuTray(btn){ rbMoveToTray(btn.getAttribute('data-name')); }
 function rbToggleSel(name, wk){ const k=normName(name)+'#'+(wk==null?'t':wk); if(rbSel[k]) delete rbSel[k]; else rbSel[k]=true; rbRerender(); }
 function rbClearSel(){ rbSel={}; rbRerender(); }
@@ -3519,11 +3532,11 @@ function rbUnitOrd(u){ if(u.kind==='round'){ const rd=rbRound(u.id); return rd&&
 function rbUnitVal(u){ if(u.kind==='round'){ return rbRoundMembers(u.id).reduce((s,c)=>s+(c.ltv||c.r||0),0); } const c=rbCustByName(u.id); return c?(c.ltv||c.r||0):0; }
 // The day a customer's visit lands on in a given week: their active round's day that week, else
 // their own loose day. Keeps day stats correct even if a weekly customer rides two rounds.
-function rbVisitDay(c, week){ const rid=rbActiveRound(c, week); if(rid){ const rd=rbRound(rid); return rd?rd.day:null; } return rbAssign(c.n).day; }
+function rbVisitDay(c, week){ const rid=rbActiveRound(c, week); if(rid){ const rd=rbRound(rid); return rd?rd.day:null; } const a=rbAssign(c.n); if(week!=null && (week%2===0) && rbCadence(c)===1 && a.day2!=null) return a.day2; return a.day; }
 function rbDayAllUnits(day){
   const units=[], seenR={};
   rbRoundsArr().forEach(rd=>{ if(rd.day===day && rbRoundMembers(rd.id).length && !seenR[rd.id]){ seenR[rd.id]=1; units.push({kind:'round', id:rd.id}); } });
-  rbCustomers().forEach(c=>{ const a=rbAssign(c.n); if(a.day!==day) return; if(rbDueWeeks(c).some(w=>rbActiveRound(c, w)===null)) units.push({kind:'card', id:c.n}); });
+  rbCustomers().forEach(c=>{ if(rbDueWeeks(c).some(w=>rbActiveRound(c, w)===null && rbVisitDay(c, w)===day)) units.push({kind:'card', id:c.n}); });
   units.sort((x,y)=>{ const ox=rbUnitOrd(x), oy=rbUnitOrd(y), hx=(ox!=null), hy=(oy!=null); if(hx&&hy) return ox-oy; if(hx!==hy) return hx?-1:1; return rbUnitVal(y)-rbUnitVal(x); });
   return units;
 }
@@ -3540,7 +3553,13 @@ function rbCardDrop(ev){
   rbReorderOnto(day, week, d, el.getAttribute('data-name'), before);
 }
 function rbReorderOnto(day, week, d, targetName, before){
-  if(d.kind==='card'){ const a=rbAssign(d.name); if((!a.rounds||!a.rounds.length) && a.day!==day){ a.day=day; a.anchor=week; } }
+  if(d.kind==='card'){ const a=rbAssign(d.name); const c=rbCustByName(d.name); const weekly=c&&rbCadence(c)===1;
+    if(!a.rounds||!a.rounds.length){
+      if(weekly && a.day!=null && (week%2===0)){ if(a.day2!==day) a.day2=day; }
+      else if(weekly && a.day!=null && (week%2===1)){ if(a.day!==day){ if(a.day2==null) a.day2=a.day; a.day=day; } }
+      else if(a.day!==day){ a.day=day; a.anchor=week; if(weekly) delete a.day2; }
+    }
+  }
   else if(d.kind==='round'){ const rd=rbRound(d.rid); if(rd && rd.day!==day){ rd.day=day; rd.anchor=week; } }
   const isDragged = u => (d.kind==='card') ? (u.kind==='card' && normName(u.id)===normName(d.name)) : (u.kind==='round' && u.id===d.rid);
   let units = rbDayAllUnits(day);
@@ -3724,7 +3743,7 @@ function renderRoundsTab(){
     ? '<div class="rb-viewtog">'+['All','Mike','Adam'].map(v=>'<button class="rb-vt'+(rbViewOverride===v?' on':'')+'" onclick="rbSetView('+JSON.stringify(v)+')">'+v+'</button>').join('')+'</div>'
     : '';
   const intro = '<div class="card" style="margin-bottom:16px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap"><div class="h">4-week rota board</div>'+toggle+'</div>'
-    + '<div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:900px">Your visit pattern across the full four-week cycle. Drag each recurring customer onto a day, and their cadence fills the rest, weekly shows every week, fortnightly every other, four-weekly once. The week you drop a non-weekly customer on sets which weeks they fall in, so drag a fortnightly job to the next week to flip it onto the other fortnight and balance the load. Aim for '+RB_TARGET_LO+' to '+RB_TARGET_HI+' billable hours a day. Tick two or more visits on the same day to group them into a round, ticking the specific week you mean. A weekly customer can ride two rounds, so to split them across alternating weeks, group the first week, then tick their other week and group that separately. Drag a job up or down within a day to set the running order, and the route follows the order you set. Each day\u2019s Route runs from your base. Hours come from the planner, so set hours per visit there for anyone showing \u201c? h\u201d. <span id="rbSaveMsg" style="color:var(--muted)"></span></div>'
+    + '<div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:900px">Your visit pattern across the full four-week cycle. Drag each recurring customer onto a day, and their cadence fills the rest, weekly shows every week, fortnightly every other, four-weekly once. The week you drop a non-weekly customer on sets which weeks they fall in, so drag a fortnightly job to the next week to flip it onto the other fortnight and balance the load. A weekly job can sit on a different day each fortnight: once placed, dragging its week 1 or 3 card moves only those weeks, and dragging its week 2 or 4 card moves only those, so week 1 can be Tuesday and week 2 Wednesday. Use the card\\u2019s \\u22ee menu to put every week back on one day. Aim for '+RB_TARGET_LO+' to '+RB_TARGET_HI+' billable hours a day. Tick two or more visits on the same day to group them into a round, ticking the specific week you mean. A weekly customer can ride two rounds, so to split them across alternating weeks, group the first week, then tick their other week and group that separately. Drag a job up or down within a day to set the running order, and the route follows the order you set. Each day\u2019s Route runs from your base. Hours come from the planner, so set hours per visit there for anyone showing \u201c? h\u201d. <span id="rbSaveMsg" style="color:var(--muted)"></span></div>'
     + (ev==='All'?'<div class="ib ib-blue" style="margin-top:12px;font-size:12.5px">Showing Mike and Adam together. Pick Mike or Adam above to build day routes and plan one person\u2019s week.</div>':'')
     + '<div style="font-size:12px;color:var(--muted);margin-top:10px">'+placed+' of '+total+' placed'+(ev!=='All'?' \u00b7 '+ev:'')+'</div></div>';
   const tray = '<div class="rb-tray" data-tray="1" ondragover="rbDragOver(event)" ondragleave="rbDragLeave(event)" ondrop="rbDropTray(event)">'
