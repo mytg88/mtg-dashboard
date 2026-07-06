@@ -2381,7 +2381,8 @@ function planFields(c){
   const wOn = p.wOn !== undefined ? !!p.wOn : false;
   const wV = num(p.wV);
   const wPv = num(p.wPv)!=='' ? num(p.wPv) : (pv||'');
-  return { v4, hv, pv, wOn, wV, wPv, saved: !!c.plan };
+  const gd = num(p.gd)!=='' ? Math.max(1, num(p.gd)) : 1;   // gardeners working the visit; hv stays TOTAL labour hours
+  return { v4, hv, pv, wOn, wV, wPv, gd, saved: !!c.plan };
 }
 function planMath(f){
   const v4=+f.v4||0, hv=+f.hv||0, pv=+f.pv||0, wV=+f.wV||0, wPv=+f.wPv||0;
@@ -2394,7 +2395,7 @@ function plannerRegs(){ return allCustomers.filter(c=>c.s==='Recurring'); }
 function planReadRow(row){
   const g = f => { const el = row.querySelector('[data-f="'+f+'"]'); return el ? el.value : ''; };
   const wOn = row.querySelector('[data-f="wOn"]').checked;
-  return { v4:g('v4'), hv:g('hv'), pv:g('pv'), wOn:wOn, wV:g('wV'), wPv:g('wPv') };
+  return { v4:g('v4'), hv:g('hv'), gd:g('gd'), pv:g('pv'), wOn:wOn, wV:g('wV'), wPv:g('wPv') };
 }
 // Recompute every row's derived cells and the summary from the live inputs.
 function recalcPlanner(){
@@ -2426,7 +2427,7 @@ function planChanged(row){
   recalcPlanner();
   const name = row.getAttribute('data-cust'); if(!name) return;
   const f = planReadRow(row);
-  const obj = { v4:f.v4, hv:f.hv, pv:f.pv, wOn:f.wOn, wV:f.wV, wPv:f.wPv };
+  const obj = { v4:f.v4, hv:f.hv, gd:f.gd, pv:f.pv, wOn:f.wOn, wV:f.wV, wPv:f.wPv };
   const k = normName(name);
   plan[k] = obj; const c = allCustomers.find(x=>normName(x.n)===k); if(c) c.plan = obj;
   const s=document.getElementById('plSaveMsg'); if(s){ s.textContent='Saving\u2026'; s.style.color='var(--muted)'; }
@@ -2458,6 +2459,7 @@ function renderPlannerTab(){
       + '<td class="c">'+badge(c.f)+'</td>'
       + '<td class="r">'+ni('v4',f.v4,52,'0.25')+'</td>'
       + '<td class="r">'+ni('hv',f.hv,52,'0.25')+'</td>'
+      + '<td class="r">'+ni('gd',f.gd,46)+'</td>'
       + '<td class="r">'+ni('pv',f.pv,58)+'</td>'
       + '<td class="c"><input type="checkbox" data-f="wOn" '+(f.wOn?'checked':'')+' onchange="planChanged(this.closest(\'tr\'))"></td>'
       + '<td class="r">'+ni('wV',f.wV,52)+'</td>'
@@ -2467,8 +2469,8 @@ function renderPlannerTab(){
       + '<td class="r pl-t" style="font-weight:700">'+(m.total?fmt(Math.round(m.total)):'\u2014')+'</td>'
       + '<td class="r pl-h" style="color:var(--muted)">'+(m.hrsSeason?(Math.round(m.hrsSeason)+'h'):'\u2014')+'</td>'
       + '</tr>'; }).join('');
-  const table = '<div class="card"><div class="h">Per customer ('+rows.length+')</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px">Visits per 4 weeks, hours per visit and pound per visit set the core season. Tick winter and add the winter visit count and price for the off season. Everything recalculates and saves as you type.</div>'
-    + '<div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th class="r">V/4wk</th><th class="r">Hrs</th><th class="r">\u00a3/visit</th><th class="c">Winter</th><th class="r">W visits</th><th class="r">W \u00a3</th><th class="r">Season</th><th class="r">Off</th><th class="r">Total</th><th class="r">Hours</th></tr></thead><tbody id="planBody">'
+  const table = '<div class="card"><div class="h">Per customer ('+rows.length+')</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px">Visits per 4 weeks, hours per visit and pound per visit set the core season. Hrs is the TOTAL labour on the visit; Gdnrs is how many gardeners work it, so a 15h job done by 2 people still counts 15h here but shows as your 7.5h share on the rounds board. Tick winter and add the winter visit count and price for the off season. Everything recalculates and saves as you type.</div>'
+    + '<div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th class="r">V/4wk</th><th class="r">Hrs</th><th class="r">Gdnrs</th><th class="r">\u00a3/visit</th><th class="c">Winter</th><th class="r">W visits</th><th class="r">W \u00a3</th><th class="r">Season</th><th class="r">Off</th><th class="r">Total</th><th class="r">Hours</th></tr></thead><tbody id="planBody">'
     + body + '</tbody></table></div></div>';
   return intro + summary + bar + table;
 }
@@ -3333,7 +3335,10 @@ function rbDueWeeks(c){
   return out;
 }
 function rbDueIn(c, week){ return rbDueWeeks(c).indexOf(week)!==-1; }
-function rbHv(c){ return +planFields(c).hv || 0; }
+// Hours the OPERATOR personally spends on the visit: total labour (hv) split across the crew
+// (gd). The planner keeps counting the total; the rounds board plans one person's day.
+function rbHv(c){ const f=planFields(c); const hv=+f.hv||0; const gd=Math.max(1,+f.gd||1); return hv ? hv/gd : 0; }
+function rbCrew(c){ return Math.max(1, +planFields(c).gd || 1); }
 function rbFreqTag(c){
   const e = rbCadence(c);
   if(e===1) return 'wk'; if(e===2) return '2wk'; if(e===4) return '4wk'; return e+'wk';
@@ -3576,7 +3581,9 @@ function rbReorderOnto(day, week, d, targetName, before){
 function rbCardHTML(c, inRound, rid, week){
   const a=rbAssign(c.n), hv=rbHv(c), tag=rbFreqTag(c), k=normName(c.n), nm=escAttr(c.n);
   const nmeta = c.address ? ' title="'+escAttr(c.address)+'"' : (c.postcode ? ' title="'+escAttr(c.postcode)+'"' : '');
-  const hvHtml = hv>0 ? '<span class="rb-hv">'+(Math.round(hv*10)/10)+'h</span>' : '<span class="rb-hv miss" title="Set hours per visit in the planner">? h</span>';
+  const crew = rbCrew(c);
+  const hvHtml = hv>0 ? '<span class="rb-hv"'+(crew>1?' title="'+(Math.round(hv*crew*10)/10)+'h total across '+crew+' gardeners"':'')+'>'+(Math.round(hv*10)/10)+'h</span>' : '<span class="rb-hv miss" title="Set hours per visit in the planner">? h</span>';
+  const crewHtml = crew>1 ? '<span class="rb-freq" title="'+crew+' gardeners on this visit; hours shown are your share">\u00d7'+crew+'</span>' : '';
   const tagHtml = tag ? '<span class="rb-freq">'+tag+'</span>' : '';
   const owner = (rbView()==='All' && c.f) ? '<span class="rb-freq" style="background:'+(c.f==='Adam'?'#E3ECFA':'#FBE7D2')+';color:'+(c.f==='Adam'?'#1565C0':'#9A5410')+'">'+escAttr(c.f)+'</span>' : '';
   const phTag = c._ph ? '<span class="rb-freq" style="background:#FFE7CC;color:#9A5410">new</span>' : '';
@@ -3584,7 +3591,7 @@ function rbCardHTML(c, inRound, rid, week){
     return '<div class="rb-card" data-name="'+nm+'"><div class="rb-card-top">'
       + '<span class="rb-card-name"'+nmeta+'>'+nm+'</span>'
       + '<button class="rb-mini" title="Remove from this round (the visit stays on the day)" data-name="'+nm+'" data-rid="'+escAttr(rid||'')+'" onclick="rbEject(this.getAttribute(\'data-name\'), this.getAttribute(\'data-rid\'))">\u2934</button>'
-      + '</div><div class="rb-card-sub">'+hvHtml+tagHtml+phTag+owner+'</div></div>';
+      + '</div><div class="rb-card-sub">'+hvHtml+crewHtml+tagHtml+phTag+owner+'</div></div>';
   }
   const pin = '<button class="rb-mini'+(a.pinned?' on':'')+'" title="'+(a.pinned?'Pinned, click to unpin':'Pin to this day')+'" data-name="'+nm+'" onclick="rbTogglePin(this.getAttribute(\'data-name\'))">\ud83d\udccc</button>';
   const wk = (week==null?'t':week), sk = k+'#'+wk, selOn = !!rbSel[sk];
@@ -3592,7 +3599,7 @@ function rbCardHTML(c, inRound, rid, week){
     + '<div class="rb-card-top">'
       + '<input type="checkbox" '+(selOn?'checked':'')+' title="Tick to group this visit" data-name="'+nm+'" data-week="'+wk+'" onchange="rbToggleSel(this.getAttribute(\'data-name\'), this.getAttribute(\'data-week\'))" style="margin:0 1px 0 0;cursor:pointer">'
       + '<span class="rb-card-name"'+nmeta+'>'+nm+'</span>'+pin+rbCardMenu(c)
-    + '</div><div class="rb-card-sub">'+hvHtml+tagHtml+phTag+owner+'</div></div>';
+    + '</div><div class="rb-card-sub">'+hvHtml+crewHtml+tagHtml+phTag+owner+'</div></div>';
 }
 function rbCardMenu(c){
   const nm = escAttr(c.n);
