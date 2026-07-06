@@ -3730,10 +3730,13 @@ function rbColBodyHTML(week, day){
   });
   return html || '<div class="rb-empty">Drop here</div>';
 }
+// The visit's price from the planner: winter price in off-season mode, else the core price.
+// Revenue is never split by crew, a two-gardener visit still invoices the full amount.
+function rbPv(c){ const f=planFields(c); if(rbSeasonMode==='off'){ const w=+f.wPv||0; if(w>0) return w; } return +f.pv||0; }
 function rbDayStats(week, day){
-  let hrs=0,miss=0,n=0;
-  rbCustomers().forEach(c=>{ if(!rbDueIn(c, week) || rbVisitDay(c, week)!==day) return; n++; const hv=rbHv(c); if(hv>0) hrs+=hv; else miss++; });
-  return { count:n, hrs:Math.round(hrs*10)/10, missing:miss };
+  let hrs=0,miss=0,n=0,rev=0;
+  rbCustomers().forEach(c=>{ if(!rbDueIn(c, week) || rbVisitDay(c, week)!==day) return; n++; const hv=rbHv(c); if(hv>0) hrs+=hv; else miss++; rev+=rbPv(c); });
+  return { count:n, hrs:Math.round(hrs*10)/10, missing:miss, rev:Math.round(rev) };
 }
 function rbColHTML(week, day, op){
   const st=rbDayStats(week, day);
@@ -3745,18 +3748,18 @@ function rbColHTML(week, day, op){
   return '<div class="rb-col" data-week="'+week+'" data-day="'+day+'" ondragover="rbDragOver(event)" ondragleave="rbDragLeave(event)" ondrop="rbDrop(event)">'
     + '<div class="rb-col-h"><div class="rb-col-day"><span>'+RB_DAY_FULL[day]+'</span><span style="font-size:11px;font-weight:700;color:'+band+'">'+st.hrs+'h</span></div>'
       + '<div class="rb-hbar"><span style="width:'+pct+'%;background:'+band+'"></span></div>'
-      + '<div class="rb-col-meta"><span>'+st.count+' job'+(st.count===1?'':'s')+(st.missing?' \u00b7 '+st.missing+' no hrs':'')+'</span>'+route+'</div>'
+      + '<div class="rb-col-meta"><span>'+st.count+' job'+(st.count===1?'':'s')+(st.rev?' \u00b7 <b style="color:var(--ink)">'+fmt(st.rev)+'</b>':'')+(st.missing?' \u00b7 '+st.missing+' no hrs':'')+'</span>'+route+'</div>'
     + '</div><div class="rb-col-body">'+rbColBodyHTML(week, day)+'</div></div>';
 }
 function rbWeekStats(week){
-  let hrs=0,n=0;
-  rbCustomers().forEach(c=>{ if(!rbDueIn(c, week) || rbVisitDay(c, week)==null) return; n++; hrs+=rbHv(c); });
-  return { count:n, hrs:Math.round(hrs*10)/10 };
+  let hrs=0,n=0,rev=0;
+  rbCustomers().forEach(c=>{ if(!rbDueIn(c, week) || rbVisitDay(c, week)==null) return; n++; hrs+=rbHv(c); rev+=rbPv(c); });
+  return { count:n, hrs:Math.round(hrs*10)/10, rev:Math.round(rev) };
 }
 function rbWeekHTML(week, op){
   const ws=rbWeekStats(week);
   return '<div class="rb-week"><div class="rb-week-h"><span class="rb-week-t">Week '+week+'</span>'
-    + '<span class="rb-week-sum"><b>'+ws.hrs+'h</b> across '+ws.count+' visit'+(ws.count===1?'':'s')+'</span></div>'
+    + '<span class="rb-week-sum"><b>'+ws.hrs+'h</b> across '+ws.count+' visit'+(ws.count===1?'':'s')+(ws.rev?' \u00b7 <b>'+fmt(ws.rev)+'</b>':'')+'</span></div>'
     + '<div class="rb-cols">'+RB_DAYS.map(d=>rbColHTML(week, d, op)).join('')+'</div></div>';
 }
 function rbCadLabel(cd){ return cd===1?'Weekly':cd===2?'Fortnightly':cd===4?'Every 4 weeks':cd+'-weekly'; }
