@@ -539,6 +539,8 @@ th.sortable:hover{color:var(--green)}
 .cm-rem{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;margin-top:8px}
 .cm-rem input[type=date]{border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 10px;font-family:inherit;font-size:14px;background:var(--card);color:var(--ink)}
 .cm-rem-btn{background:var(--green);color:#fff;border:none;border-radius:var(--r-sm);padding:10px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.cm-rev-btn{background:none;border:1px solid var(--line);border-radius:var(--r-sm);padding:4px 9px;margin-left:8px;font-family:inherit;font-size:11.5px;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap}
+.cm-rev-btn:hover{color:var(--green);border-color:var(--green)}
 .cm-rem-btn:active{transform:scale(.97)}
 .cm-rem-on{display:flex;align-items:center;gap:9px;background:var(--t-green-bg);color:var(--t-green-fg);border-radius:var(--r-sm);padding:10px 13px;font-size:13px;font-weight:600;margin-top:8px}
 .cm-rem-x{background:none;border:none;color:inherit;cursor:pointer;font-weight:700;font-size:15px;margin-left:auto;font-family:inherit}
@@ -772,7 +774,7 @@ const API_URL   = 'https://script.google.com/macros/s/AKfycbxN137wCPVA5IVaHseSxC
 let auth = null; // {user, pass, role, name} once logged in. No password is stored in this file.
 // ==============================================================
 
-let rawJobs=[], customers=[], rawLeads=[], rawRecurring=[], numToCust={}, manualNames={}, customerNotes={}, scorecards={}, plan={};
+let rawJobs=[], customers=[], rawLeads=[], rawRecurring=[], numToCust={}, manualNames={}, customerNotes={}, scorecards={}, plan={}, lastSeenMap={};
 let scoreEditFor=null;
 let jobsPeriod=[], jobs=[], prevJobs=[], allCustomers=[], churnedList=[], monthlyData=[], serviceData=[], missingPriceData=[];
 let roundsBoard = { assign:{}, rounds:{}, placeholders:{} };
@@ -1172,6 +1174,7 @@ function handleData(data, fromCache) {
     setTimeout(function(){ try{ maybeNotify(); }catch(_){} }, 200);
   }
   rawJobs = data.jobs || [];
+  lastSeenMap = data.lastSeen || {};
   rawLeads = data.leads || [];
   rawRecurring = data.recurring || [];
   rawCalls = data.calls || [];
@@ -1751,6 +1754,19 @@ function apiCall(extra, onOk, onErr) {
   for (const k in extra) url += '&' + k + '=' + encodeURIComponent(extra[k]);
   s.src = url; document.head.appendChild(s);
 }
+// ---------- lightweight activity events ----------
+// Fire-and-forget log to the backend's Activity Log (and it counts as presence, so an
+// already-open tab that regains focus registers as "seen today" without a data refresh).
+function logEvent(text){ try{ apiCall({ action:'logEvent', event:String(text||'').slice(0,120) }); }catch(e){} }
+let _lastHeartbeat = 0;
+function _heartbeat(){ if(!auth) return; const now=Date.now(); if(now - _lastHeartbeat < 30*60*1000) return; _lastHeartbeat = now; logEvent('heartbeat'); }
+document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible') _heartbeat(); });
+window.addEventListener('focus', _heartbeat);
+// Resources: log which document was opened (links carry data-res with the tile title).
+document.addEventListener('click', function(ev){
+  const a = ev.target && ev.target.closest ? ev.target.closest('a.res-open, a.res-ver') : null;
+  if(a) logEvent('resource: ' + ((a.getAttribute('data-res')||a.textContent||'').trim().slice(0,80)));
+});
 // ---------- customer notes + churn reasons ----------
 function normName(s){ return String(s==null?'':s).trim().toLowerCase(); }
 function escAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
@@ -2655,6 +2671,39 @@ const cmIcons = {
   nav:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>',
   star:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'
 };
+// Cover days: re-attribute one visit's REVENUE to the other franchisee without touching
+// who invoices (that stays with the customer's owner and their QB record). Franchisor
+// (role All) only. Uses the job Key the backend computes per Completed Jobs row, and
+// requires the "Revenue Franchisee" column on the Completed Jobs tab.
+function cmVisitRevHTML(c){
+  if(!auth || auth.role!=='All') return '';
+  const k = normName(c.n);
+  const vs = rawJobs.filter(j => normName(j['Customer Name'])===k && j['Key'] && j._date)
+    .sort((a,b)=> b._date - a._date).slice(0,6);
+  if(!vs.length) return '';
+  const rows = vs.map(j => {
+    const owner = j['Franchisee'] || '';
+    const rev = j['Revenue Franchisee'] || owner || '';
+    const other = rev==='Mike' ? 'Adam' : 'Mike';
+    const moved = owner && rev && owner!==rev;
+    const keyArg = JSON.stringify(String(j['Key'])).replace(/"/g,'&quot;');
+    return '<div class="cm-row"><span>'+fmtDate(j._date)+'</span>'
+      + '<span style="margin-left:8px;color:var(--muted)">'+(j._amount>0?fmt(j._amount):'\u2014')+'</span>'
+      + '<span class="badge" style="margin-left:auto'+(moved?';background:#FFF3E0;color:#9A5410':'')+'" title="'+(moved?'Revenue credited to '+escAttr(rev)+', invoiced by '+escAttr(owner):'Revenue and invoicing: '+escAttr(rev))+'">'+escAttr(rev)+'</span>'
+      + '<button class="cm-rev-btn" onclick="cmTransferRev('+keyArg+',\''+other+'\')" title="Credit this visit\u2019s revenue to '+other+' (invoicing stays with '+escAttr(owner)+')">\u2192 '+other+'</button></div>';
+  }).join('');
+  return '<div class="cm-sec">Visits \u00b7 revenue credit</div>' + rows
+    + '<div style="font-size:11.5px;color:var(--muted);margin-top:6px">For cover days: moves the revenue credit on the dashboard only. Invoicing always stays with the customer\u2019s owner.</div>';
+}
+function cmTransferRev(key, to){
+  apiCall({ action:'transferJobRevenue', key:key, to:to }, function(d){
+    if(d && d.ok){
+      const j = rawJobs.find(x => String(x['Key'])===String(key));
+      if(j) j['Revenue Franchisee'] = to;
+      if(custModalFor) openCustomer(custModalFor);
+    } else { alert((d && d.error) || 'Transfer failed'); }
+  }, function(){ alert('Could not reach the app'); });
+}
 function openCustomer(name){
   const c = custByName(name);
   if(!c) return;
@@ -2697,6 +2746,7 @@ function openCustomer(name){
     + '<div class="cm-row"><span style="color:var(--muted)">First visit</span><span style="margin-left:auto;font-weight:600">'+fmtDate(c.first)+'</span></div>'
     + '<div class="cm-row"><span style="color:var(--muted)">Last visit</span><span style="margin-left:auto;font-weight:600">'+fmtDate(c.last)+'</span></div>'
     + (c.svc?'<div class="cm-row"><span style="color:var(--muted)">Services</span><span style="margin-left:auto;font-weight:600;text-align:right">'+escAttr(c.svc)+'</span></div>':'')
+    + cmVisitRevHTML(c)
     + '<div class="cm-sec">Note</div>'
     + '<textarea class="cm-note" id="cmNote" placeholder="Add a note about this customer..." onchange="cmSaveNote(this.value)">'+escAttr(c.note||'')+'</textarea>'
     + '<div class="cm-sec">Follow-up reminder</div>'
@@ -3055,6 +3105,16 @@ function dfRender() {
   const who = franchiseeView === 'All' ? '' : ' \u00b7 '+franchiseeView;
   if (!b.from || !b.to) summary.innerHTML = 'Showing <b>'+(franchiseeView==='All'?'all jobs':franchiseeView+'\u2019s jobs')+'</b> &nbsp;\u2022&nbsp; <b>'+jobs.length+'</b> total';
   else summary.innerHTML = fmtDateLong(b.from)+' \u2192 '+fmtDateLong(b.to)+who+' &nbsp;\u2022&nbsp; <b>'+jobs.length+'</b> jobs';
+  // Franchisor view: when each login was last active on the dashboard (from the backend's
+  // last-seen store, updated by any authenticated request including heartbeats).
+  if (auth && auth.role === 'All' && lastSeenMap && Object.keys(lastSeenMap).length) {
+    const fmtSeen = iso => { if(!iso) return 'never'; const d=new Date(iso); if(isNaN(d)) return 'never';
+      const hm=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+      if(d.toDateString()===new Date().toDateString()) return 'today '+hm;
+      return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]+' '+d.getDate()+'/'+(d.getMonth()+1)+' '+hm; };
+    const bits = Object.keys(lastSeenMap).sort().map(u => (u.charAt(0).toUpperCase()+u.slice(1))+' seen '+fmtSeen(lastSeenMap[u]));
+    summary.innerHTML += ' &nbsp;\u2022&nbsp; <span style="color:var(--muted)" title="Last dashboard activity per login">'+bits.join(' \u00b7 ')+'</span>';
+  }
 }
 function onPeriodChange(v) {
   dfRange = v;
@@ -3977,7 +4037,7 @@ function todoUpcoming(){ const today=todoYmd(0); return todoDatedOpen().filter(t
 function todoToggleUrgent(id){ const t=todoState.tasks.find(x=>x.id===id); if(!t) return; t.urgent=!t.urgent; todoSave(); todoRerender(); }
 function todoRerender(){ const el=document.getElementById('content'); if(el && activeTab==='To-do') el.innerHTML=renderTodoTab(); }
 function todoSetDay(d){ todoState.addOpen=false; todoState.editId=null; todoDay=d; todoRerender(); }
-function todoToggle(id){ const t=todoState.tasks.find(x=>x.id===id); if(!t) return; if(todoIsDone(t)) delete todoState.doneMap[id]; else todoState.doneMap[id]=Date.now(); todoSave(); todoRerender(); }
+function todoToggle(id){ const t=todoState.tasks.find(x=>x.id===id); if(!t) return; if(todoIsDone(t)) delete todoState.doneMap[id]; else { todoState.doneMap[id]=Date.now(); logEvent('todo:completed: '+String(t.title||'').slice(0,60)); } todoSave(); todoRerender(); }
 function todoToggleAdd(){ todoState.addOpen=!todoState.addOpen; todoState.editId=null; todoRerender(); }
 function todoEdit(id){ todoState.editId=id; todoState.addOpen=true; todoRerender(); }
 function todoDelete(id){ const t=todoState.tasks.find(x=>x.id===id); if(!t) return; if(!confirm('Remove \u201c'+t.title+'\u201d?')) return; todoState.tasks=todoState.tasks.filter(x=>x.id!==id); delete todoState.doneMap[id]; todoSave(); todoRerender(); }
@@ -4377,10 +4437,10 @@ function resCardHTML(it){
   let actions;
   if(it.versions && it.versions.length){
     const cur=it.versions[0];
-    actions='<a class="res-open" href="'+escAttr(cur.url)+'" target="_blank" rel="noopener">Open '+escAttr(cur.label)+' \u2197</a>'
-      + it.versions.slice(1).map(v=>'<a class="res-ver" href="'+escAttr(v.url)+'" target="_blank" rel="noopener">'+escAttr(v.label)+'</a>').join('');
+    actions='<a class="res-open" data-res="'+escAttr(it.title)+'" href="'+escAttr(cur.url)+'" target="_blank" rel="noopener">Open '+escAttr(cur.label)+' \u2197</a>'
+      + it.versions.slice(1).map(v=>'<a class="res-ver" data-res="'+escAttr(it.title)+'" href="'+escAttr(v.url)+'" target="_blank" rel="noopener">'+escAttr(v.label)+'</a>').join('');
   } else {
-    actions='<a class="res-open" href="'+escAttr(it.url)+'" target="_blank" rel="noopener">Open \u2197</a>';
+    actions='<a class="res-open" data-res="'+escAttr(it.title)+'" href="'+escAttr(it.url)+'" target="_blank" rel="noopener">Open \u2197</a>';
   }
   return '<div class="res-card">'+resIcon(it.kind)+'<div class="res-body"><div class="res-title">'+escAttr(it.title)+resKindPill(it.kind)+'</div>'
     + '<div class="res-desc">'+escAttr(it.desc)+'</div><div class="res-actions">'+actions+'</div></div></div>';
