@@ -3081,8 +3081,9 @@ function setView(v) { franchiseeView=v; if(bpAll) bpActivate(bpFranchisee()); ap
 function goSeg(seg) { activeTab='Customers'; custSegFilter=seg; custSearch=''; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 function setRegSub(s){ regSub=s; renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 function goReg(sub){ activeTab='Regulars'; if(sub) regSub=sub; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
-function setResSub(s){ resSub=s; renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
-function goResources(sub){ activeTab='Resources'; if(sub) resSub=sub; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
+const RES_SUB_LABELS = { Plan:'Business plan', Docs:'Documents and SOPs', Tools:'Tools', Missing:'Missing prices' };
+function setResSub(s){ resSub=s; if(RES_SUB_LABELS[s]) logEvent('resource: '+RES_SUB_LABELS[s]); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
+function goResources(sub){ activeTab='Resources'; if(sub){ resSub=sub; if(RES_SUB_LABELS[sub]) logEvent('resource: '+RES_SUB_LABELS[sub]); } renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 // Re-rendering rebuilds the search box, which drops focus after each keystroke. Put it back.
 function onCustSearch(v, pos) {
   custSearch = v;
