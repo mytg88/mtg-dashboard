@@ -5053,6 +5053,18 @@ function renderContent() {
       ];
       const sources = Object.entries(s.bySource).sort((a,b)=>b[1]-a[1]);
       const maxSrc = Math.max(1, ...sources.map(x=>x[1]));
+      // Services requested: what people are actually asking for, grouped the same way the
+      // Revenue tab groups services, with count and the total quoted value where prices exist.
+      const svcMap = {};
+      s.list.forEach(l => {
+        const g = serviceGroup(l._svc || '') || 'Other';
+        if (!svcMap[g]) svcMap[g] = { n: 0, q: 0, booked: 0 };
+        svcMap[g].n++;
+        if (l._quote > 0) svcMap[g].q += l._quote;
+        if (String(l._status).toUpperCase() === 'BOOKED') svcMap[g].booked++;
+      });
+      const svcRows = Object.entries(svcMap).sort((a,b)=>b[1].n-a[1].n);
+      const maxSvc = Math.max(1, ...svcRows.map(x=>x[1].n));
       el.innerHTML = `
       <div class="grid grid-4">
         <div class="card accent-top"><div class="kpi-l">Total Leads</div><div class="kpi-v">${s.total}</div><div class="kpi-s">in period</div></div>
@@ -5064,16 +5076,19 @@ function renderContent() {
         <div class="card"><div class="h">Lead funnel</div>${funnelSVG(stages, s.total)}
           <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:16px;align-items:center">${badge('LOST')}<span style="font-size:12px;color:var(--muted)">${s.byStatus.LOST||0} lost</span>${badge('SPAM')}<span style="font-size:12px;color:var(--muted)">${s.byStatus.SPAM||0} spam</span></div>
         </div>
-        <div class="card"><div class="h">By source</div>
-          ${sources.length===0?'<div style="color:var(--muted);font-size:13px">No source data.</div>':sources.map(x=>'<div class="bar-row"><span class="bar-l" style="width:auto;min-width:70px;text-align:left">'+x[0].slice(0,16)+'</span><div class="bar-c"><div class="bar" style="width:'+Math.round(x[1]/maxSrc*100)+'%"></div><span class="bar-v">'+x[1]+'</span></div></div>').join('')}
-          <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:24px;font-size:13px;align-items:center">
-            <span>${badge('Mike')} <b>${s.byFr.Mike}</b></span><span>${badge('Adam')} <b>${s.byFr.Adam}</b></span>${s.byFr.Other?'<span style="color:var(--muted)">'+s.byFr.Other+' unrouted</span>':''}
-          </div>
+        <div class="card"><div class="h">Services requested</div>
+          ${svcRows.length===0?'<div style="color:var(--muted);font-size:13px">No leads in period.</div>':svcRows.map(x=>'<div style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:13px"><span style="font-weight:500">'+escAttr(x[0])+'</span><span style="color:var(--muted);font-size:12px;white-space:nowrap">'+x[1].n+' lead'+(x[1].n===1?'':'s')+(x[1].q>0?' \u00b7 '+fmt(x[1].q)+' quoted':'')+(x[1].booked?' \u00b7 '+x[1].booked+' booked':'')+'</span></div><div style="height:8px;background:#EEF1EC;border-radius:4px;margin-top:5px"><div style="height:8px;border-radius:4px;background:var(--green);width:'+Math.round(x[1].n/maxSvc*100)+'%"></div></div></div>').join('')}
         </div>
       </div>
       <div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${s.list.length} leads in period</div>
         <div class="table-wrap"><table><thead><tr><th>Received</th><th>Customer</th><th>Service</th><th class="r">Quote</th><th class="c">Territory</th><th class="c">Owner</th><th class="c">Status</th><th>Source</th></tr></thead>
         <tbody>${s.list.map(l=>'<tr class="lead-row" onclick="openLead(\''+String(l._key).replace(/'/g,"\\'")+'\')" style="cursor:pointer"><td style="color:var(--muted);font-size:12px">'+fmtDate(l._date)+'</td><td style="font-weight:500">'+(l._name||'\u2014')+'</td><td style="font-size:12px">'+(l._svc||'\u2014')+'</td><td class="r">'+(l._quote>0?fmt(l._quote):'\u2014')+'</td><td class="c" style="font-size:12px;color:var(--muted)">'+(l._territory||'\u2014')+'</td><td class="c">'+(l._franchisee?badge(l._franchisee):'\u2014')+'</td><td class="c">'+leadPill(l._status)+'</td><td style="font-size:12px;color:var(--muted)">'+l._source+'</td></tr>').join('')}</tbody></table></div>
+      </div>
+      <div class="card"><div class="h">By source</div>
+        ${sources.length===0?'<div style="color:var(--muted);font-size:13px">No source data.</div>':sources.map(x=>'<div class="bar-row"><span class="bar-l" style="width:auto;min-width:70px;text-align:left">'+x[0].slice(0,16)+'</span><div class="bar-c"><div class="bar" style="width:'+Math.round(x[1]/maxSrc*100)+'%"></div><span class="bar-v">'+x[1]+'</span></div></div>').join('')}
+        <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:24px;font-size:13px;align-items:center">
+          <span>${badge('Mike')} <b>${s.byFr.Mike}</b></span><span>${badge('Adam')} <b>${s.byFr.Adam}</b></span>${s.byFr.Other?'<span style="color:var(--muted)">'+s.byFr.Other+' unrouted</span>':''}
+        </div>
       </div>`;
     }
   }
