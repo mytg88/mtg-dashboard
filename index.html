@@ -1267,7 +1267,7 @@ function handleData(data, fromCache) {
   });
   // Adam's pre-franchise (subcontractor) jobs are not franchisee performance and aren't Mike's, so drop them.
   rawJobs = rawJobs.filter(j => !(j._franchisee === 'Adam' && j._date && j._date < ADAM_FRANCHISE_START));
-  rawLeads.forEach(l => {
+  rawLeads.forEach((l, li) => {
     l._date = parseDate(col(l,['Date Received','Received','Date']));
     l._quote = parseAmount(col(l,['Quoted Price','Quote','Price','Value']));
     l._rawStatus = (col(l,['Status']) || '').trim().toUpperCase();
@@ -1276,7 +1276,11 @@ function handleData(data, fromCache) {
     l._status = ((col(l,['Lead Status']) || col(l,['Status']) || 'New').trim().toUpperCase());
     l._leadNotes = col(l,['Lead Notes']) || '';
     l._updatedBy = col(l,['Updated By']) || '';
-    l._key = col(l,['Key']) || '';
+    // The server Key (needed for writes). Until the Key column exists and the backend is
+    // deployed it is blank, so every row also gets a unique client-side fallback key for
+    // opening the right detail panel; writes stay disabled until a real key arrives.
+    l._serverKey = col(l,['Key']) || '';
+    l._key = l._serverKey || ('idx:'+li);
     l._franchisee = (col(l,['Franchisee','Owner']) || '').trim();
     l._source = (col(l,['Source']) || '').trim() || 'Unknown';
     l._name = col(l,['Customer Name','Customer','Name']);
@@ -2794,17 +2798,17 @@ function openLead(key){
   const l = leadByKey(key);
   if(!l) return;
   leadModalFor = key;
+  const sk = l._serverKey ? String(l._serverKey).replace(/'/g,"\\'") : '';
   const wa = l._phone ? 'https://wa.me/'+waNumber(l._phone) : '';
   const tel = l._phone ? 'tel:'+String(l._phone).replace(/[^0-9+]/g,'') : '';
   const svc = l._svc || 'your enquiry';
   const waMsg = encodeURIComponent('Hi'+(l._name?' '+String(l._name).split(' ')[0]:'')+', thanks for your enquiry about '+svc+' with My Tidy Garden. When would suit you for a quick chat or to arrange a visit?');
   const mailto = 'mailto:?subject='+encodeURIComponent('My Tidy Garden \u2014 '+svc)+'&body='+waMsg;
-  const canWrite = !auth || auth.role==='All' || (l._franchisee===auth.name);
-  const menuVals = ['New','Contacted','Quoted','Booked','Not relevant','Lost','Spam'];
+  const canWrite = !!sk && (!auth || auth.role==='All' || (l._franchisee===auth.name));
   const cur = String(l._status||'New');
-  const statusBtns = menuVals.map(v=>{
+  const statusBtns = ['New','Contacted','Quoted','Booked','Not relevant','Lost','Spam'].map(v=>{
     const on = v.toUpperCase()===cur.toUpperCase();
-    return '<button class="lead-st-btn'+(on?' on':'')+'" onclick="leadSetStatus(\''+key.replace(/'/g,"\\'")+'\',\''+v+'\')">'+leadStLabel(v)+'</button>';
+    return '<button class="lead-st-btn'+(on?' on':'')+'" onclick="leadSetStatus(\''+sk+'\',\''+v+'\')">'+leadStLabel(v)+'</button>';
   }).join('');
   const acts = [];
   if(tel) acts.push('<a class="call-act" href="'+tel+'">Call</a>');
@@ -2813,28 +2817,32 @@ function openLead(key){
   const other = l._franchisee==='Mike' ? 'Adam' : 'Mike';
   const noteVal = escAttr(l._leadNotes||'');
   const quoteVal = l._quote>0 ? l._quote : '';
+  const writeBlock = canWrite ? (
+      '<div class="cm-sec">Quote</div>'
+      + '<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px"><span style="color:var(--muted)">\u00a3</span>'
+      + '<input id="leadQuoteInput" type="number" step="1" min="0" value="'+quoteVal+'" placeholder="set a price" style="width:120px;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font:inherit">'
+      + '<button class="cm-rem-btn" style="padding:7px 12px" onclick="leadSaveQuote(\''+sk+'\')">Save quote</button></div>'
+      + '<div class="cm-sec">Pipeline status</div>'
+      + '<div class="lead-st-grid">'+statusBtns+'</div>'
+      + '<div class="cm-sec">Notes</div>'
+      + '<textarea id="leadNoteInput" class="cm-note" rows="3" placeholder="Add a note\u2026" onchange="leadSaveNote(\''+sk+'\', this.value)">'+noteVal+'</textarea>'
+      + '<div class="cm-sec">Transfer</div>'
+      + '<button class="cm-rev-btn" onclick="leadTransfer(\''+sk+'\',\''+other+'\')">\u2192 Move to '+other+'</button>'
+    ) : (!sk
+      ? '<div style="font-size:12.5px;color:var(--muted);margin-top:12px;padding:10px 12px;background:#FFF3E0;border-radius:8px">Actions are disabled: this lead has no Key yet. Add the \u201cKey\u201d, \u201cLead Status\u201d, \u201cLead Notes\u201d, \u201cUpdated By\u201d and \u201cUpdated At\u201d columns to the Leads tab and deploy the updated backend, then refresh.</div>'
+      : '<div style="font-size:12px;color:var(--muted);margin-top:10px">This lead belongs to '+escAttr(l._franchisee||'the other operator')+'.</div>');
 
   document.getElementById('leadModal').innerHTML =
-    '<div class="cm-inner"><button class="cm-x" onclick="closeLead()">\u00d7</button>'
-    + '<div class="cm-name">'+escAttr(l._name||'Lead')+'</div>'
-    + '<div class="cm-sub">'+escAttr(l._svc||'')+(l._territory?' \u00b7 '+escAttr(l._territory):'')+'</div>'
+    '<div class="cm-head"><div><div class="cm-name">'+escAttr(l._name||'Lead')+'</div>'
+    + '<div class="cm-badges">'+leadPill(l._status)+(l._franchisee?badge(l._franchisee):'')+(l._territory?'<span class="badge" style="background:var(--t-neutral-bg);color:var(--t-neutral-fg)">'+escAttr(l._territory)+'</span>':'')+'</div></div>'
+    + '<button class="cm-x" onclick="closeLead()" aria-label="Close">\u00d7</button></div>'
+    + '<div class="cm-body">'
+    + '<div class="cm-row"><span style="color:var(--muted)">Service</span><span style="margin-left:auto;font-weight:600;text-align:right">'+escAttr(l._svc||'\u2014')+'</span></div>'
     + '<div class="cm-row"><span style="color:var(--muted)">Received</span><span style="margin-left:auto;font-weight:600">'+fmtDate(l._date)+'</span></div>'
     + '<div class="cm-row"><span style="color:var(--muted)">Phone</span><span style="margin-left:auto;font-weight:600">'+(l._phone?escAttr(fmtPhone(l._phone)):'\u2014')+'</span></div>'
     + '<div class="cm-row"><span style="color:var(--muted)">Source</span><span style="margin-left:auto;font-weight:600">'+escAttr(l._source||'\u2014')+'</span></div>'
-    + '<div class="cm-row"><span style="color:var(--muted)">Owner</span><span style="margin-left:auto">'+(l._franchisee?badge(l._franchisee):'\u2014')+'</span></div>'
-    + '<div class="cm-acts" style="display:flex;gap:8px;margin:12px 0">'+acts.join('')+'</div>'
-    + (canWrite ? (
-        '<div class="cm-sec">Quote</div>'
-        + '<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px"><span style="color:var(--muted)">\u00a3</span>'
-        + '<input id="leadQuoteInput" type="number" step="1" min="0" value="'+quoteVal+'" placeholder="set a price" style="width:120px;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font:inherit">'
-        + '<button class="cm-rem-btn" style="padding:7px 12px" onclick="leadSaveQuote(\''+key.replace(/'/g,"\\'")+'\')">Save quote</button></div>'
-        + '<div class="cm-sec">Pipeline status</div>'
-        + '<div class="lead-st-grid">'+statusBtns+'</div>'
-        + '<div class="cm-sec">Notes</div>'
-        + '<textarea id="leadNoteInput" class="cm-note" rows="3" placeholder="Add a note\u2026" onchange="leadSaveNote(\''+key.replace(/'/g,"\\'")+'\', this.value)">'+noteVal+'</textarea>'
-        + '<div class="cm-sec">Transfer</div>'
-        + '<button class="cm-rev-btn" onclick="leadTransfer(\''+key.replace(/'/g,"\\'")+'\',\''+other+'\')">\u2192 Move to '+other+'</button>'
-      ) : '<div style="font-size:12px;color:var(--muted);margin-top:10px">This lead belongs to '+escAttr(l._franchisee||'the other operator')+'.</div>')
+    + '<div class="cm-acts" style="display:flex;gap:8px;margin:14px 0 4px">'+acts.join('')+'</div>'
+    + writeBlock
     + '</div>';
   document.getElementById('cmOv').classList.add('show');
   document.getElementById('cmOv').setAttribute('onclick','closeLead()');
