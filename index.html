@@ -2799,8 +2799,13 @@ function openLead(key){
   if(!l) return;
   leadModalFor = key;
   const sk = l._serverKey ? String(l._serverKey).replace(/'/g,"\\'") : '';
-  const wa = l._phone ? 'https://wa.me/'+waNumber(l._phone) : '';
-  const tel = l._phone ? 'tel:'+String(l._phone).replace(/[^0-9+]/g,'') : '';
+  // Web-form phone numbers sometimes arrive with stray leading zeros or a "00" prefix
+  // (e.g. "007756998918"). Normalise to the bare national significant number first,
+  // the same way the Calls tab does, then rebuild a clean UK number for display and links.
+  const phoneClean = l._phone ? normNum(l._phone) : '';
+  const phoneUk = phoneClean ? '0'+phoneClean : '';
+  const wa = phoneClean ? 'https://wa.me/44'+phoneClean : '';
+  const tel = phoneUk ? 'tel:'+phoneUk : '';
   const svc = l._svc || 'your enquiry';
   const waMsg = encodeURIComponent('Hi'+(l._name?' '+String(l._name).split(' ')[0]:'')+', thanks for your enquiry about '+svc+' with My Tidy Garden. When would suit you for a quick chat or to arrange a visit?');
   const mailto = 'mailto:?subject='+encodeURIComponent('My Tidy Garden \u2014 '+svc)+'&body='+waMsg;
@@ -2839,7 +2844,7 @@ function openLead(key){
     + '<div class="cm-body">'
     + '<div class="cm-row"><span style="color:var(--muted)">Service</span><span style="margin-left:auto;font-weight:600;text-align:right">'+escAttr(l._svc||'\u2014')+'</span></div>'
     + '<div class="cm-row"><span style="color:var(--muted)">Received</span><span style="margin-left:auto;font-weight:600">'+fmtDate(l._date)+'</span></div>'
-    + '<div class="cm-row"><span style="color:var(--muted)">Phone</span><span style="margin-left:auto;font-weight:600">'+(l._phone?escAttr(fmtPhone(l._phone)):'\u2014')+'</span></div>'
+    + '<div class="cm-row"><span style="color:var(--muted)">Phone</span><span style="margin-left:auto;font-weight:600">'+(phoneUk?escAttr(fmtPhone(phoneUk)):'\u2014')+'</span></div>'
     + '<div class="cm-row"><span style="color:var(--muted)">Source</span><span style="margin-left:auto;font-weight:600">'+escAttr(l._source||'\u2014')+'</span></div>'
     + '<div class="cm-acts" style="display:flex;gap:8px;margin:14px 0 4px">'+acts.join('')+'</div>'
     + writeBlock
