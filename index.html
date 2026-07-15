@@ -541,6 +541,11 @@ th.sortable:hover{color:var(--green)}
 .cm-rem-btn{background:var(--green);color:#fff;border:none;border-radius:var(--r-sm);padding:10px 15px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer}
 .cm-rev-btn{background:none;border:1px solid var(--line);border-radius:var(--r-sm);padding:4px 9px;margin-left:8px;font-family:inherit;font-size:11.5px;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap}
 .cm-rev-btn:hover{color:var(--green);border-color:var(--green)}
+.lead-st-grid{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px}
+.lead-st-btn{background:none;border:1px solid var(--line);border-radius:var(--r-sm);padding:6px 12px;font-family:inherit;font-size:12.5px;font-weight:600;color:var(--muted);cursor:pointer}
+.lead-st-btn:hover{border-color:var(--green);color:var(--green)}
+.lead-st-btn.on{background:var(--green);color:#fff;border-color:var(--green)}
+.lead-row:hover{background:#F5F6F2}
 .cm-rem-btn:active{transform:scale(.97)}
 .cm-rem-on{display:flex;align-items:center;gap:9px;background:var(--t-green-bg);color:var(--t-green-fg);border-radius:var(--r-sm);padding:10px 13px;font-size:13px;font-weight:600;margin-top:8px}
 .cm-rem-x{background:none;border:none;color:inherit;cursor:pointer;font-weight:700;font-size:15px;margin-left:auto;font-family:inherit}
@@ -763,6 +768,7 @@ button{-webkit-tap-highlight-color:transparent}
 <div class="bn-sheet" id="bnSheet" role="menu"><div class="bn-sheet-grab"></div><div id="bnSheetList"></div></div>
 <div class="cm-ov" id="cmOv" onclick="closeCustomer()"></div>
 <div class="cm" id="custModal" role="dialog" aria-modal="true"></div>
+<div class="cm" id="leadModal" role="dialog" aria-modal="true"></div>
 <div class="sync-pill" id="syncPill"><span class="sync-dot"></span><span id="syncText"></span></div>
 <div class="chart-tip" id="chartTip"></div>
 
@@ -1264,12 +1270,19 @@ function handleData(data, fromCache) {
   rawLeads.forEach(l => {
     l._date = parseDate(col(l,['Date Received','Received','Date']));
     l._quote = parseAmount(col(l,['Quoted Price','Quote','Price','Value']));
-    l._status = (col(l,['Status']) || '').trim().toUpperCase();
+    l._rawStatus = (col(l,['Status']) || '').trim().toUpperCase();
+    // Pipeline status the dashboard drives, from the "Lead Status" column, falling back to
+    // the raw Zenbooker status so pre-existing leads start in the funnel with no migration.
+    l._status = ((col(l,['Lead Status']) || col(l,['Status']) || 'New').trim().toUpperCase());
+    l._leadNotes = col(l,['Lead Notes']) || '';
+    l._updatedBy = col(l,['Updated By']) || '';
+    l._key = col(l,['Key']) || '';
     l._franchisee = (col(l,['Franchisee','Owner']) || '').trim();
     l._source = (col(l,['Source']) || '').trim() || 'Unknown';
     l._name = col(l,['Customer Name','Customer','Name']);
     l._svc = col(l,['Service Requested','Service']);
     l._territory = col(l,['Territory']);
+    l._phone = col(l, PHONE_HEADERS);
   });
   rawRecurring.forEach(r => {
     r._created = parseDate(col(r,['Date Created','Created','Date']));
@@ -1642,7 +1655,7 @@ function processPrev() {
 function processLeads(b) {
   let ls = rawLeads.filter(l => matchView(l._franchisee));
   if (b.from && b.to) ls = ls.filter(l => l._date && l._date >= b.from && l._date <= b.to);
-  const byStatus = {NEW:0,CONTACTED:0,QUOTED:0,BOOKED:0,LOST:0,SPAM:0};
+  const byStatus = {NEW:0,CONTACTED:0,QUOTED:0,BOOKED:0,LOST:0,SPAM:0,'NOT RELEVANT':0};
   const bySource = {}, byFr = {Mike:0,Adam:0,Other:0};
   ls.forEach(l => {
     if (byStatus[l._status] === undefined) byStatus[l._status] = 0;
@@ -2753,6 +2766,7 @@ function openCustomer(name){
     + remBlock
     + '</div>';
   document.getElementById('cmOv').classList.add('show');
+  document.getElementById('cmOv').setAttribute('onclick','closeCustomer()');
   document.getElementById('custModal').classList.add('show');
   document.body.style.overflow='hidden';
 }
@@ -2761,6 +2775,105 @@ function closeCustomer(){
   document.getElementById('cmOv').classList.remove('show');
   document.getElementById('custModal').classList.remove('show');
   document.body.style.overflow='';
+}
+
+/* ===================== LEADS CRM ===================== */
+let leadModalFor = null;
+const LEAD_ST = [
+  ['New','New','amber'], ['Contacted','Contacted','blue'], ['Quoted','Quoted','blue'],
+  ['Booked','Booked','green'], ['Not relevant','Not relevant','grey'], ['Lost','Lost','grey'], ['Spam','Spam','grey']
+];
+function leadStLabel(v){ const u=String(v||'').toUpperCase(); for(const x of LEAD_ST) if(x[0].toUpperCase()===u) return x[1]; return v||'New'; }
+function leadStCls(v){ const u=String(v||'').toUpperCase(); for(const x of LEAD_ST) if(x[0].toUpperCase()===u) return x[2]; return 'amber'; }
+function leadPill(v){ const c=leadStCls(v); const col={amber:'#9A5410',blue:'#1D4E89',green:'var(--green)',grey:'#6B7466'}[c]||'#6B7466';
+  const bg={amber:'#FFF3E0',blue:'#E7EFF8',green:'#E7F1E9',grey:'#EEF1EC'}[c]||'#EEF1EC';
+  return '<span class="badge" style="background:'+bg+';color:'+col+'">'+escAttr(leadStLabel(v))+'</span>'; }
+function leadByKey(k){ return rawLeads.find(l => String(l._key)===String(k)) || null; }
+
+function openLead(key){
+  const l = leadByKey(key);
+  if(!l) return;
+  leadModalFor = key;
+  const wa = l._phone ? 'https://wa.me/'+waNumber(l._phone) : '';
+  const tel = l._phone ? 'tel:'+String(l._phone).replace(/[^0-9+]/g,'') : '';
+  const svc = l._svc || 'your enquiry';
+  const waMsg = encodeURIComponent('Hi'+(l._name?' '+String(l._name).split(' ')[0]:'')+', thanks for your enquiry about '+svc+' with My Tidy Garden. When would suit you for a quick chat or to arrange a visit?');
+  const mailto = 'mailto:?subject='+encodeURIComponent('My Tidy Garden \u2014 '+svc)+'&body='+waMsg;
+  const canWrite = !auth || auth.role==='All' || (l._franchisee===auth.name);
+  const menuVals = ['New','Contacted','Quoted','Booked','Not relevant','Lost','Spam'];
+  const cur = String(l._status||'New');
+  const statusBtns = menuVals.map(v=>{
+    const on = v.toUpperCase()===cur.toUpperCase();
+    return '<button class="lead-st-btn'+(on?' on':'')+'" onclick="leadSetStatus(\''+key.replace(/'/g,"\\'")+'\',\''+v+'\')">'+leadStLabel(v)+'</button>';
+  }).join('');
+  const acts = [];
+  if(tel) acts.push('<a class="call-act" href="'+tel+'">Call</a>');
+  if(wa) acts.push('<a class="call-act call-wa" href="'+wa+'?text='+waMsg+'" target="_blank" rel="noopener">WhatsApp</a>');
+  acts.push('<a class="call-act" href="'+mailto+'">Email</a>');
+  const other = l._franchisee==='Mike' ? 'Adam' : 'Mike';
+  const noteVal = escAttr(l._leadNotes||'');
+  const quoteVal = l._quote>0 ? l._quote : '';
+
+  document.getElementById('leadModal').innerHTML =
+    '<div class="cm-inner"><button class="cm-x" onclick="closeLead()">\u00d7</button>'
+    + '<div class="cm-name">'+escAttr(l._name||'Lead')+'</div>'
+    + '<div class="cm-sub">'+escAttr(l._svc||'')+(l._territory?' \u00b7 '+escAttr(l._territory):'')+'</div>'
+    + '<div class="cm-row"><span style="color:var(--muted)">Received</span><span style="margin-left:auto;font-weight:600">'+fmtDate(l._date)+'</span></div>'
+    + '<div class="cm-row"><span style="color:var(--muted)">Phone</span><span style="margin-left:auto;font-weight:600">'+(l._phone?escAttr(fmtPhone(l._phone)):'\u2014')+'</span></div>'
+    + '<div class="cm-row"><span style="color:var(--muted)">Source</span><span style="margin-left:auto;font-weight:600">'+escAttr(l._source||'\u2014')+'</span></div>'
+    + '<div class="cm-row"><span style="color:var(--muted)">Owner</span><span style="margin-left:auto">'+(l._franchisee?badge(l._franchisee):'\u2014')+'</span></div>'
+    + '<div class="cm-acts" style="display:flex;gap:8px;margin:12px 0">'+acts.join('')+'</div>'
+    + (canWrite ? (
+        '<div class="cm-sec">Quote</div>'
+        + '<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px"><span style="color:var(--muted)">\u00a3</span>'
+        + '<input id="leadQuoteInput" type="number" step="1" min="0" value="'+quoteVal+'" placeholder="set a price" style="width:120px;padding:7px 9px;border:1px solid var(--line);border-radius:6px;font:inherit">'
+        + '<button class="cm-rem-btn" style="padding:7px 12px" onclick="leadSaveQuote(\''+key.replace(/'/g,"\\'")+'\')">Save quote</button></div>'
+        + '<div class="cm-sec">Pipeline status</div>'
+        + '<div class="lead-st-grid">'+statusBtns+'</div>'
+        + '<div class="cm-sec">Notes</div>'
+        + '<textarea id="leadNoteInput" class="cm-note" rows="3" placeholder="Add a note\u2026" onchange="leadSaveNote(\''+key.replace(/'/g,"\\'")+'\', this.value)">'+noteVal+'</textarea>'
+        + '<div class="cm-sec">Transfer</div>'
+        + '<button class="cm-rev-btn" onclick="leadTransfer(\''+key.replace(/'/g,"\\'")+'\',\''+other+'\')">\u2192 Move to '+other+'</button>'
+      ) : '<div style="font-size:12px;color:var(--muted);margin-top:10px">This lead belongs to '+escAttr(l._franchisee||'the other operator')+'.</div>')
+    + '</div>';
+  document.getElementById('cmOv').classList.add('show');
+  document.getElementById('cmOv').setAttribute('onclick','closeLead()');
+  document.getElementById('leadModal').classList.add('show');
+  document.body.style.overflow='hidden';
+}
+function closeLead(){
+  leadModalFor=null;
+  document.getElementById('cmOv').classList.remove('show');
+  document.getElementById('cmOv').setAttribute('onclick','closeCustomer()');
+  document.getElementById('leadModal').classList.remove('show');
+  document.body.style.overflow='';
+}
+function _leadLocal(key, fn){ const l=leadByKey(key); if(l) fn(l); }
+function leadSetStatus(key, status){
+  apiCall({ action:'updateLeadStatus', key:key, status:status }, function(d){
+    if(d && d.ok){ _leadLocal(key, l=>{ l['Lead Status']=status; l._status=status.toUpperCase(); }); openLead(key); if(activeTab==='Leads'){ processLeads(dfBounds()); renderContent(); } }
+    else alert((d&&d.error)||'Could not update status');
+  }, function(){ alert('Could not reach the app'); });
+}
+function leadSaveNote(key, note){
+  apiCall({ action:'updateLeadNote', key:key, note:note }, function(d){
+    if(d && d.ok){ _leadLocal(key, l=>{ l['Lead Notes']=note; l._leadNotes=note; }); }
+    else alert((d&&d.error)||'Could not save note');
+  }, function(){ alert('Could not reach the app'); });
+}
+function leadSaveQuote(key){
+  const el=document.getElementById('leadQuoteInput'); if(!el) return;
+  const q=el.value;
+  apiCall({ action:'updateLeadQuote', key:key, quote:q }, function(d){
+    if(d && d.ok){ _leadLocal(key, l=>{ l['Quoted Price']=q; l._quote=parseAmount(q); }); openLead(key); if(activeTab==='Leads'){ processLeads(dfBounds()); renderContent(); } }
+    else alert((d&&d.error)||'Could not save quote');
+  }, function(){ alert('Could not reach the app'); });
+}
+function leadTransfer(key, to){
+  apiCall({ action:'transferLead', key:key, to:to }, function(d){
+    if(d && d.ok){ _leadLocal(key, l=>{ l['Franchisee']=to; l._franchisee=to; }); openLead(key); if(activeTab==='Leads'){ processLeads(dfBounds()); renderContent(); } }
+    else alert((d&&d.error)||'Transfer failed');
+  }, function(){ alert('Could not reach the app'); });
 }
 function cmSaveNote(v){
   if(!custModalFor) return;
@@ -4952,7 +5065,7 @@ function renderContent() {
       </div>
       <div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${s.list.length} leads in period</div>
         <div class="table-wrap"><table><thead><tr><th>Received</th><th>Customer</th><th>Service</th><th class="r">Quote</th><th class="c">Territory</th><th class="c">Owner</th><th class="c">Status</th><th>Source</th></tr></thead>
-        <tbody>${s.list.map(l=>'<tr><td style="color:var(--muted);font-size:12px">'+fmtDate(l._date)+'</td><td style="font-weight:500">'+(l._name||'\u2014')+'</td><td style="font-size:12px">'+(l._svc||'\u2014')+'</td><td class="r">'+(l._quote>0?fmt(l._quote):'\u2014')+'</td><td class="c" style="font-size:12px;color:var(--muted)">'+(l._territory||'\u2014')+'</td><td class="c">'+(l._franchisee?badge(l._franchisee):'\u2014')+'</td><td class="c">'+(l._status?badge(l._status):'\u2014')+'</td><td style="font-size:12px;color:var(--muted)">'+l._source+'</td></tr>').join('')}</tbody></table></div>
+        <tbody>${s.list.map(l=>'<tr class="lead-row" onclick="openLead(\''+String(l._key).replace(/'/g,"\\'")+'\')" style="cursor:pointer"><td style="color:var(--muted);font-size:12px">'+fmtDate(l._date)+'</td><td style="font-weight:500">'+(l._name||'\u2014')+'</td><td style="font-size:12px">'+(l._svc||'\u2014')+'</td><td class="r">'+(l._quote>0?fmt(l._quote):'\u2014')+'</td><td class="c" style="font-size:12px;color:var(--muted)">'+(l._territory||'\u2014')+'</td><td class="c">'+(l._franchisee?badge(l._franchisee):'\u2014')+'</td><td class="c">'+leadPill(l._status)+'</td><td style="font-size:12px;color:var(--muted)">'+l._source+'</td></tr>').join('')}</tbody></table></div>
       </div>`;
     }
   }
