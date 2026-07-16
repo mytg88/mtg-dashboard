@@ -1668,11 +1668,13 @@ function processLeads(b) {
     if (l._franchisee === 'Mike') byFr.Mike++; else if (l._franchisee === 'Adam') byFr.Adam++; else if (l._franchisee === 'HQ') byFr.HQ++; else byFr.Other++;
   });
   const spam = byStatus.SPAM||0, expired = byStatus.EXPIRED||0, declined = byStatus.DECLINED||0, accepted = byStatus.ACCEPTED||0;
-  // Spam is never counted; expired and declined leads have left this owner's funnel, so
-  // funnel percentages are measured against the ACTIVE book (still in play here).
+  const lost = byStatus.LOST||0, notRelevant = byStatus['NOT RELEVANT']||0;
+  // Spam is never counted. The ACTIVE pipeline is exactly the five funnel stages, so the
+  // stage percentages always total 100; everything else (lost, not relevant, expired,
+  // declined, spam) has left the funnel and is accounted for in the strip beneath it.
   const total = ls.length - spam, qualified = total, booked = byStatus.BOOKED||0;
-  const activeTotal = Math.max(0, ls.length - spam - expired - declined);
-  leadStats = { total, activeTotal, expired, declined, accepted, spamCount: spam, byStatus, bySource, byFr,
+  const activeTotal = (byStatus.NEW||0) + accepted + (byStatus.CONTACTED||0) + (byStatus.QUOTED||0) + booked;
+  leadStats = { total, activeTotal, expired, declined, accepted, lost, notRelevant, spamCount: spam, byStatus, bySource, byFr,
     conversion: qualified > 0 ? Math.round(booked/qualified*100) : 0,
     staleNew: byStatus.NEW||0,
     list: ls.slice().sort((a,b2) => (b2._date?b2._date:0) - (a._date?a._date:0)),
@@ -2857,6 +2859,7 @@ function openLead(key){
       + '<div class="cm-sec">'+(l._franchisee==='HQ'?'Re-offer from the HQ pool':'Transfer')+'</div>'
       + ['Mike','Adam'].filter(t=>t!==l._franchisee).map(t=>'<button class="cm-rev-btn" style="margin-right:6px" onclick="leadTransfer(\''+sk+'\',\''+t+'\')">\u2192 '+(l._franchisee==='HQ'?'Offer to ':'Move to ')+t+'</button>').join('')
       + (l._franchisee!=='HQ' && (!auth||auth.role==='All') ? '<button class="cm-rev-btn" onclick="leadTransfer(\''+sk+'\',\'HQ\')">\u2192 HQ pool</button>' : '')
+      + (l._franchisee==='HQ' && (!auth||auth.role==='All') ? '<div class="cm-sec">Reject</div><button class="cm-rev-btn" onclick="leadRejectNotify(\''+sk+'\')">Reject \u0026 notify customer\u2026</button><div style="font-size:11.5px;color:var(--muted);margin-top:4px">Marks the lead Lost and opens a standard \u201csorry, we are unable to help at this time\u201d message to the customer.</div>' : '')
     ) : (!sk
       ? '<div style="font-size:12.5px;color:var(--muted);margin-top:12px;padding:10px 12px;background:#FFF3E0;border-radius:8px">Actions are disabled: this lead has no Key yet. Add the \u201cKey\u201d, \u201cLead Status\u201d, \u201cLead Notes\u201d, \u201cUpdated By\u201d and \u201cUpdated At\u201d columns to the Leads tab and deploy the updated backend, then refresh.</div>'
       : '<div style="font-size:12px;color:var(--muted);margin-top:10px">This lead belongs to '+escAttr(l._franchisee||'the other operator')+'.</div>');
@@ -2889,7 +2892,7 @@ function closeLead(){
 function _leadLocal(key, fn){ const l=leadByKey(key); if(l) fn(l); }
 function leadSetStatus(key, status){
   apiCall({ action:'updateLeadStatus', key:key, status:status }, function(d){
-    if(d && d.ok){ _leadLocal(key, l=>{ l['Lead Status']=status; l._status=status.toUpperCase(); }); openLead(key); if(activeTab==='Leads'){ processLeads(dfBounds()); renderContent(); } }
+    if(d && d.ok){ _leadLocal(key, l=>{ l['Lead Status']=status; l._status=status.toUpperCase(); }); if(leadModalFor===key) openLead(key); if(activeTab==='Leads'){ processLeads(dfBounds()); renderContent(); } }
     else alert((d&&d.error)||'Could not update status');
   }, function(){ alert('Could not reach the app'); });
 }
@@ -2912,8 +2915,49 @@ function leadDecline(key){
   const reason = prompt('Why are you declining this lead? (e.g. at capacity, out of scope, too far)');
   if (reason === null) return;   // cancelled
   apiCall({ action:'declineLead', key:key, reason:reason }, function(d){
-    if(d && d.ok){ _leadLocal(key, l=>{ l['Lead Status']='Declined'; l._status='DECLINED'; l['Franchisee']='HQ'; l._franchisee='HQ'; }); openLead(key); if(activeTab==='Leads'){ processLeads(dfBounds()); renderContent(); } }
+    if(d && d.ok){ _leadLocal(key, l=>{ l['Lead Status']='Declined'; l._status='DECLINED'; l['Franchisee']='HQ'; l._franchisee='HQ'; }); if(leadModalFor===key) openLead(key); if(activeTab==='Leads'){ processLeads(dfBounds()); renderContent(); } }
     else alert((d&&d.error)||'Could not decline');
+  }, function(){ alert('Could not reach the app'); });
+}
+// ---- Leads table state: sorting, owner filter, spam visibility, bulk selection ----
+let leadSort = { k:'date', d:-1 }, leadOwnerFilter = 'All', leadShowSpam = false, leadSel = {}, _leadVisibleKeys = [];
+function leadSortBy(k){ if(leadSort.k===k) leadSort.d=-leadSort.d; else leadSort={k:k, d:(k==='date'||k==='quote')?-1:1}; renderContent(); }
+function leadFilterOwner(o){ leadOwnerFilter=o; leadSel={}; renderContent(); }
+function leadToggleSpam(){ leadShowSpam=!leadShowSpam; renderContent(); }
+function leadToggleSel(k, ev){ if(ev&&ev.stopPropagation) ev.stopPropagation(); if(leadSel[k]) delete leadSel[k]; else leadSel[k]=1; renderContent(); }
+function leadSelToggleAll(){ const allOn=_leadVisibleKeys.length && _leadVisibleKeys.every(k=>leadSel[k]); leadSel={}; if(!allOn) _leadVisibleKeys.forEach(k=>leadSel[k]=1); renderContent(); }
+function leadSortVal(l,k){ switch(k){ case 'date': return l._date?l._date.getTime():0; case 'customer': return (l._name||'').toLowerCase(); case 'service': return (l._svc||'').toLowerCase(); case 'quote': return l._quote||0; case 'territory': return (l._territory||'').toLowerCase(); case 'owner': return (l._franchisee||'').toLowerCase(); case 'status': return leadStLabel(l._status).toLowerCase(); case 'source': return (l._source||'').toLowerCase(); } return 0; }
+// Bulk actions over the selected leads: accept, decline (one reason for all), spam, or any status.
+function leadBulk(kind, value){
+  const keys = Object.keys(leadSel); if(!keys.length) return;
+  let reason = '';
+  if(kind==='decline'){ reason = prompt('Reason for declining these '+keys.length+' lead(s)? (applies to all)'); if(reason===null) return; }
+  if(kind==='status' && !value) return;
+  let done=0;
+  const finish=()=>{ done++; if(done===keys.length){ leadSel={}; processLeads(dfBounds()); renderContent(); } };
+  keys.forEach(k=>{
+    const onOk=d=>{ if(d&&d.ok){ const l=leadByKey(k); if(l){ if(kind==='decline'){ l['Lead Status']='Declined'; l._status='DECLINED'; l['Franchisee']='HQ'; l._franchisee='HQ'; } else { const st=(kind==='accept')?'Accepted':(kind==='spam')?'Spam':value; l['Lead Status']=st; l._status=st.toUpperCase(); } } } finish(); };
+    const onErr=()=>finish();
+    if(kind==='decline') apiCall({ action:'declineLead', key:k, reason:reason }, onOk, onErr);
+    else apiCall({ action:'updateLeadStatus', key:k, status:(kind==='accept')?'Accepted':(kind==='spam')?'Spam':value }, onOk, onErr);
+  });
+}
+// Inline accept/decline from the table row, without opening the modal.
+function leadRowAccept(k, ev){ if(ev&&ev.stopPropagation) ev.stopPropagation(); leadSetStatus(k,'Accepted'); }
+function leadRowDecline(k, ev){ if(ev&&ev.stopPropagation) ev.stopPropagation(); leadDecline(k); }
+// HQ reject with a standard customer message: marks Lost and opens a prefilled message.
+function leadRejectNotify(key){
+  const l=leadByKey(key); if(!l) return;
+  if(!confirm('Mark this lead as Lost and open a message to the customer?')) return;
+  apiCall({ action:'updateLeadStatus', key:key, status:'Lost' }, function(d){
+    if(!(d&&d.ok)){ alert((d&&d.error)||'Could not update'); return; }
+    const ll=leadByKey(key); if(ll){ ll['Lead Status']='Lost'; ll._status='LOST'; }
+    const msg='Hi'+(l._name&&l._name.indexOf('@')===-1?' '+String(l._name).split(' ')[0]:'')+', thanks for contacting My Tidy Garden. Sorry, we are unable to help with your request at this time. We hope we can help on a future occasion.';
+    const pc=l._phone?normNum(l._phone):'';
+    if(pc) window.open('https://wa.me/44'+pc+'?text='+encodeURIComponent(msg),'_blank');
+    else window.open('mailto:?subject='+encodeURIComponent('Your enquiry to My Tidy Garden')+'&body='+encodeURIComponent(msg));
+    if(leadModalFor===key) openLead(key);
+    processLeads(dfBounds()); renderContent();
   }, function(){ alert('Could not reach the app'); });
 }
 function leadTransfer(key, to){
@@ -5114,20 +5158,72 @@ function renderContent() {
       </div>
       <div class="grid grid-2">
         <div class="card"><div class="h">Lead funnel</div>${funnelSVG(stages, s.activeTotal)}
-          <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:16px;align-items:center">${badge('LOST')}<span style="font-size:12px;color:var(--muted)">${s.byStatus.LOST||0} lost</span>${badge('SPAM')}<span style="font-size:12px;color:var(--muted)">${s.byStatus.SPAM||0} spam</span>${s.expired?'<span class="badge" style="background:#FDECEA;color:#C62828">EXPIRED</span><span style="font-size:12px;color:var(--muted)">'+s.expired+' to HQ</span>':''}${s.declined?'<span class="badge" style="background:#EEF1EC;color:#6B7466">DECLINED</span><span style="font-size:12px;color:var(--muted)">'+s.declined+'</span>':''}</div>
+          <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:16px;align-items:center">${s.lost?badge('LOST')+'<span style="font-size:12px;color:var(--muted)">'+s.lost+' lost</span>':''}${s.notRelevant?'<span class="badge" style="background:#EEF1EC;color:#6B7466">NOT RELEVANT</span><span style="font-size:12px;color:var(--muted)">'+s.notRelevant+'</span>':''}${s.expired?'<span class="badge" style="background:#FDECEA;color:#C62828">EXPIRED</span><span style="font-size:12px;color:var(--muted)">'+s.expired+' to HQ</span>':''}${s.declined?'<span class="badge" style="background:#EEF1EC;color:#6B7466">DECLINED</span><span style="font-size:12px;color:var(--muted)">'+s.declined+'</span>':''}${s.spamCount?'<span class="badge" style="background:#EEF1EC;color:#6B7466">SPAM</span><span style="font-size:12px;color:var(--muted)">'+s.spamCount+'</span>':''}${(!s.lost&&!s.notRelevant&&!s.expired&&!s.declined&&!s.spamCount)?'<span style="font-size:12px;color:var(--muted)">Nothing has left the funnel</span>':''}</div>
         </div>
         <div class="card"><div class="h">Services requested</div>
           ${svcRows.length===0?'<div style="color:var(--muted);font-size:13px">No leads in period.</div>':svcRows.map(x=>'<div style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:13px"><span style="font-weight:500">'+escAttr(x[0])+'</span><span style="color:var(--muted);font-size:12px;white-space:nowrap">'+x[1].n+' lead'+(x[1].n===1?'':'s')+(x[1].q>0?' \u00b7 '+fmt(x[1].q)+' quoted':'')+(x[1].booked?' \u00b7 '+x[1].booked+' booked':'')+'</span></div><div style="height:8px;background:#EEF1EC;border-radius:4px;margin-top:5px"><div style="height:8px;border-radius:4px;background:var(--green);width:'+Math.round(x[1].n/maxSvc*100)+'%"></div></div></div>').join('')}
         </div>
       </div>
-      <div class="card"><div style="font-size:13px;color:var(--muted);margin-bottom:12px">${s.list.length} leads in period</div>
-        <div class="table-wrap"><table><thead><tr><th>Received</th><th>Customer</th><th>Service</th><th class="r">Quote</th><th class="c">Territory</th><th class="c">Owner</th><th class="c">Status</th><th>Source</th></tr></thead>
-        <tbody>${s.list.map(l=>'<tr class="lead-row" onclick="openLead(\''+String(l._key).replace(/'/g,"\\'")+'\')" style="cursor:pointer"><td style="color:var(--muted);font-size:12px">'+fmtDate(l._date)+'</td><td style="font-weight:500">'+(l._name||'\u2014')+'</td><td style="font-size:12px">'+(l._svc||'\u2014')+'</td><td class="r">'+(l._quote>0?fmt(l._quote):'\u2014')+'</td><td class="c" style="font-size:12px;color:var(--muted)">'+(l._territory||'\u2014')+'</td><td class="c">'+(l._franchisee?badge(l._franchisee):'\u2014')+'</td><td class="c">'+leadPill(l._status)+'</td><td style="font-size:12px;color:var(--muted)">'+l._source+'</td></tr>').join('')}</tbody></table></div>
+      <div class="card">
+        ${(()=>{
+          // ---- filter, sort, and selection over the period's leads ----
+          let list = s.list.slice();
+          const spamCountTable = list.filter(l=>l._status==='SPAM').length;
+          if(!leadShowSpam) list = list.filter(l=>l._status!=='SPAM');
+          if(franchiseeView==='All' && leadOwnerFilter!=='All') list = list.filter(l=>(l._franchisee||'')===leadOwnerFilter);
+          list.sort((a,b)=>{ const va=leadSortVal(a,leadSort.k), vb=leadSortVal(b,leadSort.k); return (va<vb?-1:va>vb?1:0)*leadSort.d; });
+          _leadVisibleKeys = list.filter(l=>l._serverKey).map(l=>String(l._key));
+          const selCount = _leadVisibleKeys.filter(k=>leadSel[k]).length;
+          const chip = (label,val,cur,fn,count)=>'<button class="rb-vt'+(cur===val?' on':'')+'" onclick="'+fn+'(\''+val+'\')">'+label+(count!=null?' ('+count+')':'')+'</button>';
+          const ownerCounts = {All:s.list.filter(l=>l._status!=='SPAM').length, Mike:0, Adam:0, HQ:0};
+          s.list.forEach(l=>{ if(l._status==='SPAM') return; if(ownerCounts[l._franchisee]!==undefined) ownerCounts[l._franchisee]++; });
+          const filterRow = '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px">'
+            + (franchiseeView==='All' ? '<div class="rb-viewtog">'+chip('All','All',leadOwnerFilter,'leadFilterOwner',ownerCounts.All)+chip('Mike','Mike',leadOwnerFilter,'leadFilterOwner',ownerCounts.Mike)+chip('Adam','Adam',leadOwnerFilter,'leadFilterOwner',ownerCounts.Adam)+chip('HQ pool','HQ',leadOwnerFilter,'leadFilterOwner',ownerCounts.HQ)+'</div>' : '')
+            + (spamCountTable ? '<button class="rb-vt'+(leadShowSpam?' on':'')+'" style="border:1px solid var(--line);border-radius:var(--r-sm)" onclick="leadToggleSpam()">'+(leadShowSpam?'Hide':'Show')+' spam ('+spamCountTable+')</button>' : '')
+            + '<span style="margin-left:auto;font-size:13px;color:var(--muted)">'+list.length+' lead'+(list.length===1?'':'s')+'</span></div>';
+          const bulkBar = selCount ? '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;padding:10px 12px;background:#F5F6F2;border:1px solid var(--line);border-radius:8px">'
+            + '<b style="font-size:13px">'+selCount+' selected</b>'
+            + '<button class="cm-rem-btn" style="padding:7px 12px" onclick="leadBulk(\'accept\')">Accept</button>'
+            + '<button class="lead-st-btn" onclick="leadBulk(\'decline\')">Decline\u2026</button>'
+            + '<button class="lead-st-btn" onclick="leadBulk(\'spam\')">Spam</button>'
+            + '<select style="font:inherit;font-size:12.5px;padding:6px 8px;border:1px solid var(--line);border-radius:6px" onchange="if(this.value){leadBulk(\'status\',this.value);this.value=\'\';}">'
+            + '<option value="">Set status\u2026</option>' + ['New','Accepted','Contacted','Quoted','Booked','Not relevant','Lost'].map(v=>'<option>'+v+'</option>').join('')
+            + '</select>'
+            + '<button class="lead-st-btn" onclick="leadSel={};renderContent()">Clear</button></div>' : '';
+          const arrow = k => leadSort.k===k ? (leadSort.d===1?' \u2191':' \u2193') : '';
+          const th = (label,k,cls)=>'<th class="'+(cls||'')+'" style="cursor:pointer;user-select:none;white-space:nowrap" onclick="leadSortBy(\''+k+'\')">'+label+arrow(k)+'</th>';
+          const allOn = _leadVisibleKeys.length && _leadVisibleKeys.every(k=>leadSel[k]);
+          const head = '<thead><tr><th style="width:30px"><input type="checkbox" '+(allOn?'checked':'')+' onclick="event.stopPropagation();leadSelToggleAll()"></th>'
+            + th('Received','date') + th('Customer','customer') + th('Service','service') + th('Quote','quote','r')
+            + th('Territory','territory','c') + th('Owner','owner','c') + th('Status','status','c') + th('Source','source')
+            + '<th></th></tr></thead>';
+          const rows = list.map(l=>{
+            const key = String(l._key).replace(/'/g,"\\'");
+            const canAct = l._serverKey && (!auth || auth.role==='All' || l._franchisee===auth.name);
+            const cb = l._serverKey ? '<input type="checkbox" '+(leadSel[l._key]?'checked':'')+' onclick="leadToggleSel(\''+key+'\',event)">' : '';
+            const inline = (canAct && l._status==='NEW')
+              ? '<span style="white-space:nowrap"><button class="cm-rem-btn" style="padding:5px 10px;font-size:12px" title="Accept this lead" onclick="leadRowAccept(\''+key+'\',event)">Accept</button>'
+                + '<button class="lead-st-btn" style="padding:5px 9px;margin-left:5px" title="Decline to the HQ pool" onclick="leadRowDecline(\''+key+'\',event)">\u2715</button></span>'
+              : '';
+            return '<tr class="lead-row" onclick="openLead(\''+key+'\')" style="cursor:pointer">'
+              + '<td onclick="event.stopPropagation()">'+cb+'</td>'
+              + '<td style="color:var(--muted);font-size:12px;white-space:nowrap">'+fmtDate(l._date)+'</td>'
+              + '<td style="font-weight:500">'+(l._name||'\u2014')+'</td>'
+              + '<td style="font-size:12px">'+(l._svc||'\u2014')+'</td>'
+              + '<td class="r">'+(l._quote>0?fmt(l._quote):'\u2014')+'</td>'
+              + '<td class="c" style="font-size:12px;color:var(--muted)">'+(l._territory||'\u2014')+'</td>'
+              + '<td class="c">'+(l._franchisee?badge(l._franchisee):'\u2014')+'</td>'
+              + '<td class="c">'+leadPill(l._status)+'</td>'
+              + '<td style="font-size:12px;color:var(--muted)">'+l._source+'</td>'
+              + '<td onclick="event.stopPropagation()">'+inline+'</td></tr>';
+          }).join('');
+          return filterRow + bulkBar + '<div class="table-wrap"><table>' + head + '<tbody>' + rows + '</tbody></table></div>';
+        })()}
       </div>
       <div class="card"><div class="h">By source</div>
         ${sources.length===0?'<div style="color:var(--muted);font-size:13px">No source data.</div>':sources.map(x=>'<div class="bar-row"><span class="bar-l" style="width:auto;min-width:70px;text-align:left">'+x[0].slice(0,16)+'</span><div class="bar-c"><div class="bar" style="width:'+Math.round(x[1]/maxSrc*100)+'%"></div><span class="bar-v">'+x[1]+'</span></div></div>').join('')}
         <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:24px;font-size:13px;align-items:center">
-          <span>${badge('Mike')} <b>${s.byFr.Mike}</b></span><span>${badge('Adam')} <b>${s.byFr.Adam}</b></span>${s.byFr.HQ?'<span><span class="badge" style="background:#FDECEA;color:#C62828">HQ pool</span> <b>'+s.byFr.HQ+'</b></span>':''}${s.byFr.Other?'<span style="color:var(--muted)">'+s.byFr.Other+' unrouted</span>':''}
+          ${franchiseeView!=='All'?'':`<span>${badge('Mike')} <b>${s.byFr.Mike}</b></span><span>${badge('Adam')} <b>${s.byFr.Adam}</b></span>`}${s.byFr.HQ?'<span><span class="badge" style="background:#FDECEA;color:#C62828">HQ pool</span> <b>'+s.byFr.HQ+'</b></span>':''}${s.byFr.Other?'<span style="color:var(--muted)">'+s.byFr.Other+' unrouted</span>':''}
         </div>
       </div>`;
     }
