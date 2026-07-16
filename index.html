@@ -1667,8 +1667,12 @@ function processLeads(b) {
     bySource[l._source] = (bySource[l._source]||0)+1;
     if (l._franchisee === 'Mike') byFr.Mike++; else if (l._franchisee === 'Adam') byFr.Adam++; else if (l._franchisee === 'HQ') byFr.HQ++; else byFr.Other++;
   });
-  const total = ls.length, spam = byStatus.SPAM||0, qualified = total - spam, booked = byStatus.BOOKED||0;
-  leadStats = { total, byStatus, bySource, byFr,
+  const spam = byStatus.SPAM||0, expired = byStatus.EXPIRED||0, declined = byStatus.DECLINED||0, accepted = byStatus.ACCEPTED||0;
+  // Spam is never counted; expired and declined leads have left this owner's funnel, so
+  // funnel percentages are measured against the ACTIVE book (still in play here).
+  const total = ls.length - spam, qualified = total, booked = byStatus.BOOKED||0;
+  const activeTotal = Math.max(0, ls.length - spam - expired - declined);
+  leadStats = { total, activeTotal, expired, declined, accepted, spamCount: spam, byStatus, bySource, byFr,
     conversion: qualified > 0 ? Math.round(booked/qualified*100) : 0,
     staleNew: byStatus.NEW||0,
     list: ls.slice().sort((a,b2) => (b2._date?b2._date:0) - (a._date?a._date:0)),
@@ -3048,7 +3052,7 @@ function funnelSVG(stages, total) {
     out += '<rect x="'+x.toFixed(1)+'" y="'+y+'" width="'+w.toFixed(1)+'" height="40" rx="8" fill="'+s.color+'"/>';
     if (w>70) out += '<text x="'+(x+w/2).toFixed(1)+'" y="'+(y+25)+'" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">'+pct+'%</text>';
     out += '<text x="'+(W-200)+'" y="'+(y+19)+'" font-size="13" font-weight="600" fill="#16241C">'+s.label+'</text>';
-    out += '<text x="'+(W-200)+'" y="'+(y+35)+'" font-size="11" fill="#7C8A7E">'+pct+'% of all leads</text>';
+    out += '<text x="'+(W-200)+'" y="'+(y+35)+'" font-size="11" fill="#7C8A7E">'+pct+'% of active leads</text>';
     out += '<text x="'+(W-14)+'" y="'+(y+28)+'" font-size="19" font-weight="700" text-anchor="end" fill="#16241C" font-family="Fraunces,serif">'+s.count+'</text>';
   });
   out += '</svg></div>';
@@ -5082,6 +5086,7 @@ function renderContent() {
       const s = leadStats;
       const stages = [
         {label:'New',count:s.byStatus.NEW||0,color:'#E65100'},
+        {label:'Accepted',count:s.byStatus.ACCEPTED||0,color:'#00695C'},
         {label:'Contacted',count:s.byStatus.CONTACTED||0,color:'#1565C0'},
         {label:'Quoted',count:s.byStatus.QUOTED||0,color:'#6A1B9A'},
         {label:'Booked',count:s.byStatus.BOOKED||0,color:'#2E7D32'}
@@ -5102,14 +5107,14 @@ function renderContent() {
       const maxSvc = Math.max(1, ...svcRows.map(x=>x[1].n));
       el.innerHTML = `
       <div class="grid grid-4">
-        <div class="card accent-top"><div class="kpi-l">Total Leads</div><div class="kpi-v">${s.total}</div><div class="kpi-s">in period</div></div>
+        <div class="card accent-top"><div class="kpi-l">Total Leads</div><div class="kpi-v">${s.total}</div><div class="kpi-s">in period${s.spamCount?' \u00b7 '+s.spamCount+' spam excluded':''}</div></div>
         <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Conversion</div><div class="kpi-v">${s.conversion}%</div><div class="kpi-s">booked of non-spam</div></div>
         <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Booked</div><div class="kpi-v">${s.byStatus.BOOKED||0}</div><div class="kpi-s">won this period</div></div>
         <div class="card accent-top" style="border-top-color:var(--accent)"><div class="kpi-l">Still New</div><div class="kpi-v" style="color:var(--amber)">${s.staleNew}</div><div class="kpi-s">need actioning</div></div>
       </div>
       <div class="grid grid-2">
-        <div class="card"><div class="h">Lead funnel</div>${funnelSVG(stages, s.total)}
-          <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:16px;align-items:center">${badge('LOST')}<span style="font-size:12px;color:var(--muted)">${s.byStatus.LOST||0} lost</span>${badge('SPAM')}<span style="font-size:12px;color:var(--muted)">${s.byStatus.SPAM||0} spam</span></div>
+        <div class="card"><div class="h">Lead funnel</div>${funnelSVG(stages, s.activeTotal)}
+          <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:16px;align-items:center">${badge('LOST')}<span style="font-size:12px;color:var(--muted)">${s.byStatus.LOST||0} lost</span>${badge('SPAM')}<span style="font-size:12px;color:var(--muted)">${s.byStatus.SPAM||0} spam</span>${s.expired?'<span class="badge" style="background:#FDECEA;color:#C62828">EXPIRED</span><span style="font-size:12px;color:var(--muted)">'+s.expired+' to HQ</span>':''}${s.declined?'<span class="badge" style="background:#EEF1EC;color:#6B7466">DECLINED</span><span style="font-size:12px;color:var(--muted)">'+s.declined+'</span>':''}</div>
         </div>
         <div class="card"><div class="h">Services requested</div>
           ${svcRows.length===0?'<div style="color:var(--muted);font-size:13px">No leads in period.</div>':svcRows.map(x=>'<div style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:13px"><span style="font-weight:500">'+escAttr(x[0])+'</span><span style="color:var(--muted);font-size:12px;white-space:nowrap">'+x[1].n+' lead'+(x[1].n===1?'':'s')+(x[1].q>0?' \u00b7 '+fmt(x[1].q)+' quoted':'')+(x[1].booked?' \u00b7 '+x[1].booked+' booked':'')+'</span></div><div style="height:8px;background:#EEF1EC;border-radius:4px;margin-top:5px"><div style="height:8px;border-radius:4px;background:var(--green);width:'+Math.round(x[1].n/maxSvc*100)+'%"></div></div></div>').join('')}
