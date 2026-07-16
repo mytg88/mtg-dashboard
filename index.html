@@ -1660,12 +1660,12 @@ function processLeads(b) {
   let ls = rawLeads.filter(l => matchView(l._franchisee));
   if (b.from && b.to) ls = ls.filter(l => l._date && l._date >= b.from && l._date <= b.to);
   const byStatus = {NEW:0,CONTACTED:0,QUOTED:0,BOOKED:0,LOST:0,SPAM:0,'NOT RELEVANT':0};
-  const bySource = {}, byFr = {Mike:0,Adam:0,Other:0};
+  const bySource = {}, byFr = {Mike:0,Adam:0,HQ:0,Other:0};
   ls.forEach(l => {
     if (byStatus[l._status] === undefined) byStatus[l._status] = 0;
     byStatus[l._status]++;
     bySource[l._source] = (bySource[l._source]||0)+1;
-    if (l._franchisee === 'Mike') byFr.Mike++; else if (l._franchisee === 'Adam') byFr.Adam++; else byFr.Other++;
+    if (l._franchisee === 'Mike') byFr.Mike++; else if (l._franchisee === 'Adam') byFr.Adam++; else if (l._franchisee === 'HQ') byFr.HQ++; else byFr.Other++;
   });
   const total = ls.length, spam = byStatus.SPAM||0, qualified = total - spam, booked = byStatus.BOOKED||0;
   leadStats = { total, byStatus, bySource, byFr,
@@ -2784,13 +2784,13 @@ function closeCustomer(){
 /* ===================== LEADS CRM ===================== */
 let leadModalFor = null;
 const LEAD_ST = [
-  ['New','New','amber'], ['Contacted','Contacted','blue'], ['Quoted','Quoted','blue'],
-  ['Booked','Booked','green'], ['Not relevant','Not relevant','grey'], ['Lost','Lost','grey'], ['Spam','Spam','grey']
+  ['New','New','amber'], ['Accepted','Accepted','blue'], ['Contacted','Contacted','blue'], ['Quoted','Quoted','blue'],
+  ['Booked','Booked','green'], ['Declined','Declined','grey'], ['Expired','Expired','red'], ['Not relevant','Not relevant','grey'], ['Lost','Lost','grey'], ['Spam','Spam','grey']
 ];
 function leadStLabel(v){ const u=String(v||'').toUpperCase(); for(const x of LEAD_ST) if(x[0].toUpperCase()===u) return x[1]; return v||'New'; }
 function leadStCls(v){ const u=String(v||'').toUpperCase(); for(const x of LEAD_ST) if(x[0].toUpperCase()===u) return x[2]; return 'amber'; }
-function leadPill(v){ const c=leadStCls(v); const col={amber:'#9A5410',blue:'#1D4E89',green:'var(--green)',grey:'#6B7466'}[c]||'#6B7466';
-  const bg={amber:'#FFF3E0',blue:'#E7EFF8',green:'#E7F1E9',grey:'#EEF1EC'}[c]||'#EEF1EC';
+function leadPill(v){ const c=leadStCls(v); const col={amber:'#9A5410',blue:'#1D4E89',green:'var(--green)',grey:'#6B7466',red:'#C62828'}[c]||'#6B7466';
+  const bg={amber:'#FFF3E0',blue:'#E7EFF8',green:'#E7F1E9',grey:'#EEF1EC',red:'#FDECEA'}[c]||'#EEF1EC';
   return '<span class="badge" style="background:'+bg+';color:'+col+'">'+escAttr(leadStLabel(v))+'</span>'; }
 function leadByKey(k){ return rawLeads.find(l => String(l._key)===String(k)) || null; }
 
@@ -2811,10 +2811,29 @@ function openLead(key){
   const mailto = 'mailto:?subject='+encodeURIComponent('My Tidy Garden \u2014 '+svc)+'&body='+waMsg;
   const canWrite = !!sk && (!auth || auth.role==='All' || (l._franchisee===auth.name));
   const cur = String(l._status||'New');
-  const statusBtns = ['New','Contacted','Quoted','Booked','Not relevant','Lost','Spam'].map(v=>{
+  const statusBtns = ['New','Accepted','Contacted','Quoted','Booked','Not relevant','Lost','Spam'].map(v=>{
     const on = v.toUpperCase()===cur.toUpperCase();
     return '<button class="lead-st-btn'+(on?' on':'')+'" onclick="leadSetStatus(\''+sk+'\',\''+v+'\')">'+leadStLabel(v)+'</button>';
   }).join('');
+  // The OFFER banner: a New lead is an offer on a clock. Accept starts working it;
+  // Decline (reason required) sends it straight to the HQ pool for re-offering.
+  let offerBlock = '';
+  if (canWrite && cur.toUpperCase()==='NEW') {
+    let clockText = '';
+    if (l._date) {
+      const hoursLeft = Math.round(24 - (Date.now() - l._date.getTime())/3600000);
+      clockText = hoursLeft > 0
+        ? 'Respond within the 24-hour window or this lead reassigns to HQ.'
+        : 'The 24-hour window has passed; this lead reassigns to HQ on the next sweep.';
+    }
+    offerBlock = '<div style="margin:14px 0 4px;padding:12px 14px;background:#FFF8EE;border:1px solid #F0DFC4;border-radius:10px">'
+      + '<div style="font-size:12px;font-weight:700;color:#9A5410;letter-spacing:.04em;margin-bottom:6px">NEW LEAD OFFER</div>'
+      + (clockText?'<div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">'+clockText+'</div>':'')
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      + '<button class="cm-rem-btn" style="padding:9px 18px" onclick="leadAccept(\''+sk+'\')">Accept lead</button>'
+      + '<button class="lead-st-btn" style="padding:9px 14px" onclick="leadDecline(\''+sk+'\')">Decline\u2026</button>'
+      + '</div></div>';
+  }
   const acts = [];
   if(tel) acts.push('<a class="call-act" href="'+tel+'">Call</a>');
   if(wa) acts.push('<a class="call-act call-wa" href="'+wa+'?text='+waMsg+'" target="_blank" rel="noopener">WhatsApp</a>');
@@ -2831,8 +2850,9 @@ function openLead(key){
       + '<div class="lead-st-grid">'+statusBtns+'</div>'
       + '<div class="cm-sec">Notes</div>'
       + '<textarea id="leadNoteInput" class="cm-note" rows="3" placeholder="Add a note\u2026" onchange="leadSaveNote(\''+sk+'\', this.value)">'+noteVal+'</textarea>'
-      + '<div class="cm-sec">Transfer</div>'
-      + '<button class="cm-rev-btn" onclick="leadTransfer(\''+sk+'\',\''+other+'\')">\u2192 Move to '+other+'</button>'
+      + '<div class="cm-sec">'+(l._franchisee==='HQ'?'Re-offer from the HQ pool':'Transfer')+'</div>'
+      + ['Mike','Adam'].filter(t=>t!==l._franchisee).map(t=>'<button class="cm-rev-btn" style="margin-right:6px" onclick="leadTransfer(\''+sk+'\',\''+t+'\')">\u2192 '+(l._franchisee==='HQ'?'Offer to ':'Move to ')+t+'</button>').join('')
+      + (l._franchisee!=='HQ' && (!auth||auth.role==='All') ? '<button class="cm-rev-btn" onclick="leadTransfer(\''+sk+'\',\'HQ\')">\u2192 HQ pool</button>' : '')
     ) : (!sk
       ? '<div style="font-size:12.5px;color:var(--muted);margin-top:12px;padding:10px 12px;background:#FFF3E0;border-radius:8px">Actions are disabled: this lead has no Key yet. Add the \u201cKey\u201d, \u201cLead Status\u201d, \u201cLead Notes\u201d, \u201cUpdated By\u201d and \u201cUpdated At\u201d columns to the Leads tab and deploy the updated backend, then refresh.</div>'
       : '<div style="font-size:12px;color:var(--muted);margin-top:10px">This lead belongs to '+escAttr(l._franchisee||'the other operator')+'.</div>');
@@ -2847,6 +2867,7 @@ function openLead(key){
     + '<div class="cm-row"><span style="color:var(--muted)">Phone</span><span style="margin-left:auto;font-weight:600">'+(phoneUk?escAttr(fmtPhone(phoneUk)):'\u2014')+'</span></div>'
     + '<div class="cm-row"><span style="color:var(--muted)">Source</span><span style="margin-left:auto;font-weight:600">'+escAttr(l._source||'\u2014')+'</span></div>'
     + '<div class="cm-acts" style="display:flex;gap:8px;margin:14px 0 4px">'+acts.join('')+'</div>'
+    + offerBlock
     + writeBlock
     + '</div>';
   document.getElementById('cmOv').classList.add('show');
@@ -2880,6 +2901,15 @@ function leadSaveQuote(key){
   apiCall({ action:'updateLeadQuote', key:key, quote:q }, function(d){
     if(d && d.ok){ _leadLocal(key, l=>{ l['Quoted Price']=q; l._quote=parseAmount(q); }); openLead(key); if(activeTab==='Leads'){ processLeads(dfBounds()); renderContent(); } }
     else alert((d&&d.error)||'Could not save quote');
+  }, function(){ alert('Could not reach the app'); });
+}
+function leadAccept(key){ leadSetStatus(key, 'Accepted'); }
+function leadDecline(key){
+  const reason = prompt('Why are you declining this lead? (e.g. at capacity, out of scope, too far)');
+  if (reason === null) return;   // cancelled
+  apiCall({ action:'declineLead', key:key, reason:reason }, function(d){
+    if(d && d.ok){ _leadLocal(key, l=>{ l['Lead Status']='Declined'; l._status='DECLINED'; l['Franchisee']='HQ'; l._franchisee='HQ'; }); openLead(key); if(activeTab==='Leads'){ processLeads(dfBounds()); renderContent(); } }
+    else alert((d&&d.error)||'Could not decline');
   }, function(){ alert('Could not reach the app'); });
 }
 function leadTransfer(key, to){
@@ -5092,7 +5122,7 @@ function renderContent() {
       <div class="card"><div class="h">By source</div>
         ${sources.length===0?'<div style="color:var(--muted);font-size:13px">No source data.</div>':sources.map(x=>'<div class="bar-row"><span class="bar-l" style="width:auto;min-width:70px;text-align:left">'+x[0].slice(0,16)+'</span><div class="bar-c"><div class="bar" style="width:'+Math.round(x[1]/maxSrc*100)+'%"></div><span class="bar-v">'+x[1]+'</span></div></div>').join('')}
         <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:24px;font-size:13px;align-items:center">
-          <span>${badge('Mike')} <b>${s.byFr.Mike}</b></span><span>${badge('Adam')} <b>${s.byFr.Adam}</b></span>${s.byFr.Other?'<span style="color:var(--muted)">'+s.byFr.Other+' unrouted</span>':''}
+          <span>${badge('Mike')} <b>${s.byFr.Mike}</b></span><span>${badge('Adam')} <b>${s.byFr.Adam}</b></span>${s.byFr.HQ?'<span><span class="badge" style="background:#FDECEA;color:#C62828">HQ pool</span> <b>'+s.byFr.HQ+'</b></span>':''}${s.byFr.Other?'<span style="color:var(--muted)">'+s.byFr.Other+' unrouted</span>':''}
         </div>
       </div>`;
     }
