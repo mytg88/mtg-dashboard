@@ -2922,7 +2922,7 @@ function openLead(key){
       + '<div class="cm-sec">'+(l._franchisee==='HQ'?'Re-offer from the HQ pool':'Transfer')+'</div>'
       + ['Mike','Adam'].filter(t=>t!==l._franchisee).map(t=>'<button class="cm-rev-btn" style="margin-right:6px" onclick="leadTransfer(\''+sk+'\',\''+t+'\')">\u2192 '+(l._franchisee==='HQ'?'Offer to ':'Move to ')+t+'</button>').join('')
       + (l._franchisee!=='HQ' && (!auth||auth.role==='All') ? '<button class="cm-rev-btn" onclick="leadTransfer(\''+sk+'\',\'HQ\')">\u2192 HQ pool</button>' : '')
-      + (l._franchisee==='HQ' && (!auth||auth.role==='All') ? '<div class="cm-sec">Reject</div><button class="cm-rev-btn" onclick="leadRejectNotify(\''+sk+'\')">Reject \u0026 notify customer\u2026</button><div style="font-size:11.5px;color:var(--muted);margin-top:4px">Marks the lead Lost and opens a standard \u201csorry, we are unable to help at this time\u201d message to the customer.</div>' : '')
+      + '<div class="cm-sec">Reject</div><button class="cm-rev-btn" style="margin-right:6px" onclick="leadRejectNotify(\''+sk+'\')">Reject \u0026 notify customer\u2026</button><button class="cm-rev-btn" onclick="if(confirm(\'Mark this lead as Lost without messaging the customer?\')) leadSetStatus(\''+sk+'\',\'Lost\')">Reject (no message)</button><div style="font-size:11.5px;color:var(--muted);margin-top:4px">Reject \u0026 notify marks the lead Lost and opens a standard \u201csorry, we are unable to help at this time\u201d message; plain Reject just marks it Lost.</div>'
     ) : (!sk
       ? '<div style="font-size:12.5px;color:var(--muted);margin-top:12px;padding:10px 12px;background:#FFF3E0;border-radius:8px">Actions are disabled: this lead has no Key yet. Add the \u201cKey\u201d, \u201cLead Status\u201d, \u201cLead Notes\u201d, \u201cUpdated By\u201d and \u201cUpdated At\u201d columns to the Leads tab and deploy the updated backend, then refresh.</div>'
       : '<div style="font-size:12px;color:var(--muted);margin-top:10px">This lead belongs to '+escAttr(l._franchisee||'the other operator')+'.</div>');
@@ -3000,7 +3000,7 @@ function mlQueueBuild(){
     if(own && l._offer==='PENDING' && l._stage==='NEW') q.push({t:'offer', l});
     else if(own && l._offer==='ACCEPTED' && l._stage==='NEW') q.push({t:'contact', l});
     else if(own && l._offer==='ACCEPTED' && (l._stage==='CONTACTED'||l._stage==='QUOTED') && l._updatedAtD && (Date.now()-l._updatedAtD.getTime())>STALE_MS) q.push({t:'stale', l});
-    else if(l._franchisee==='HQ' && (!auth||auth.role==='All') && ['LOST','NOT RELEVANT','BOOKED'].indexOf(l._stage)===-1) q.push({t:'pool', l});
+    else if(l._franchisee==='HQ' && franchiseeView==='All' && (!auth||auth.role==='All') && ['LOST','NOT RELEVANT','BOOKED'].indexOf(l._stage)===-1) q.push({t:'pool', l});
   });
   const rank={offer:0,contact:1,stale:2,pool:3};
   q.sort((a,b)=> rank[a.t]-rank[b.t] || ((a.l._date&&b.l._date)?(a.l._date-b.l._date):0));
@@ -3025,10 +3025,10 @@ function mlRender(){
   const note=l._leadNotes?('<div style="font-size:12px;color:var(--muted);white-space:pre-wrap;background:#F5F6F2;border-radius:8px;padding:8px 10px;margin-top:10px;max-height:110px;overflow:auto">'+escAttr(l._leadNotes).slice(0,400)+'</div>'):'';
   const B=(label,fn,primary)=>'<button class="'+(primary?'cm-rem-btn':'lead-st-btn')+'" style="padding:9px 14px" onclick="'+fn+'">'+label+'</button>';
   let actions='';
-  if(it.t==='offer') actions=B('Accept lead','mlAccept(\''+sk+'\')',1)+B('Decline\u2026','mlDecline(\''+sk+'\')')+B('Spam','mlStatus(\''+sk+'\',\'Spam\')');
+  if(it.t==='offer') actions=B('Accept lead','mlAccept(\''+sk+'\')',1)+B('Decline\u2026','mlDecline(\''+sk+'\')')+B('Reject \u0026 notify\u2026','mlReject(\''+sk+'\')')+B('Reject','mlStatus(\''+sk+'\',\'Lost\')')+B('Spam','mlStatus(\''+sk+'\',\'Spam\')');
   else if(it.t==='contact') actions=comms+B('Mark contacted','mlStatus(\''+sk+'\',\'Contacted\')',1)+B('Lost','mlStatus(\''+sk+'\',\'Lost\')');
   else if(it.t==='stale') actions=B('Still waiting','mlStill(\''+sk+'\')')+(l._stage==='CONTACTED'?B('Quoted\u2026','mlQuote(\''+sk+'\')',1):'')+B('Booked','mlStatus(\''+sk+'\',\'Booked\')',l._stage!=='CONTACTED')+B('Lost','mlStatus(\''+sk+'\',\'Lost\')');
-  else actions=B('Offer to Mike','mlTransfer(\''+sk+'\',\'Mike\')')+B('Offer to Adam','mlTransfer(\''+sk+'\',\'Adam\')')+B('Reject \u0026 notify\u2026','mlReject(\''+sk+'\')')+B('Spam','mlStatus(\''+sk+'\',\'Spam\')');
+  else actions=B('Offer to Mike','mlTransfer(\''+sk+'\',\'Mike\')')+B('Offer to Adam','mlTransfer(\''+sk+'\',\'Adam\')')+B('Reject \u0026 notify\u2026','mlReject(\''+sk+'\')')+B('Reject','mlStatus(\''+sk+'\',\'Lost\')')+B('Spam','mlStatus(\''+sk+'\',\'Spam\')');
   el.innerHTML='<div class="cm-head"><div><div style="font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--muted)">MANAGE LEADS \u00b7 '+(mlIdx+1)+' OF '+mlQueue.length+'</div><div class="cm-name">'+escAttr(l._name||'Lead')+'</div>'
     +'<div class="cm-badges">'+leadPill(l._status)+(l._franchisee?badge(l._franchisee):'')+'<span class="badge" style="background:#EEF1EC;color:#6B7466">'+titles[it.t]+'</span></div></div>'
     +'<button class="cm-x" onclick="mlClose()" aria-label="Close">\u00d7</button></div>'
