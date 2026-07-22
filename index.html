@@ -2458,7 +2458,7 @@ function recalcPlanner(){
     set('.pl-s', m.valSeason?fmt(Math.round(m.valSeason)):'\u2014');
     set('.pl-o', f.wOn&&m.valOff?fmt(Math.round(m.valOff)):'\u2014');
     set('.pl-t', m.total?fmt(Math.round(m.total)):'\u2014');
-    set('.pl-h', m.hrsSeason?(Math.round(m.hrsSeason)+'h'):'\u2014');
+    set('.pl-h', (m.hrsSeason+m.hrsOff)?(Math.round(m.hrsSeason+m.hrsOff)+'h'):'\u2014');
     row.querySelectorAll('[data-f="wV"],[data-f="wPv"]').forEach(el=>{ el.disabled = !f.wOn; el.style.opacity = f.wOn?'1':'0.4'; });
     vS+=m.valSeason; vO+=m.valOff; hS+=m.hrsSeason; hO+=m.hrsOff;
   });
@@ -2520,7 +2520,7 @@ function renderPlannerTab(){
       + '<td class="r pl-s" style="font-weight:600">'+(m.valSeason?fmt(Math.round(m.valSeason)):'\u2014')+'</td>'
       + '<td class="r pl-o">'+(f.wOn&&m.valOff?fmt(Math.round(m.valOff)):'\u2014')+'</td>'
       + '<td class="r pl-t" style="font-weight:700">'+(m.total?fmt(Math.round(m.total)):'\u2014')+'</td>'
-      + '<td class="r pl-h" style="color:var(--muted)">'+(m.hrsSeason?(Math.round(m.hrsSeason)+'h'):'\u2014')+'</td>'
+      + '<td class="r pl-h" style="color:var(--muted)">'+((m.hrsSeason+m.hrsOff)?(Math.round(m.hrsSeason+m.hrsOff)+'h'):'\u2014')+'</td>'
       + '</tr>'; }).join('');
   const table = '<div class="card"><div class="h">Per customer ('+rows.length+')</div><div style="font-size:12px;color:var(--muted);margin-bottom:12px">Visits per 4 weeks, hours per visit and pound per visit set the core season. Hrs is the TOTAL labour on the visit; Gdnrs is how many gardeners work it, so a 15h job done by 2 people still counts 15h here but shows as your 7.5h share on the rounds board. My % is your cut of the money when the job is shared, it defaults to an even split, and the rounds board revenue counts only your cut while Season and Total here keep the full job value. Tick winter and add the winter visit count and price for the off season. Everything recalculates and saves as you type.</div>'
     + '<div class="table-wrap"><table><thead><tr><th>Customer</th><th class="c">Owner</th><th class="r">V/4wk</th><th class="r">Hrs</th><th class="r">Gdnrs</th><th class="r" title="Your share of the job value when more than one gardener works it">My %</th><th class="r">\u00a3/visit</th><th class="c">Winter</th><th class="r">W visits</th><th class="r">W \u00a3</th><th class="r">Season</th><th class="r">Off</th><th class="r">Total</th><th class="r">Hours</th></tr></thead><tbody id="planBody">'
