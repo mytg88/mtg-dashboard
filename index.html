@@ -769,6 +769,7 @@ button{-webkit-tap-highlight-color:transparent}
 <div class="cm-ov" id="cmOv" onclick="closeCustomer()"></div>
 <div class="cm" id="custModal" role="dialog" aria-modal="true"></div>
 <div class="cm" id="leadModal" role="dialog" aria-modal="true"></div>
+<div class="cm" id="mlModal" role="dialog" aria-modal="true"></div>
 <div class="sync-pill" id="syncPill"><span class="sync-dot"></span><span id="syncText"></span></div>
 <div class="chart-tip" id="chartTip"></div>
 
@@ -1281,6 +1282,12 @@ function handleData(data, fromCache) {
     // opening the right detail panel; writes stay disabled until a real key arrives.
     l._serverKey = col(l,['Key']) || '';
     l._key = l._serverKey || ('idx:'+li);
+    // Offer gate (permanent) and pipeline stage (progress) are separate dimensions.
+    l._updatedAtD = parseDate(col(l,['Updated At']));
+    l._offer = (col(l,['Offer']) || '').trim().toUpperCase();
+    l._offerAt = parseDate(col(l,['Offer At']));
+    const stU = l._status;
+    l._stage = (['CONTACTED','QUOTED','BOOKED','LOST','NOT RELEVANT','SPAM'].indexOf(stU)!==-1) ? stU : 'NEW';
     l._franchisee = (col(l,['Franchisee','Owner']) || '').trim();
     l._source = (col(l,['Source']) || '').trim() || 'Unknown';
     l._name = col(l,['Customer Name','Customer','Name']);
@@ -1668,13 +1675,31 @@ function processLeads(b) {
     if (l._franchisee === 'Mike') byFr.Mike++; else if (l._franchisee === 'Adam') byFr.Adam++; else if (l._franchisee === 'HQ') byFr.HQ++; else byFr.Other++;
   });
   const spam = byStatus.SPAM||0, expired = byStatus.EXPIRED||0, declined = byStatus.DECLINED||0, accepted = byStatus.ACCEPTED||0;
+  // Offer gate counts (permanent answers) and the pipeline counted CUMULATIVELY over
+  // accepted leads: a Booked lead still counts as Contacted and Quoted, because it was.
+  const gate = { pending:0, accepted:0, declined:0, expired:0 };
+  const pipe = { acceptedTotal:0, contacted:0, quoted:0, booked:0, lost:0 };
+  ls.forEach(l => {
+    if (l._status==='SPAM') return;
+    if (l._offer==='PENDING') gate.pending++;
+    else if (l._offer==='ACCEPTED') gate.accepted++;
+    else if (l._offer==='DECLINED') gate.declined++;
+    else if (l._offer==='EXPIRED') gate.expired++;
+    if (l._offer==='ACCEPTED') {
+      pipe.acceptedTotal++;
+      if (['CONTACTED','QUOTED','BOOKED'].indexOf(l._stage)!==-1) pipe.contacted++;
+      if (['QUOTED','BOOKED'].indexOf(l._stage)!==-1) pipe.quoted++;
+      if (l._stage==='BOOKED') pipe.booked++;
+      if (l._stage==='LOST' || l._stage==='NOT RELEVANT') pipe.lost++;
+    }
+  });
   const lost = byStatus.LOST||0, notRelevant = byStatus['NOT RELEVANT']||0;
   // Spam is never counted. The ACTIVE pipeline is exactly the five funnel stages, so the
   // stage percentages always total 100; everything else (lost, not relevant, expired,
   // declined, spam) has left the funnel and is accounted for in the strip beneath it.
   const total = ls.length - spam, qualified = total, booked = byStatus.BOOKED||0;
   const activeTotal = (byStatus.NEW||0) + accepted + (byStatus.CONTACTED||0) + (byStatus.QUOTED||0) + booked;
-  leadStats = { total, activeTotal, expired, declined, accepted, lost, notRelevant, spamCount: spam, byStatus, bySource, byFr,
+  leadStats = { total, activeTotal, expired, declined, accepted, lost, notRelevant, spamCount: spam, gate, pipe, byStatus, bySource, byFr,
     conversion: qualified > 0 ? Math.round(booked/qualified*100) : 0,
     staleNew: byStatus.NEW||0,
     list: ls.slice().sort((a,b2) => (b2._date?b2._date:0) - (a._date?a._date:0)),
@@ -2879,8 +2904,8 @@ function openLead(key){
       + '</div></div>';
   }
   const acts = [];
-  if(tel) acts.push('<a class="call-act" href="'+tel+'">Call</a>');
-  if(wa) acts.push('<a class="call-act call-wa" href="'+wa+'?text='+waMsg+'" target="_blank" rel="noopener">WhatsApp</a>');
+  if(tel) acts.push('<a class="call-act" href="'+tel+'" onclick="leadContactAttempt(\''+sk+'\')">Call</a>');
+  if(wa) acts.push('<a class="call-act call-wa" href="'+wa+'?text='+waMsg+'" target="_blank" rel="noopener" onclick="leadContactAttempt(\''+sk+'\')">WhatsApp</a>');
   acts.push('<a class="call-act" href="'+mailto+'">Email</a>');
   const other = l._franchisee==='Mike' ? 'Adam' : 'Mike';
   const noteVal = escAttr(l._leadNotes||'');
@@ -2948,7 +2973,12 @@ function leadSaveQuote(key){
     else alert((d&&d.error)||'Could not save quote');
   }, function(){ alert('Could not reach the app'); });
 }
-function leadAccept(key){ leadSetStatus(key, 'Accepted'); }
+function leadAccept(key){
+  apiCall({ action:'acceptLead', key:key }, function(d){
+    if(d && d.ok){ _leadLocal(key, l=>{ l['Lead Status']='Accepted'; l._status='ACCEPTED'; l._stage='NEW'; l._offer='ACCEPTED'; l._offerAt=new Date(); }); if(leadModalFor===key) openLead(key); if(activeTab==='Leads'){ processLeads(dfBounds()); renderContent(); } }
+    else alert((d&&d.error)||'Could not accept');
+  }, function(){ alert('Could not reach the app'); });
+}
 function leadDecline(key){
   const reason = prompt('Why are you declining this lead? (e.g. at capacity, out of scope, too far)');
   if (reason === null) return;   // cancelled
@@ -2957,6 +2987,99 @@ function leadDecline(key){
     else alert((d&&d.error)||'Could not decline');
   }, function(){ alert('Could not reach the app'); });
 }
+/* ===== MANAGE LEADS: a guided queue that walks every outstanding item, one at a
+   time, until the book is clean. Offers to answer, accepted leads awaiting contact,
+   stale follow-ups (2+ days without movement), and the HQ pool for re-offering. ===== */
+let mlQueue=[], mlIdx=0;
+function mlQueueBuild(){
+  const owned = franchiseeView!=='All' ? [franchiseeView] : ['Mike','Adam'];
+  const q=[]; const STALE_MS = 2*86400000;
+  rawLeads.forEach(l=>{
+    if(!l._serverKey || l._status==='SPAM') return;
+    const own = owned.indexOf(l._franchisee)!==-1;
+    if(own && l._offer==='PENDING' && l._stage==='NEW') q.push({t:'offer', l});
+    else if(own && l._offer==='ACCEPTED' && l._stage==='NEW') q.push({t:'contact', l});
+    else if(own && l._offer==='ACCEPTED' && (l._stage==='CONTACTED'||l._stage==='QUOTED') && l._updatedAtD && (Date.now()-l._updatedAtD.getTime())>STALE_MS) q.push({t:'stale', l});
+    else if(l._franchisee==='HQ' && (!auth||auth.role==='All') && ['LOST','NOT RELEVANT','BOOKED'].indexOf(l._stage)===-1) q.push({t:'pool', l});
+  });
+  const rank={offer:0,contact:1,stale:2,pool:3};
+  q.sort((a,b)=> rank[a.t]-rank[b.t] || ((a.l._date&&b.l._date)?(a.l._date-b.l._date):0));
+  return q;
+}
+function mlOpen(){ mlQueue=mlQueueBuild(); mlIdx=0; mlRender(); document.getElementById('cmOv').classList.add('show'); document.getElementById('cmOv').setAttribute('onclick','mlClose()'); document.getElementById('mlModal').classList.add('show'); document.body.style.overflow='hidden'; }
+function mlClose(){ document.getElementById('cmOv').classList.remove('show'); document.getElementById('cmOv').setAttribute('onclick','closeCustomer()'); document.getElementById('mlModal').classList.remove('show'); document.body.style.overflow=''; if(activeTab==='Leads'){ processLeads(dfBounds()); renderContent(); } }
+function mlNext(){ mlIdx++; mlRender(); }
+function mlRender(){
+  const el=document.getElementById('mlModal'); if(!el) return;
+  if(mlIdx>=mlQueue.length){
+    el.innerHTML='<div class="cm-head"><div><div class="cm-name">All done</div><div class="cm-badges"><span class="badge" style="background:#E7F1E9;color:var(--green)">QUEUE CLEAR</span></div></div><button class="cm-x" onclick="mlClose()" aria-label="Close">\u00d7</button></div>'
+      +'<div class="cm-body"><div style="font-size:14px">Every lead has an answer. Nothing is waiting on you.</div></div>';
+    return;
+  }
+  const it=mlQueue[mlIdx], l=it.l, sk=String(l._serverKey).replace(/'/g,"\\'");
+  const pc=l._phone?normNum(l._phone):''; const uk=pc?('0'+pc):'';
+  const waMsg=encodeURIComponent('Hi'+(l._name&&l._name.indexOf('@')===-1?' '+String(l._name).split(' ')[0]:'')+', thanks for your enquiry about '+(l._svc||'your garden')+' with My Tidy Garden. When would suit you for a quick chat or to arrange a visit?');
+  const comms=(pc?'<a class="call-act" href="tel:'+uk+'" onclick="leadContactAttempt(\''+sk+'\')">Call</a><a class="call-act call-wa" href="https://wa.me/44'+pc+'?text='+waMsg+'" target="_blank" rel="noopener" onclick="leadContactAttempt(\''+sk+'\')">WhatsApp</a>':'');
+  const titles={offer:'New lead offer', contact:'Accepted \u00b7 awaiting first contact', stale:'No movement for 2+ days', pool:'HQ pool \u00b7 needs a decision'};
+  const clock=leadClock(l); const clockLine=clock?'<div style="font-size:12.5px;color:'+(clock.urgent?'#C62828':'#9A5410')+';margin:2px 0 10px">\u23f1 '+clock.label+'</div>':'';
+  const note=l._leadNotes?('<div style="font-size:12px;color:var(--muted);white-space:pre-wrap;background:#F5F6F2;border-radius:8px;padding:8px 10px;margin-top:10px;max-height:110px;overflow:auto">'+escAttr(l._leadNotes).slice(0,400)+'</div>'):'';
+  const B=(label,fn,primary)=>'<button class="'+(primary?'cm-rem-btn':'lead-st-btn')+'" style="padding:9px 14px" onclick="'+fn+'">'+label+'</button>';
+  let actions='';
+  if(it.t==='offer') actions=B('Accept lead','mlAccept(\''+sk+'\')',1)+B('Decline\u2026','mlDecline(\''+sk+'\')')+B('Spam','mlStatus(\''+sk+'\',\'Spam\')');
+  else if(it.t==='contact') actions=comms+B('Mark contacted','mlStatus(\''+sk+'\',\'Contacted\')',1)+B('Lost','mlStatus(\''+sk+'\',\'Lost\')');
+  else if(it.t==='stale') actions=B('Still waiting','mlStill(\''+sk+'\')')+(l._stage==='CONTACTED'?B('Quoted\u2026','mlQuote(\''+sk+'\')',1):'')+B('Booked','mlStatus(\''+sk+'\',\'Booked\')',l._stage!=='CONTACTED')+B('Lost','mlStatus(\''+sk+'\',\'Lost\')');
+  else actions=B('Offer to Mike','mlTransfer(\''+sk+'\',\'Mike\')')+B('Offer to Adam','mlTransfer(\''+sk+'\',\'Adam\')')+B('Reject \u0026 notify\u2026','mlReject(\''+sk+'\')')+B('Spam','mlStatus(\''+sk+'\',\'Spam\')');
+  el.innerHTML='<div class="cm-head"><div><div style="font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--muted)">MANAGE LEADS \u00b7 '+(mlIdx+1)+' OF '+mlQueue.length+'</div><div class="cm-name">'+escAttr(l._name||'Lead')+'</div>'
+    +'<div class="cm-badges">'+leadPill(l._status)+(l._franchisee?badge(l._franchisee):'')+'<span class="badge" style="background:#EEF1EC;color:#6B7466">'+titles[it.t]+'</span></div></div>'
+    +'<button class="cm-x" onclick="mlClose()" aria-label="Close">\u00d7</button></div>'
+    +'<div class="cm-body">'+clockLine
+    +'<div class="cm-row"><span style="color:var(--muted)">Service</span><span style="margin-left:auto;font-weight:600;text-align:right">'+escAttr(l._svc||'\u2014')+'</span></div>'
+    +'<div class="cm-row"><span style="color:var(--muted)">Received</span><span style="margin-left:auto;font-weight:600">'+fmtDate(l._date)+'</span></div>'
+    +'<div class="cm-row"><span style="color:var(--muted)">Phone</span><span style="margin-left:auto;font-weight:600">'+(uk?escAttr(fmtPhone(uk)):'\u2014')+'</span></div>'
+    +note
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">'+actions+'</div>'
+    +'<div style="display:flex;justify-content:space-between;margin-top:14px"><button class="lead-st-btn" onclick="mlNext()">Skip \u203a</button><span style="font-size:12px;color:var(--muted);align-self:center">'+(mlQueue.length-mlIdx-1)+' remaining</span></div>'
+    +'</div>';
+}
+function _mlOk(key, fn){ return function(d){ if(d&&d.ok){ const l=leadByKey(key); if(l) fn(l); mlNext(); } else { alert((d&&d.error)||'Could not update'); } }; }
+function _mlErr(){ alert('Could not reach the app'); }
+function mlAccept(key){ apiCall({action:'acceptLead',key:key}, _mlOk(key,l=>{ l['Lead Status']='Accepted'; l._status='ACCEPTED'; l._stage='NEW'; l._offer='ACCEPTED'; l._offerAt=new Date(); }), _mlErr); }
+function mlDecline(key){ const r=prompt('Why are you declining? (e.g. at capacity, out of scope, too far)'); if(r===null) return; apiCall({action:'declineLead',key:key,reason:r}, _mlOk(key,l=>{ l['Lead Status']='Declined'; l._status='DECLINED'; l._stage='NEW'; l._offer='DECLINED'; l._franchisee='HQ'; l['Franchisee']='HQ'; }), _mlErr); }
+function mlStatus(key,status){ apiCall({action:'updateLeadStatus',key:key,status:status}, _mlOk(key,l=>{ l['Lead Status']=status; l._status=status.toUpperCase(); l._stage=(['CONTACTED','QUOTED','BOOKED','LOST','NOT RELEVANT','SPAM'].indexOf(l._status)!==-1)?l._status:'NEW'; if(['CONTACTED','QUOTED','BOOKED'].indexOf(l._status)!==-1 && l._offer!=='ACCEPTED'){ l._offer='ACCEPTED'; l._offerAt=new Date(); } l._updatedAtD=new Date(); }), _mlErr); }
+function mlStill(key){ const l=leadByKey(key); if(!l) return; mlStatus(key, leadStLabel(l._status)); }
+function mlQuote(key){ const q=prompt('Quote amount (\u00a3)?'); if(q===null||q==='') return; apiCall({action:'updateLeadQuote',key:key,quote:q}, function(d){ if(d&&d.ok){ const l=leadByKey(key); if(l){ l['Quoted Price']=q; l._quote=parseAmount(q); } mlStatus(key,'Quoted'); } else alert((d&&d.error)||'Could not save quote'); }, _mlErr); }
+function mlTransfer(key,to){ apiCall({action:'transferLead',key:key,to:to}, _mlOk(key,l=>{ l['Franchisee']=to; l._franchisee=to; l['Lead Status']='New'; l._status='NEW'; l._stage='NEW'; l._offer='PENDING'; l._offerAt=null; l._updatedAtD=new Date(); }), _mlErr); }
+function mlReject(key){ const l=leadByKey(key); if(!l) return; apiCall({action:'updateLeadStatus',key:key,status:'Lost'}, _mlOk(key,ll=>{ ll['Lead Status']='Lost'; ll._status='LOST'; ll._stage='LOST'; const msg='Hi'+(l._name&&l._name.indexOf('@')===-1?' '+String(l._name).split(' ')[0]:'')+', thanks for contacting My Tidy Garden. Sorry, we are unable to help with your request at this time. We hope we can help on a future occasion.'; const pc=l._phone?normNum(l._phone):''; if(pc) window.open('https://wa.me/44'+pc+'?text='+encodeURIComponent(msg),'_blank'); else window.open('mailto:?subject='+encodeURIComponent('Your enquiry to My Tidy Garden')+'&body='+encodeURIComponent(msg)); }), _mlErr); }
+
+// Deadline clocks made visible: how long before the sweep acts on this lead.
+function leadClock(l){
+  const H=3600000;
+  if (l._offer==='PENDING' && l._stage==='NEW') {
+    const start = (l._updatedAtD && l._updatedAtD>l._date) ? l._updatedAtD : l._date;
+    if (!start) return null;
+    const left = 24*H - (Date.now()-start.getTime());
+    return { kind:'accept', left, label: left>0 ? ('accept in '+leadHrs(left)) : 'reassigns on next sweep', urgent: left < 6*H };
+  }
+  if (l._offer==='ACCEPTED' && l._stage==='NEW') {
+    const start = l._offerAt || l._updatedAtD;
+    if (!start) return null;
+    const left = 24*H - (Date.now()-start.getTime());
+    return { kind:'contact', left, label: left>0 ? ('contact in '+leadHrs(left)) : 'reassigns on next sweep', urgent: left < 6*H };
+  }
+  return null;
+}
+function leadHrs(ms){ const h=Math.floor(ms/3600000); if(h>=1) return h+'h'; return Math.max(1,Math.round(ms/60000))+'m'; }
+function leadClockChip(l){ const c=leadClock(l); if(!c) return ''; return '<div style="font-size:11px;margin-top:3px;color:'+(c.urgent?'#C62828':'var(--muted)')+'">⏱ '+c.label+'</div>'; }
+// After tapping Call/WhatsApp, ask on return whether contact was made: one tap to Contacted.
+let _leadPing=null;
+function leadContactAttempt(key){ _leadPing={key:key, at:Date.now()}; }
+window.addEventListener('focus', function(){
+  if(!_leadPing || (Date.now()-_leadPing.at) > 30*60000) { _leadPing=null; return; }
+  const key=_leadPing.key; _leadPing=null;
+  const l=leadByKey(key); if(!l || l._stage!=='NEW') return;
+  setTimeout(function(){ if(confirm('Did you reach '+(l._name||'the customer')+'? OK = mark as Contacted.')) leadSetStatus(key,'Contacted'); }, 400);
+});
+
 // ---- Leads table state: sorting, owner filter, spam visibility, bulk selection ----
 let leadSort = { k:'date', d:-1 }, leadOwnerFilter = 'All', leadShowSpam = false, leadSel = {}, _leadVisibleKeys = [];
 function leadSortBy(k){ if(leadSort.k===k) leadSort.d=-leadSort.d; else leadSort={k:k, d:(k==='date'||k==='quote')?-1:1}; renderContent(); }
@@ -2977,7 +3100,8 @@ function leadBulk(kind, value){
     const onOk=d=>{ if(d&&d.ok){ const l=leadByKey(k); if(l){ if(kind==='decline'){ l['Lead Status']='Declined'; l._status='DECLINED'; l['Franchisee']='HQ'; l._franchisee='HQ'; } else { const st=(kind==='accept')?'Accepted':(kind==='spam')?'Spam':value; l['Lead Status']=st; l._status=st.toUpperCase(); } } } finish(); };
     const onErr=()=>finish();
     if(kind==='decline') apiCall({ action:'declineLead', key:k, reason:reason }, onOk, onErr);
-    else apiCall({ action:'updateLeadStatus', key:k, status:(kind==='accept')?'Accepted':(kind==='spam')?'Spam':value }, onOk, onErr);
+    else if(kind==='accept') apiCall({ action:'acceptLead', key:k }, onOk, onErr);
+    else apiCall({ action:'updateLeadStatus', key:k, status:(kind==='spam')?'Spam':value }, onOk, onErr);
   });
 }
 // Inline accept/decline from the table row, without opening the modal.
@@ -5226,8 +5350,27 @@ function renderContent() {
         <div class="card accent-top" style="border-top-color:var(--accent)"><div class="kpi-l">Still New</div><div class="kpi-v" style="color:var(--amber)">${s.staleNew}</div><div class="kpi-s">need actioning</div></div>
       </div>
       <div class="grid grid-2">
-        <div class="card"><div class="h">Lead funnel</div>${funnelSVG(stages, s.total)}
-          <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:16px;align-items:center">${s.spamCount?'<span class="badge" style="background:#EEF1EC;color:#6B7466">SPAM</span><span style="font-size:12px;color:var(--muted)">'+s.spamCount+' excluded from all numbers</span>':'<span style="font-size:12px;color:var(--muted)">No spam in period</span>'}</div>
+        <div class="card"><div class="h">Lead funnel</div>
+          ${(()=>{ const g=s.gate, p=s.pipe;
+            const gateChip=(label,n,bg,fg,sub)=>'<div style="flex:1;min-width:110px;background:'+bg+';border-radius:10px;padding:10px 12px"><div style="font-size:11px;font-weight:700;letter-spacing:.04em;color:'+fg+'">'+label.toUpperCase()+'</div><div style="font-size:22px;font-family:\'Tiempos Headline\',Georgia,serif;color:'+fg+'">'+n+'</div>'+(sub?'<div style="font-size:11px;color:'+fg+';opacity:.75">'+sub+'</div>':'')+'</div>';
+            const gateStrip='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">'
+              + gateChip('Awaiting response',g.pending,'#FFF3E0','#9A5410', g.pending?'clock running':'')
+              + gateChip('Accepted',g.accepted,'#E7F1E9','var(--green)','')
+              + gateChip('Declined',g.declined,'#EEF1EC','#6B7466','to HQ')
+              + gateChip('Expired',g.expired,'#FDECEA','#C62828','ignored')
+              + '</div>';
+            const den=p.acceptedTotal;
+            const bar=(label,n,color)=>{ const pc=den?Math.round(n/den*100):0;
+              return '<div style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;align-items:baseline;font-size:13px"><span style="font-weight:500">'+label+'</span><span style="color:var(--muted);font-size:12px">'+n+' of '+den+' accepted \u00b7 '+pc+'%</span></div><div style="height:10px;background:#EEF1EC;border-radius:5px;margin-top:5px"><div style="height:10px;border-radius:5px;background:'+color+';width:'+pc+'%"></div></div></div>'; };
+            const pipeBars = den
+              ? '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Of the leads accepted, how far each has got. Counts are cumulative: a booked lead was also contacted and quoted.</div>'
+                + bar('Contacted',p.contacted,'#1565C0') + bar('Quoted',p.quoted,'#6A1B9A') + bar('Booked',p.booked,'#2E7D32')
+                + (p.lost?'<div style="font-size:12px;color:var(--muted)">'+p.lost+' accepted lead'+(p.lost===1?'':'s')+' ended as lost or not relevant.</div>':'')
+              : '<div style="font-size:13px;color:var(--muted)">No accepted leads in this period yet.</div>';
+            return gateStrip + pipeBars;
+          })()}
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);display:flex;gap:16px;font-size:12px;color:var(--muted);align-items:center">${s.spamCount?'<span><span class="badge" style="background:#EEF1EC;color:#6B7466">SPAM</span> '+s.spamCount+' excluded from all numbers</span>':'<span>No spam in period</span>'}</div>
+        </div>
         </div>
         <div class="card"><div class="h">Services requested</div>
           ${svcRows.length===0?'<div style="color:var(--muted);font-size:13px">No leads in period.</div>':svcRows.map(x=>'<div style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:13px"><span style="font-weight:500">'+escAttr(x[0])+'</span><span style="color:var(--muted);font-size:12px;white-space:nowrap">'+x[1].n+' lead'+(x[1].n===1?'':'s')+(x[1].q>0?' \u00b7 '+fmt(x[1].q)+' quoted':'')+(x[1].booked?' \u00b7 '+x[1].booked+' booked':'')+'</span></div><div style="height:8px;background:#EEF1EC;border-radius:4px;margin-top:5px"><div style="height:8px;border-radius:4px;background:var(--green);width:'+Math.round(x[1].n/maxSvc*100)+'%"></div></div></div>').join('')}
@@ -5246,7 +5389,9 @@ function renderContent() {
           const chip = (label,val,cur,fn,count)=>'<button class="rb-vt'+(cur===val?' on':'')+'" onclick="'+fn+'(\''+val+'\')">'+label+(count!=null?' ('+count+')':'')+'</button>';
           const ownerCounts = {All:s.list.filter(l=>l._status!=='SPAM').length, Mike:0, Adam:0, HQ:0};
           s.list.forEach(l=>{ if(l._status==='SPAM') return; if(ownerCounts[l._franchisee]!==undefined) ownerCounts[l._franchisee]++; });
+          const mlN = mlQueueBuild().length;
           const filterRow = '<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px">'
+            + (mlN ? '<button class="cm-rem-btn" style="padding:8px 16px" onclick="mlOpen()">Manage leads \u00b7 '+mlN+' to action \u2192</button>' : '')
             + (franchiseeView==='All' ? '<div class="rb-viewtog">'+chip('All','All',leadOwnerFilter,'leadFilterOwner',ownerCounts.All)+chip('Mike','Mike',leadOwnerFilter,'leadFilterOwner',ownerCounts.Mike)+chip('Adam','Adam',leadOwnerFilter,'leadFilterOwner',ownerCounts.Adam)+chip('HQ pool','HQ',leadOwnerFilter,'leadFilterOwner',ownerCounts.HQ)+'</div>' : '')
             + (spamCountTable ? '<button class="rb-vt'+(leadShowSpam?' on':'')+'" style="border:1px solid var(--line);border-radius:var(--r-sm)" onclick="leadToggleSpam()">'+(leadShowSpam?'Hide':'Show')+' spam ('+spamCountTable+')</button>' : '')
             + '<span style="margin-left:auto;font-size:13px;color:var(--muted)">'+list.length+' lead'+(list.length===1?'':'s')+'</span></div>';
@@ -5282,7 +5427,7 @@ function renderContent() {
               + '<td class="r">'+(l._quote>0?fmt(l._quote):'\u2014')+'</td>'
               + '<td class="c" style="font-size:12px;color:var(--muted)">'+(l._territory||'\u2014')+'</td>'
               + '<td class="c">'+(l._franchisee?badge(l._franchisee):'\u2014')+'</td>'
-              + '<td class="c">'+leadPill(l._status)+'</td>'
+              + '<td class="c">'+leadPill(l._status)+leadClockChip(l)+'</td>'
               + '<td style="font-size:12px;color:var(--muted)">'+l._source+'</td>'
               + '<td onclick="event.stopPropagation()">'+inline+'</td></tr>';
           }).join('');
