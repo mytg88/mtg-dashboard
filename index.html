@@ -2386,7 +2386,30 @@ const PLAN_SEASON_WEEKS = 40, PLAN_OFF_WEEKS = 12, PLAN_TARGET = 1440;
 let planFTEMap = {};
 try { planFTEMap = JSON.parse(localStorage.getItem('mtg_plan_fte')||'{}') || {}; } catch(e){ planFTEMap = {}; }
 function planFTEval(){ const v = planFTEMap[franchiseeView]; return (v != null) ? v : (franchiseeView==='All' ? 2 : 1); }
-function planTarget(){ return Math.round(planFTEval() * PLAN_TARGET); }
+// The capacity target now comes from each franchisee's business plan (Operations:
+// billable hours a year) when they have set a working pattern, so the planner measures
+// the round against the hours they actually plan to sell. Falls back to the head-count
+// model (FTE x 1440h) for anyone whose plan has no pattern yet.
+function bpBillableFor_(fr){
+  try{
+    if(!bpAll) return null;
+    const st = bpAll[String(fr).toLowerCase()];
+    if(!st || !st.ops || !st.ops.peak || !st.ops.peak.start || !st.ops.peak.finish) return null;
+    const b = bpOpsCalcFor(bpEnsurePlan(st)).billable;
+    return b>0 ? b : null;
+  }catch(e){ return null; }
+}
+function planTargetSrc(){
+  if(franchiseeView==='All'){
+    const m=bpBillableFor_('Mike'), a=bpBillableFor_('Adam');
+    if(m!=null && a!=null) return { target:m+a, src:'plans' };
+    return { target: Math.round(planFTEval()*PLAN_TARGET), src:'fte' };
+  }
+  const b=bpBillableFor_(franchiseeView);
+  if(b!=null) return { target:b, src:'plan' };
+  return { target: Math.round(planFTEval()*PLAN_TARGET), src:'fte' };
+}
+function planTarget(){ return planTargetSrc().target; }
 function fteNote(f){
   const ft = Math.floor(f + 1e-9), frac = f - ft;
   const parts = [];
@@ -2463,12 +2486,13 @@ function recalcPlanner(){
     vS+=m.valSeason; vO+=m.valOff; hS+=m.hrsSeason; hO+=m.hrsOff;
   });
   const target = planTarget();
-  const fill = target? hS/target*100 : 0, pph = hS? (vS+vO)/hS : 0;
+  const hAll = hS + hO;
+  const fill = target? hAll/target*100 : 0, pph = hAll? (vS+vO)/hAll : 0;
   const put=(id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
   put('plTotal', fmt(Math.round(vS+vO)));
   put('plSeason', fmt(Math.round(vS)));
   put('plOff', fmt(Math.round(vO)));
-  put('plHours', Math.round(hS)+'h of '+target+'h');
+  put('plHours', Math.round(hAll)+'h of '+target+'h');
   put('plFill', Math.round(fill)+'%');
   put('plPph', pph?fmt(Math.round(pph)):'\u2014');
   put('plTargetLab', target);
@@ -2491,7 +2515,7 @@ function renderPlannerTab(){
   const regs = plannerRegs();
   const rows = regs.map(c=>{ const f=planFields(c); return { c, f, m:planMath(f) }; }).sort((a,b)=>b.m.total-a.m.total);
   const target = planTarget();
-  let vS=0,vO=0,hS=0; rows.forEach(o=>{ vS+=o.m.valSeason; vO+=o.m.valOff; hS+=o.m.hrsSeason; });
+  let vS=0,vO=0,hS=0; rows.forEach(o=>{ vS+=o.m.valSeason; vO+=o.m.valOff; hS+=o.m.hrsSeason+o.m.hrsOff; });
   const fill = target? hS/target*100 : 0, pph = hS? (vS+vO)/hS : 0;
   const card = (lab,inner) => '<div class="card" style="padding:16px 18px"><div style="font-size:12px;color:var(--muted);margin-bottom:4px">'+lab+'</div><div style="font-size:22px;font-weight:700">'+inner+'</div></div>';
   const intro = '<div class="card" style="margin-bottom:18px"><div class="h">Recurring value planner</div><div style="font-size:13px;color:var(--muted);line-height:1.6;max-width:760px">Your seasonal projection of what the recurring round is worth, before extras. Core season is '+PLAN_SEASON_WEEKS+' weeks, off season '+PLAN_OFF_WEEKS+' weeks. Every active regular starts from their live cadence and price, edit anything and it saves as you go. Add hours per visit to see how full the round is, and set the head count below to model taking on more capacity. <span id="plSaveMsg" style="color:var(--muted)"></span></div></div>';
@@ -2503,7 +2527,12 @@ function renderPlannerTab(){
     + card('Capacity', '<span id="plFill">'+Math.round(fill)+'%</span>')
     + card('Per hour', '<span id="plPph">'+(pph?fmt(Math.round(pph)):'\u2014')+'</span>')
     + '</div>';
-  const bar = '<div class="card" style="margin-bottom:18px;padding:16px 18px"><div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);margin-bottom:10px;gap:14px;flex-wrap:wrap"><span style="display:inline-flex;align-items:center;gap:8px">Gardeners <input type="number" min="0" step="0.2" value="'+planFTEval()+'" onchange="planSetFTE(this.value)" style="width:62px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px;text-align:right"> FTE <span id="plFteNote" style="color:var(--muted)">'+fteNote(planFTEval())+'</span></span><span><span id="plTargetLab">'+target+'</span>h target</span></div><div style="height:12px;border-radius:6px;background:var(--line);overflow:hidden"><div id="plBar" style="height:100%;width:'+Math.min(100,fill)+'%;background:var(--green6);transition:width .2s"></div></div></div>';
+  const bar = (function(){ const ts=planTargetSrc(); const planDriven = ts.src!=='fte';
+    const note = planDriven
+      ? '<span style="color:var(--green);font-weight:600">Target from '+(ts.src==='plans'?'both business plans':'the business plan')+' (Operations: billable hours)</span>'
+      : '<span id="plFteNote" style="color:var(--muted)">'+fteNote(planFTEval())+'</span>';
+    const fteInput = '<input type="number" min="0" step="0.2" value="'+planFTEval()+'" onchange="planSetFTE(this.value)" '+(planDriven?'disabled style="width:62px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px;text-align:right;opacity:.4" title="Capacity comes from the business plan working pattern while one is set"':'style="width:62px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px;text-align:right"')+'>';
+    return '<div class="card" style="margin-bottom:18px;padding:16px 18px"><div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);margin-bottom:10px;gap:14px;flex-wrap:wrap"><span style="display:inline-flex;align-items:center;gap:8px">Gardeners '+fteInput+' FTE '+note+'</span><span><span id="plTargetLab">'+target+'</span>h target</span></div><div style="height:12px;border-radius:6px;background:var(--line);overflow:hidden"><div id="plBar" style="height:100%;width:'+Math.min(100,fill)+'%;background:var(--green6);transition:width .2s"></div></div></div>'; })();
   const ni = (f,v,w,step) => '<input type="number" data-f="'+f+'" value="'+(v===''?'':v)+'" step="'+(step||'1')+'" min="0" style="width:'+(w||52)+'px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px;text-align:right" onchange="planChanged(this.closest(\'tr\'))">';
   const body = rows.map(o=>{ const c=o.c, f=o.f, m=o.m;
     return '<tr data-cust="'+escAttr(c.n)+'">'
@@ -4367,7 +4396,7 @@ const BP_SEEDS = { adam: {
   income:{ monthly:'3000', rate:'33', breakeven:'27', turnover:'63340', costs:'51403' },
   market:{ territory:'Bournemouth', alsoCover:[], channels:['Customer referrals','Social media','Door drops and flyers'], edge:'' },
   services:{ offered:['Lawn mowing','Border maintenance','Weeding','Hedge trimming','Pruning','Planting','Leaf clearance','Pressure washing','Garden clearance','Waste removal','Lawn care treatments','Lawn renovations'], skills:[], develop:'I would like to enhance my knowledge of all aspects of gardening, including business management, plant knowledge, planting, garden design and build, lawn care and lawn renovations. I have been doing this through YouTube videos, gardening programmes and books. I would also like to enrol on a horticulture course to improve my knowledge of plant species and genus.' },
-  ops:{ peak:{start:'09:00',finish:'18:00',days:5,holiday:2}, off:{start:'09:30',finish:'16:30',days:5,holiday:4} }
+  ops:{ peak:{start:'09:00',finish:'18:00',days:5,holiday:2,breakMins:60,eff:75}, off:{start:'09:30',finish:'16:30',days:5,holiday:4,breakMins:30,eff:75} }
 } };
 let bpMode='overview', bpSection=0;
 let bpState={}, bpAll=null, bpSaveTimer=null, bpBooted=false;
@@ -4378,7 +4407,7 @@ function bpDefault(){ return { v:1, updatedAt:0, reviewEvery:'quarter',
   invest:{tools:'',vehicle:'',training:'',marketing:'',other:'',funding:'Reinvested profit'},
   market:{territory:'',alsoCover:[],channels:[],edge:''},
   services:{offered:[],skills:[],develop:''},
-  ops:{peak:{start:'09:00',finish:'18:00',days:5,holiday:2}, off:{start:'09:30',finish:'16:30',days:5,holiday:4}}
+  ops:{peak:{start:'09:00',finish:'18:00',days:5,holiday:2,breakMins:60,eff:75}, off:{start:'09:30',finish:'16:30',days:5,holiday:4,breakMins:30,eff:75}}
 }; }
 function bpFranchisee(){ return (typeof franchiseeView!=='undefined' && franchiseeView==='Adam') ? 'adam' : 'mike'; }
 function bpCacheKey(){ return 'mtg_bizplan_all'; }
@@ -4429,6 +4458,25 @@ function bpMargin(){ const t=bpNum(bpState.income.turnover); return t>0?Math.rou
 function bpInvestTotal(){ const s=bpState.invest; return bpNum(s.tools)+bpNum(s.vehicle)+bpNum(s.training)+bpNum(s.marketing)+bpNum(s.other); }
 function bpOpsWeeks(){ return Math.max(0, 52 - bpNum(bpState.ops.peak.holiday) - bpNum(bpState.ops.off.holiday)); }
 function bpOpsDays(){ const pk=Math.max(0,(40-bpNum(bpState.ops.peak.holiday)))*bpNum(bpState.ops.peak.days); const of=Math.max(0,(12-bpNum(bpState.ops.off.holiday)))*bpNum(bpState.ops.off.days); return Math.round(pk+of); }
+// Full-year hours from a working pattern: per season, worked weeks x days x (span minus
+// break), and billable hours after the efficiency rate (travel, quotes, admin). This is
+// what the planner's capacity target inherits, so the plan and the planner agree.
+function bpOpsCalcFor(state){
+  function seasonCalc(p, weeks){
+    const t=x=>{ const m=String(x||'').match(/^(\d{1,2}):(\d{2})$/); return m? (+m[1]+(+m[2])/60) : null; };
+    const st=t(p.start), fi=t(p.finish);
+    if(st==null||fi==null||fi<=st) return { weeks:0, days:0, hours:0, billable:0 };
+    const perDay=Math.max(0, (fi-st) - (bpNum(p.breakMins)||0)/60);
+    const workedWeeks=Math.max(0, weeks - bpNum(p.holiday));
+    const days=workedWeeks*bpNum(p.days);
+    const hours=days*perDay;
+    const eff=(p.eff===''||p.eff==null)?75:Math.max(10,Math.min(100,bpNum(p.eff)));
+    return { weeks:workedWeeks, days:Math.round(days), hours:Math.round(hours), billable:Math.round(hours*eff/100) };
+  }
+  const pk=seasonCalc(state.ops.peak, 40), of=seasonCalc(state.ops.off, 12);
+  return { peak:pk, off:of, hours:pk.hours+of.hours, billable:pk.billable+of.billable };
+}
+function bpOpsCalc(){ return bpOpsCalcFor(bpState); }
 function bpDone(i){
   const k=BP_SECTIONS[i].key, s=bpState;
   if(k==='motivation') return (s.motivation.why||[]).length>0;
@@ -4448,8 +4496,9 @@ function bpFmtDate(d){ if(!d) return '\u2014'; const m=['Jan','Feb','Mar','Apr',
 function bpEsc(s){ return escAttr(s==null?'':s); }
 // setters
 function bpSet(sec, field, val){ if(!bpState[sec]) bpState[sec]={}; bpState[sec][field]=val; bpSave(); }
-function bpSetOps(sub, field, val){ bpState.ops[sub][field]=val; bpSave(); }
-function bpSetOpsNum(sub, field, val){ bpState.ops[sub][field]=val; bpSave(); const w=document.getElementById('bpOpsWk'), d=document.getElementById('bpOpsDy'); if(w)w.textContent=bpOpsWeeks(); if(d)d.textContent=bpOpsDays(); }
+function bpSetOps(sub, field, val){ bpState.ops[sub][field]=val; bpSave(); bpOpsRefresh_(); }
+function bpOpsRefresh_(){ const c=bpOpsCalc(); const put=(id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; }; put('bpOpsWk',bpOpsWeeks()); put('bpOpsDy',bpOpsDays()); put('bpOpsHr',c.hours+'h'); put('bpOpsBill',c.billable+'h'); }
+function bpSetOpsNum(sub, field, val){ bpState.ops[sub][field]=val; bpSave(); bpOpsRefresh_(); }
 function bpIncomeOnInput(field, val){ bpState.income[field]=val; bpSave(); const p=document.getElementById('bpProfitV'), m=document.getElementById('bpMarginV'); if(p)p.textContent=fmt(bpProfit()); if(m)m.textContent=bpMargin()+'%'; }
 function bpToggleOpt(sec, field, optsKey, idx){ const o=BP_OPTS[optsKey][idx]; const arr=bpState[sec][field]||[]; const j=arr.indexOf(o); if(j===-1) arr.push(o); else arr.splice(j,1); bpState[sec][field]=arr; bpSave(); bpRerender(); }
 function bpAddReviewReminder(){
@@ -4497,11 +4546,16 @@ function bpOpsFields(){
   function pat(sub,label,note){ const p=bpState.ops[sub]; return '<div class="card" style="margin-bottom:14px"><div class="bp-q" style="margin-top:0">'+label+'</div><div class="bp-hint">'+note+'</div>'
     + '<div class="bp-row"><div><span class="bp-deri-l">Start time</span>'+bpOpsTime(sub,'start')+'</div><div><span class="bp-deri-l">Finish time</span>'+bpOpsTime(sub,'finish')+'</div>'
     + '<div><span class="bp-deri-l">Days per week</span><input class="bp-input" type="number" min="1" max="7" value="'+bpEsc(p.days)+'" oninput="bpSetOpsNum(\''+sub+'\',\'days\',this.value)"></div>'
-    + '<div><span class="bp-deri-l">Holiday weeks</span><input class="bp-input" type="number" min="0" max="20" value="'+bpEsc(p.holiday)+'" oninput="bpSetOpsNum(\''+sub+'\',\'holiday\',this.value)"></div></div></div>'; }
+    + '<div><span class="bp-deri-l">Holiday weeks</span><input class="bp-input" type="number" min="0" max="20" value="'+bpEsc(p.holiday)+'" oninput="bpSetOpsNum(\''+sub+'\',\'holiday\',this.value)"></div></div>'
+    + '<div class="bp-row" style="margin-top:10px"><div><span class="bp-deri-l">Daily break</span><select class="bp-input" onchange="bpSetOpsNum(\''+sub+'\',\'breakMins\',this.value)">'
+      + [0,30,60,90].map(m=>'<option value="'+m+'"'+((bpNum(p.breakMins)||0)===m?' selected':'')+'>'+(m===0?'None':(m===60?'1 hour':(m===90?'1\u00bd hours':m+' mins')))+'</option>').join('')
+    + '</select><div class="bp-hint" style="margin-top:4px">Lunch, comfort breaks and travel between jobs.</div></div>'
+    + '<div><span class="bp-deri-l">Efficiency %</span><input class="bp-input" type="number" min="10" max="100" value="'+bpEsc(p.eff==null?75:p.eff)+'" oninput="bpSetOpsNum(\''+sub+'\',\'eff\',this.value)"><div class="bp-hint" style="margin-top:4px">Share of the working day that is billable. 75% is typical, the rest goes on travel, quotes and admin.</div></div></div></div>'; }
   return '<div class="bp-hint">Your working pattern across the year. Peak season is the long days from spring to autumn; off-season is the quieter winter months.</div>'
     + pat('peak','Peak season pattern','Mid-March to mid-November, roughly 40 weeks. Your main earning window.')
     + pat('off','Off-season pattern','December to February, roughly 12 weeks. Good for admin, planning and holidays.')
-    + '<div class="bp-derived"><div><span class="bp-deri-l">Working weeks a year</span><span class="bp-deri-v" id="bpOpsWk">'+bpOpsWeeks()+'</span></div><div><span class="bp-deri-l">Working days a year (approx)</span><span class="bp-deri-v" id="bpOpsDy">'+bpOpsDays()+'</span></div></div>';
+    + (function(){ const c=bpOpsCalc(); return '<div class="bp-derived"><div><span class="bp-deri-l">Working weeks a year</span><span class="bp-deri-v" id="bpOpsWk">'+bpOpsWeeks()+'</span></div><div><span class="bp-deri-l">Working days a year (approx)</span><span class="bp-deri-v" id="bpOpsDy">'+bpOpsDays()+'</span></div><div><span class="bp-deri-l">Working hours a year</span><span class="bp-deri-v" id="bpOpsHr">'+c.hours+'h</span></div><div><span class="bp-deri-l">Billable hours a year</span><span class="bp-deri-v" id="bpOpsBill" style="color:var(--green)">'+c.billable+'h</span></div></div>'
+      + '<div class="bp-hint" style="margin-top:8px">Billable hours feed the planner\u2019s capacity target, so the round is measured against the hours you actually plan to sell.</div>'; })();
 }
 function bpReviewFields(){
   const s=bpState, inc=s.income;
