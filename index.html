@@ -2399,15 +2399,20 @@ function bpBillableFor_(fr){
     return b>0 ? b : null;
   }catch(e){ return null; }
 }
+// Target = billable hours from that franchisee's business plan (their one-person year),
+// multiplied by the head count: 1 = solo, 1.2 = plus a gardener one day a week, and so
+// on. Falls back to 1440h a head when the plan has no working pattern yet. The All view
+// sums each franchisee's own target (their plan x their FTE, set in their view).
+function planFteFor_(view){ const v=planFTEMap[view]; return (v!=null)?v:1; }
 function planTargetSrc(){
   if(franchiseeView==='All'){
-    const m=bpBillableFor_('Mike'), a=bpBillableFor_('Adam');
-    if(m!=null && a!=null) return { target:m+a, src:'plans' };
-    return { target: Math.round(planFTEval()*PLAN_TARGET), src:'fte' };
+    const mB=bpBillableFor_('Mike'), aB=bpBillableFor_('Adam');
+    const t = Math.round(((mB!=null?mB:PLAN_TARGET)*planFteFor_('Mike')) + ((aB!=null?aB:PLAN_TARGET)*planFteFor_('Adam')));
+    return { target:t, src:(mB!=null||aB!=null)?'plans':'fte', base:null };
   }
   const b=bpBillableFor_(franchiseeView);
-  if(b!=null) return { target:b, src:'plan' };
-  return { target: Math.round(planFTEval()*PLAN_TARGET), src:'fte' };
+  const base = (b!=null)?b:PLAN_TARGET;
+  return { target: Math.round(base*planFTEval()), src:(b!=null)?'plan':'fte', base:base };
 }
 function planTarget(){ return planTargetSrc().target; }
 function fteNote(f){
@@ -2423,7 +2428,9 @@ function planSetFTE(v){
   else planFTEMap[franchiseeView] = Math.max(0, n);
   try { localStorage.setItem('mtg_plan_fte', JSON.stringify(planFTEMap)); } catch(e){}
   recalcPlanner();
-  const note=document.getElementById('plFteNote'); if(note) note.textContent = fteNote(planFTEval());
+  const ts=planTargetSrc();
+  const note=document.getElementById('plFteNote');
+  if(note) note.textContent = (ts.src==='plan') ? (ts.base+'h billable (business plan) \u00d7 '+planFTEval()+' gardeners = '+ts.target+'h') : fteNote(planFTEval());
 }
 // In-season visits per 4 weeks, defaulted from the live cadence when the customer has no saved plan.
 function planDefaultV4(c){
@@ -2527,11 +2534,13 @@ function renderPlannerTab(){
     + card('Capacity', '<span id="plFill">'+Math.round(fill)+'%</span>')
     + card('Per hour', '<span id="plPph">'+(pph?fmt(Math.round(pph)):'\u2014')+'</span>')
     + '</div>';
-  const bar = (function(){ const ts=planTargetSrc(); const planDriven = ts.src!=='fte';
-    const note = planDriven
-      ? '<span style="color:var(--green);font-weight:600">Target from '+(ts.src==='plans'?'both business plans':'the business plan')+' (Operations: billable hours)</span>'
-      : '<span id="plFteNote" style="color:var(--muted)">'+fteNote(planFTEval())+'</span>';
-    const fteInput = '<input type="number" min="0" step="0.2" value="'+planFTEval()+'" onchange="planSetFTE(this.value)" '+(planDriven?'disabled style="width:62px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px;text-align:right;opacity:.4" title="Capacity comes from the business plan working pattern while one is set"':'style="width:62px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px;text-align:right"')+'>';
+  const bar = (function(){ const ts=planTargetSrc(); const allView = franchiseeView==='All';
+    const note = allView
+      ? '<span id="plFteNote" style="color:var(--muted)">Sum of each franchisee\u2019s target, set the gardeners in their own view</span>'
+      : (ts.src==='plan'
+        ? '<span id="plFteNote" style="color:var(--green);font-weight:600">'+ts.base+'h billable (business plan) \u00d7 '+planFTEval()+' gardeners = '+ts.target+'h</span>'
+        : '<span id="plFteNote" style="color:var(--muted)">'+fteNote(planFTEval())+'</span>');
+    const fteInput = '<input type="number" min="0" step="0.2" value="'+(allView?'':planFTEval())+'" onchange="planSetFTE(this.value)" '+(allView?'disabled style="width:62px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px;text-align:right;opacity:.4" title="Set the head count in each franchisee\u2019s own view"':'style="width:62px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px;text-align:right"')+'>';
     return '<div class="card" style="margin-bottom:18px;padding:16px 18px"><div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);margin-bottom:10px;gap:14px;flex-wrap:wrap"><span style="display:inline-flex;align-items:center;gap:8px">Gardeners '+fteInput+' FTE '+note+'</span><span><span id="plTargetLab">'+target+'</span>h target</span></div><div style="height:12px;border-radius:6px;background:var(--line);overflow:hidden"><div id="plBar" style="height:100%;width:'+Math.min(100,fill)+'%;background:var(--green6);transition:width .2s"></div></div></div>'; })();
   const ni = (f,v,w,step) => '<input type="number" data-f="'+f+'" value="'+(v===''?'':v)+'" step="'+(step||'1')+'" min="0" style="width:'+(w||52)+'px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;font:inherit;font-size:12px;text-align:right" onchange="planChanged(this.closest(\'tr\'))">';
   const body = rows.map(o=>{ const c=o.c, f=o.f, m=o.m;
