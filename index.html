@@ -3058,18 +3058,18 @@ function leadClock(l){
     const start = (l._updatedAtD && l._updatedAtD>l._date) ? l._updatedAtD : l._date;
     if (!start) return null;
     const left = 24*H - (Date.now()-start.getTime());
-    return { kind:'accept', left, label: left>0 ? ('accept in '+leadHrs(left)) : 'reassigns on next sweep', urgent: left < 6*H };
+    return { kind:'accept', left, label: left>0 ? ('accept or decline in '+leadHrs(left)) : 'Your 24 hours to respond are up. Accept or decline this lead now, before it moves to HQ.', urgent: left < 6*H, over: left<=0 };
   }
   if (l._offer==='ACCEPTED' && l._stage==='NEW') {
     const start = l._offerAt || l._updatedAtD;
     if (!start) return null;
     const left = 24*H - (Date.now()-start.getTime());
-    return { kind:'contact', left, label: left>0 ? ('contact in '+leadHrs(left)) : 'reassigns on next sweep', urgent: left < 6*H };
+    return { kind:'contact', left, label: left>0 ? ('contact within '+leadHrs(left)) : 'Your 24 hours to make contact are up. Contact the customer and update the outcome now, before this lead moves to HQ.', urgent: left < 6*H, over: left<=0 };
   }
   return null;
 }
 function leadHrs(ms){ const h=Math.floor(ms/3600000); if(h>=1) return h+'h'; return Math.max(1,Math.round(ms/60000))+'m'; }
-function leadClockChip(l){ const c=leadClock(l); if(!c) return ''; return '<div style="font-size:11px;margin-top:3px;color:'+(c.urgent?'#C62828':'var(--muted)')+'">⏱ '+c.label+'</div>'; }
+function leadClockChip(l){ const c=leadClock(l); if(!c) return ''; return '<div style="font-size:11px;margin-top:3px;max-width:220px;white-space:normal;line-height:1.35;color:'+(c.urgent?'#C62828':'var(--muted)')+'">⏱ '+c.label+'</div>'; }
 // After tapping Call/WhatsApp, ask on return whether contact was made: one tap to Contacted.
 let _leadPing=null;
 function leadContactAttempt(key){ _leadPing={key:key, at:Date.now()}; }
