@@ -1288,6 +1288,15 @@ function handleData(data, fromCache) {
     l._offerAt = parseDate(col(l,['Offer At']));
     const stU = l._status;
     l._stage = (['CONTACTED','QUOTED','BOOKED','LOST','NOT RELEVANT','SPAM'].indexOf(stU)!==-1) ? stU : 'NEW';
+    // Self-healing gate: the lead's CURRENT state wins over a stale Offer cell. A lead
+    // that is accepted or progressing with a live owner cannot still be "Expired" or
+    // "Declined" (that history lives in its notes); and a New lead with a live owner is
+    // by definition awaiting a response. Prevents double counting after re-offers.
+    const live = l._franchisee==='Mike' || l._franchisee==='Adam';
+    if (live && (l._offer==='EXPIRED' || l._offer==='DECLINED' || l._offer==='')) {
+      if (stU==='ACCEPTED' || ['CONTACTED','QUOTED','BOOKED'].indexOf(stU)!==-1) l._offer='ACCEPTED';
+      else if (stU==='NEW') l._offer='PENDING';
+    }
     l._franchisee = (col(l,['Franchisee','Owner']) || '').trim();
     l._source = (col(l,['Source']) || '').trim() || 'Unknown';
     l._name = col(l,['Customer Name','Customer','Name']);
