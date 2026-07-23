@@ -1292,6 +1292,8 @@ function handleData(data, fromCache) {
     // that is accepted or progressing with a live owner cannot still be "Expired" or
     // "Declined" (that history lives in its notes); and a New lead with a live owner is
     // by definition awaiting a response. Prevents double counting after re-offers.
+    const exM = String(l._leadNotes||'').match(/Expired from (Mike|Adam)/g);
+    l._expiredFrom = exM ? exM[exM.length-1].replace('Expired from ','') : '';
     const live = l._franchisee==='Mike' || l._franchisee==='Adam';
     if (live && (l._offer==='EXPIRED' || l._offer==='DECLINED' || l._offer==='')) {
       if (stU==='ACCEPTED' || ['CONTACTED','QUOTED','BOOKED'].indexOf(stU)!==-1) l._offer='ACCEPTED';
@@ -1675,6 +1677,12 @@ function processPrev() {
 function processLeads(b) {
   let ls = rawLeads.filter(l => matchView(l._franchisee));
   if (b.from && b.to) ls = ls.filter(l => l._date && l._date >= b.from && l._date <= b.to);
+  // Expired leads leave the owner's list (they belong to HQ now) but must not vanish
+  // from their story: this collects the CURRENTLY-expired leads this view lost, shown
+  // greyed-out behind the Expired chip. Re-offered leads drop out (they are live again).
+  const inB2 = l => !(b.from && b.to) || (l._date && l._date >= b.from && l._date <= b.to);
+  const expiredList = rawLeads.filter(l => l._offer==='EXPIRED' && inB2(l)
+    && (franchiseeView==='All' ? true : l._expiredFrom===franchiseeView));
   const byStatus = {NEW:0,CONTACTED:0,QUOTED:0,BOOKED:0,LOST:0,SPAM:0,'NOT RELEVANT':0};
   const bySource = {}, byFr = {Mike:0,Adam:0,HQ:0,Other:0};
   ls.forEach(l => {
@@ -1693,7 +1701,7 @@ function processLeads(b) {
     if (l._offer==='PENDING') gate.pending++;
     else if (l._offer==='ACCEPTED') gate.accepted++;
     else if (l._offer==='DECLINED') gate.declined++;
-    else if (l._offer==='EXPIRED') gate.expired++;
+    else if (l._offer==='EXPIRED' && franchiseeView==='All') gate.expired++;
     if (l._offer==='ACCEPTED') {
       pipe.acceptedTotal++;
       if (['CONTACTED','QUOTED','BOOKED'].indexOf(l._stage)!==-1) pipe.contacted++;
@@ -1708,7 +1716,8 @@ function processLeads(b) {
   // declined, spam) has left the funnel and is accounted for in the strip beneath it.
   const total = ls.length - spam, qualified = total, booked = byStatus.BOOKED||0;
   const activeTotal = (byStatus.NEW||0) + accepted + (byStatus.CONTACTED||0) + (byStatus.QUOTED||0) + booked;
-  leadStats = { total, activeTotal, expired, declined, accepted, lost, notRelevant, spamCount: spam, gate, pipe, byStatus, bySource, byFr,
+  if (franchiseeView!=='All') gate.expired = expiredList.length;
+  leadStats = { total, activeTotal, expired, declined, accepted, lost, notRelevant, spamCount: spam, gate, pipe, expiredList, byStatus, bySource, byFr,
     conversion: qualified > 0 ? Math.round(booked/qualified*100) : 0,
     staleNew: byStatus.NEW||0,
     list: ls.slice().sort((a,b2) => (b2._date?b2._date:0) - (a._date?a._date:0)),
@@ -3090,7 +3099,8 @@ window.addEventListener('focus', function(){
 });
 
 // ---- Leads table state: sorting, owner filter, spam visibility, bulk selection ----
-let leadSort = { k:'date', d:-1 }, leadOwnerFilter = 'All', leadShowSpam = false, leadSel = {}, _leadVisibleKeys = [];
+let leadSort = { k:'date', d:-1 }, leadOwnerFilter = 'All', leadShowSpam = false, leadSel = {}, _leadVisibleKeys = [], leadGateFilter = '';
+function leadGateToggle(k){ leadGateFilter = leadGateFilter===k?'':k; renderContent(); }
 function leadSortBy(k){ if(leadSort.k===k) leadSort.d=-leadSort.d; else leadSort={k:k, d:(k==='date'||k==='quote')?-1:1}; renderContent(); }
 function leadFilterOwner(o){ leadOwnerFilter=o; leadSel={}; renderContent(); }
 function leadToggleSpam(){ leadShowSpam=!leadShowSpam; renderContent(); }
@@ -5361,12 +5371,12 @@ function renderContent() {
       <div class="grid grid-2">
         <div class="card"><div class="h">Lead funnel</div>
           ${(()=>{ const g=s.gate, p=s.pipe;
-            const gateChip=(label,n,bg,fg,sub)=>'<div style="flex:1;min-width:110px;background:'+bg+';border-radius:10px;padding:10px 12px"><div style="font-size:11px;font-weight:700;letter-spacing:.04em;color:'+fg+'">'+label.toUpperCase()+'</div><div style="font-size:22px;font-family:\'Tiempos Headline\',Georgia,serif;color:'+fg+'">'+n+'</div>'+(sub?'<div style="font-size:11px;color:'+fg+';opacity:.75">'+sub+'</div>':'')+'</div>';
+            const gateChip=(label,n,bg,fg,sub,click,on)=>'<div '+(click?'onclick="'+click+'" ':'')+'style="flex:1;min-width:110px;background:'+bg+';border-radius:10px;padding:10px 12px'+(click?';cursor:pointer':'')+(on?';outline:2px solid '+fg:'')+'"><div style="font-size:11px;font-weight:700;letter-spacing:.04em;color:'+fg+'">'+label.toUpperCase()+'</div><div style="font-size:22px;font-family:\'Tiempos Headline\',Georgia,serif;color:'+fg+'">'+n+'</div>'+(sub?'<div style="font-size:11px;color:'+fg+';opacity:.75">'+sub+'</div>':'')+'</div>';
             const gateStrip='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">'
               + gateChip('Awaiting response',g.pending,'#FFF3E0','#9A5410', g.pending?'clock running':'')
               + gateChip('Accepted',g.accepted,'#E7F1E9','var(--green)','')
               + gateChip('Declined',g.declined,'#EEF1EC','#6B7466','to HQ')
-              + gateChip('Expired',g.expired,'#FDECEA','#C62828','ignored')
+              + gateChip('Expired',g.expired,'#FDECEA','#C62828', leadGateFilter==='expired'?'showing below \u00b7 tap to hide':'ignored \u00b7 tap to view', 'leadGateToggle(\'expired\')', leadGateFilter==='expired')
               + '</div>';
             const den=p.acceptedTotal;
             const bar=(label,n,color)=>{ const pc=den?Math.round(n/den*100):0;
@@ -5387,6 +5397,14 @@ function renderContent() {
       </div>
       <div class="card">
         ${(()=>{
+          if (leadGateFilter==='expired') {
+            const ex = s.expiredList.slice().sort((a,b)=>(b._date||0)-(a._date||0));
+            const who = franchiseeView==='All' ? 'the network' : franchiseeView;
+            const head='<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap"><b style="font-size:14px">Expired leads \u00b7 '+ex.length+'</b><span style="font-size:12.5px;color:var(--muted)">Offers '+(franchiseeView==='All'?'across '+who:who+' let lapse')+', now with HQ. They cannot be opened here'+(franchiseeView==='All'?' \u2014 re-offer them from the HQ pool filter or Manage leads.':'; speak to Michael if one should come back to you.')+'</span><button class="lead-st-btn" style="margin-left:auto" onclick="leadGateToggle(\'expired\')">\u2190 Back to leads</button></div>';
+            if(!ex.length) return head+'<div style="font-size:13px;color:var(--muted)">Nothing expired in this period. Keep it that way.</div>';
+            const rows=ex.map(l=>'<tr style="opacity:.5;pointer-events:none"><td style="color:var(--muted);font-size:12px;white-space:nowrap">'+fmtDate(l._date)+'</td><td style="font-weight:500">'+(l._name||'\u2014')+'</td><td style="font-size:12px">'+(l._svc||'\u2014')+'</td><td class="r">'+(l._quote>0?fmt(l._quote):'\u2014')+'</td><td class="c">'+badge('HQ')+'</td><td class="c">'+leadPill('Expired')+'</td><td style="font-size:12px;color:var(--muted)">'+(l._expiredFrom?'was '+l._expiredFrom+'\u2019s':'')+'</td></tr>').join('');
+            return head+'<div class="table-wrap"><table><thead><tr><th>Received</th><th>Customer</th><th>Service</th><th class="r">Quote</th><th class="c">Owner</th><th class="c">Status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+          }
           // ---- filter, sort, and selection over the period's leads ----
           let list = s.list.slice();
           const spamCountTable = list.filter(l=>l._status==='SPAM').length;
