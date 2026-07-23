@@ -3044,7 +3044,7 @@ function mlRender(){
   const B=(label,fn,primary)=>'<button class="'+(primary?'cm-rem-btn':'lead-st-btn')+'" style="padding:9px 14px" onclick="'+fn+'">'+label+'</button>';
   let actions='';
   if(it.t==='offer') actions=B('Accept lead','mlAccept(\''+sk+'\')',1)+B('Decline\u2026','mlDecline(\''+sk+'\')')+B('Reject \u0026 notify\u2026','mlReject(\''+sk+'\')')+B('Reject','mlStatus(\''+sk+'\',\'Lost\')')+B('Spam','mlStatus(\''+sk+'\',\'Spam\')');
-  else if(it.t==='contact') actions=comms+B('Mark contacted','mlStatus(\''+sk+'\',\'Contacted\')',1)+B('Lost','mlStatus(\''+sk+'\',\'Lost\')');
+  else if(it.t==='contact') actions=comms+B('Mark contacted','mlStatus(\''+sk+'\',\'Contacted\')',1)+B('Quoted\u2026','mlQuote(\''+sk+'\')')+B('Booked','mlStatus(\''+sk+'\',\'Booked\')')+B('Lost','mlStatus(\''+sk+'\',\'Lost\')');
   else if(it.t==='stale') actions=B('Still waiting','mlStill(\''+sk+'\')')+(l._stage==='CONTACTED'?B('Quoted\u2026','mlQuote(\''+sk+'\')',1):'')+B('Booked','mlStatus(\''+sk+'\',\'Booked\')',l._stage!=='CONTACTED')+B('Lost','mlStatus(\''+sk+'\',\'Lost\')');
   else actions=B('Offer to Mike','mlTransfer(\''+sk+'\',\'Mike\')')+B('Offer to Adam','mlTransfer(\''+sk+'\',\'Adam\')')+B('Reject \u0026 notify\u2026','mlReject(\''+sk+'\')')+B('Reject','mlStatus(\''+sk+'\',\'Lost\')')+B('Spam','mlStatus(\''+sk+'\',\'Spam\')');
   el.innerHTML='<div class="cm-head"><div><div style="font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--muted)">MANAGE LEADS \u00b7 '+(mlIdx+1)+' OF '+mlQueue.length+'</div><div class="cm-name">'+escAttr(l._name||'Lead')+'</div>'
