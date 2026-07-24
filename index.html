@@ -805,6 +805,40 @@ function normNum(s) {
   while (d.charAt(0) === '0') d = d.slice(1);    // drop the trunk 0 (and any stray leading zeros)
   return d;
 }
+// ---------- shared low-level helpers ----------
+// Storage: every read/write is wrapped because private browsing and full quotas throw.
+function lsGet(key){ try { return localStorage.getItem(key); } catch(_){ return null; } }
+function lsSet(key, val){ try { localStorage.setItem(key, val); return true; } catch(_){ return false; } }
+function lsRemove(key){ try { localStorage.removeItem(key); } catch(_){} }
+function lsGetJSON(key, fallback){
+  const raw = lsGet(key);
+  if (raw == null) return fallback;
+  try { const v = JSON.parse(raw); return v == null ? fallback : v; } catch(_){ return fallback; }
+}
+function lsSetJSON(key, val){ try { return lsSet(key, JSON.stringify(val)); } catch(_){ return false; } }
+// Name key used everywhere a customer/caller name is matched across feeds.
+function normName(s){ return String(s==null?'':s).trim().toLowerCase(); }
+function pad2(n){ return String(n).padStart(2,'0'); }
+function ymd(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()); }
+// Dial and WhatsApp links from any stored phone format.
+function telHref(p){ const d=String(p==null?'':p).replace(/\D/g,''); return d ? 'tel:'+fmtPhone(d).replace(/\s/g,'') : ''; }
+function waHref(p, text){ const d=waNumber(p); return d ? 'https://wa.me/'+d+(text?'?text='+encodeURIComponent(text):'') : ''; }
+// JSONP call to the Apps Script Web App: it has no CORS headers, so a <script> tag is the
+// only way in. Resolves once, cleans up the callback and tag either way, and times out.
+function jsonp(params, onOk, onErr, timeoutMs){
+  const cb = 'mtg_cb_' + Date.now() + '_' + Math.floor(Math.random()*100000);
+  const s = document.createElement('script');
+  let done = false;
+  const cleanup = () => { try { delete window[cb]; } catch(_){ window[cb] = undefined; } if (s.parentNode) s.parentNode.removeChild(s); };
+  const fail = () => { if (!done) { done = true; cleanup(); onErr && onErr(); } };
+  window[cb] = function(d){ done = true; cleanup(); onOk && onOk(d); };
+  s.onerror = fail;
+  setTimeout(fail, timeoutMs || 20000);
+  let url = API_URL + (API_URL.indexOf('?') === -1 ? '?' : '&') + 'callback=' + cb;
+  for (const k in params) if (params[k] != null) url += '&' + k + '=' + encodeURIComponent(params[k]);
+  s.src = url;
+  document.head.appendChild(s);
+}
 // A call stays in the chase list (counts as "open") only for these. Anything else is a closed outcome.
 // 'No answer' is a legacy value kept open so old rows behave sensibly.
 function isCallOpen(st) {
@@ -847,19 +881,25 @@ function parseCSVLine(line) {
   result.push(current);
   return result;
 }
-function parseCSV(text) {
-  const lines = text.split('\n');
-  if (lines.length < 2) return [];
-  const headers = parseCSVLine(lines[0]);
+// Rows below a known header line, as objects keyed by trimmed header. Blank lines and
+// all-blank rows are skipped.
+function parseCSVRows(lines, headerIndex) {
+  const headers = parseCSVLine(lines[headerIndex]).map(h => h.trim());
   const rows = [];
-  for (let i = 1; i < lines.length; i++) {
+  for (let i = headerIndex + 1; i < lines.length; i++) {
     if (!lines[i].trim()) continue;
     const vals = parseCSVLine(lines[i]);
     const obj = {};
-    headers.forEach((h, idx) => obj[h.trim()] = (vals[idx] || '').trim());
+    headers.forEach((h, idx) => obj[h] = (vals[idx] || '').trim());
+    if (Object.values(obj).every(v => !v)) continue;
     rows.push(obj);
   }
   return rows;
+}
+function parseCSV(text) {
+  const lines = text.split('\n');
+  if (lines.length < 2) return [];
+  return parseCSVRows(lines, 0);
 }
 // Tolerant reader: scans the first rows for the line containing a known header keyword,
 // so a title/banner row above the real headers no longer breaks parsing.
@@ -872,17 +912,7 @@ function parseCSVSmart(text, keywords) {
     if (keywords.some(k => low.includes(k))) { hi = i; break; }
   }
   if (hi === -1) hi = 0;
-  const headers = parseCSVLine(lines[hi]).map(h => h.trim());
-  const rows = [];
-  for (let i = hi + 1; i < lines.length; i++) {
-    if (!lines[i].trim()) continue;
-    const vals = parseCSVLine(lines[i]);
-    const obj = {};
-    headers.forEach((h, idx) => obj[h] = (vals[idx] || '').trim());
-    if (Object.values(obj).every(v => !v)) continue;
-    rows.push(obj);
-  }
-  return rows;
+  return parseCSVRows(lines, hi);
 }
 function parseAmount(s) { if (!s) return 0; return parseFloat(String(s).replace(/[£,]/g, '')) || 0; }
 function parseDate(s) {
@@ -982,13 +1012,13 @@ const MIKE_PASSED_EXTRA = [
 const TRANSFERRED_TO_ADAM = new Set(
   Object.keys(MIKE_CUST_FIX).filter(k => MIKE_CUST_FIX[k] === 'adam')
     .concat(MIKE_PASSED_EXTRA.map(p => p.n))
-    .map(n => String(n).trim().toLowerCase())
+    .map(normName)
 );
 // Wholesale owner reassignments: this customer, and all their visits and revenue, are reattributed
 // to the named operator, overriding the franchisee recorded on their jobs. For genuine misattributions
 // (e.g. always Mike's customer, but another operator covered the first few visits). Keys are lowercased names.
 const OWNER_REASSIGN = { "nicky waters": "Mike" };
-function monthKey(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function monthKey(d){ return d.getFullYear()+'-'+pad2(d.getMonth()+1); }
 function monthOverlaps(k,b){ if(!b.from||!b.to) return true; const p=k.split('-'); const y=+p[0],m=+p[1]; const s=new Date(y,m-1,1), e=new Date(y,m,0,23,59,59); return e>=b.from && s<=b.to; }
 // Per-franchisee Zenbooker monthly revenue within bounds b (all franchisees, ignores the view toggle).
 function zenMonthlyByFr(b){
@@ -1101,26 +1131,26 @@ function clearDataCache() {
    Refresh); it is not background push, which needs a service worker and a push server. */
 function notifyKey(){ return 'mtg_notify_' + (auth ? auth.user : ''); }
 function notifyEnabled(){
-  try { return localStorage.getItem(notifyKey())==='1' && 'Notification' in window && Notification.permission==='granted'; } catch(_){ return false; }
+  return lsGet(notifyKey())==='1' && 'Notification' in window && Notification.permission==='granted';
 }
 function setNotify(on){
   const chk=document.getElementById('notifChk');
-  if(!on){ try{ localStorage.setItem(notifyKey(),'0'); }catch(_){} return; }
+  if(!on){ lsSet(notifyKey(),'0'); return; }
   if(!('Notification' in window)){ alert('This browser does not support notifications.'); if(chk) chk.checked=false; return; }
   Notification.requestPermission().then(p=>{
-    if(p==='granted'){ try{ localStorage.setItem(notifyKey(),'1'); }catch(_){} }
-    else { if(chk) chk.checked=false; try{ localStorage.setItem(notifyKey(),'0'); }catch(_){} }
+    if(p==='granted'){ lsSet(notifyKey(),'1'); }
+    else { if(chk) chk.checked=false; lsSet(notifyKey(),'0'); }
   });
 }
 function syncNotifyChk(){
   const chk=document.getElementById('notifChk');
-  if(chk){ chk.checked = (function(){ try{ return localStorage.getItem(notifyKey())==='1'; }catch(_){ return false; } })(); }
+  if(chk){ chk.checked = lsGet(notifyKey())==='1'; }
 }
 function maybeNotify(){
   if(!auth) return;
   const counts = navBadgeCounts();
   const seenKey='mtg_seen_'+auth.user;
-  let seen={}; try{ seen=JSON.parse(localStorage.getItem(seenKey)||'{}'); }catch(_){ seen={}; }
+  const seen = lsGetJSON(seenKey, {});
   if(notifyEnabled()){
     const msgs=[];
     const dc=counts['Calls']-(seen.calls||0), dl=counts['Leads']-(seen.leads||0);
@@ -1128,7 +1158,7 @@ function maybeNotify(){
     if(dl>0) msgs.push(dl+' new lead'+(dl>1?'s':''));
     if(msgs.length){ try{ new Notification('My Tidy Garden', { body: msgs.join(' \u00b7 ')+' waiting in the dashboard', tag:'mtg-new-items' }); }catch(_){} }
   }
-  try{ localStorage.setItem(seenKey, JSON.stringify({ calls:counts['Calls'], leads:counts['Leads'] })); }catch(_){}
+  lsSetJSON(seenKey, { calls:counts['Calls'], leads:counts['Leads'] });
 }
 document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ closeCustomer(); closeBnSheet(); } });
 
@@ -1140,8 +1170,7 @@ function loadData() {
   }
   // Paint the last saved payload straight away, if there is one for this user.
   paintedFromCache = false;
-  let cached = null;
-  try { const raw = localStorage.getItem(dataCacheKey()); if (raw) cached = JSON.parse(raw); } catch (_) { cached = null; }
+  const cached = lsGetJSON(dataCacheKey(), null);
   if (cached && !cached.error && cached.jobs) {
     paintedFromCache = true;
     handleData(cached, true);
@@ -1149,19 +1178,10 @@ function loadData() {
   } else {
     showSkeleton();
   }
-  const cb = 'mtg_cb_' + Date.now();
-  const s = document.createElement('script');
-  let done = false;
-  const cleanup = () => { try { delete window[cb]; } catch(_) { window[cb] = undefined; } if (s.parentNode) s.parentNode.removeChild(s); };
-  const failSoft = (msg) => {
+  jsonp({ user: auth.user, pass: auth.pass }, handleData, function(){
     if (paintedFromCache) { syncPill('Offline \u00b7 showing saved data', true); setTimeout(() => syncPill(''), 6000); }
-    else showMsg(msg);
-  };
-  window[cb] = function(data) { done = true; cleanup(); handleData(data); };
-  s.onerror = function() { if (!done) { cleanup(); failSoft('Could not reach the MTG app. Check the Web App URL is correct and deployed with access set to "Anyone".'); } };
-  setTimeout(() => { if (!done) { cleanup(); failSoft('The MTG app did not respond. Check the Web App URL and token, then try Refresh.'); } }, 20000);
-  s.src = API_URL + (API_URL.indexOf('?') === -1 ? '?' : '&') + 'user=' + encodeURIComponent(auth.user) + '&pass=' + encodeURIComponent(auth.pass) + '&callback=' + cb;
-  document.head.appendChild(s);
+    else showMsg('Could not reach the MTG app. Check the Web App URL is correct and deployed with access set to "Anyone".');
+  }, 20000);
 }
 
 function handleData(data, fromCache) {
@@ -1174,7 +1194,7 @@ function handleData(data, fromCache) {
   if (!fromCache) {
     try {
       const j = JSON.stringify(data);
-      if (j.length < 4500000) localStorage.setItem(dataCacheKey(), j);
+      if (j.length < 4500000) lsSet(dataCacheKey(), j);
     } catch (_) {}
     paintedFromCache = false;
     syncPill('');
@@ -1398,7 +1418,6 @@ function applyFilters() {
 function processData() {
   const now = new Date();
   const cutoff90 = new Date(now); cutoff90.setDate(cutoff90.getDate() - 90);
-  const norm = n => String(n || '').trim().toLowerCase();
 
   // ALL-TIME, view-filtered history decides the SEGMENT (independent of the selected period).
   const histJobs = franchiseeView === 'All' ? rawJobs : rawJobs.filter(j => j._franchisee === franchiseeView);
@@ -1407,14 +1426,14 @@ function processData() {
   const recurringNames = new Set(
     rawRecurring.filter(r => matchView(r._franchisee))
       .filter(r => !r._canceled && r._status !== 'CANCELED' && r._status !== 'CANCELLED')
-      .map(r => norm(r._cust)).filter(Boolean)
+      .map(r => normName(r._cust)).filter(Boolean)
   );
 
   // Build each customer's all-time picture: total jobs ever, recurrence, first/last visit.
   const histMap = {};
   histJobs.forEach(j => {
     const name = j['Customer Name']; if (!name) return;
-    const k = norm(name);
+    const k = normName(name);
     if (!histMap[k]) histMap[k] = { hasRecurring: recurringNames.has(k), freq: '', count: 0, first: null, last: null };
     const h = histMap[k];
     h.count++;
@@ -1446,7 +1465,7 @@ function processData() {
   // True lifetime value per customer, independent of the selected period: all-time view-filtered
   // Zenbooker revenue, plus Mike's pre-Zenbooker invoiced and cash work and his folded-in historical customers.
   const ltvRev = {};
-  const addLtv = (nm, amt) => { if (!nm || !amt) return; const key = norm(nm); ltvRev[key] = (ltvRev[key] || 0) + amt; };
+  const addLtv = (nm, amt) => { if (!nm || !amt) return; const key = normName(nm); ltvRev[key] = (ltvRev[key] || 0) + amt; };
   histJobs.forEach(j => addLtv(NAME_ALIAS[j['Customer Name']] || j['Customer Name'], j._amount));
   if (franchiseeView !== 'Adam') {
     Object.keys(MIKE_CUST_PRIOR).forEach(nm => addLtv(nm, MIKE_CUST_PRIOR[nm].pr));
@@ -1456,7 +1475,7 @@ function processData() {
   }
 
   allCustomers = Object.values(custMap).map(c => {
-    const h = histMap[norm(c.name)] || { hasRecurring:false, freq:'', count:c.jobs.length, first:null, last:null };
+    const h = histMap[normName(c.name)] || { hasRecurring:false, freq:'', count:c.jobs.length, first:null, last:null };
     const priced = c.jobs.filter(j => j._amount > 0);
     const avg = priced.length ? priced.reduce((s,j) => s + j._amount, 0) / priced.length : 0;
     const rgmJobs = c.jobs.filter(j => j._service === 'Regular Garden Maintenance');
@@ -1496,12 +1515,12 @@ function processData() {
   // If the same person is already live (e.g. Adam serves them now), merge into that row rather than adding a duplicate.
   if (franchiseeView !== 'Adam') {
     const bnd = dfBounds();
-    const byNorm = {}; allCustomers.forEach(c => { if (!byNorm[norm(c.n)]) byNorm[norm(c.n)] = c; });
+    const byNorm = {}; allCustomers.forEach(c => { if (!byNorm[normName(c.n)]) byNorm[normName(c.n)] = c; });
     const inPeriod = (cf, cl) => !((bnd.from && cl < bnd.from) || (bnd.to && cf > bnd.to));
     const addOrMerge = (hc, passed) => {
       const cf = new Date(hc.f), cl = new Date(hc.l);
       if (!inPeriod(cf, cl)) return;
-      const ex = byNorm[norm(hc.n)];
+      const ex = byNorm[normName(hc.n)];
       if (ex) {   // already present from the live feed: combine the relationship into one row
         ex.r = Math.round((ex.r + hc.r) * 100) / 100;
         ex.j += hc.j;
@@ -1516,7 +1535,7 @@ function processData() {
       const row = { n: hc.n, j: hc.j, r: hc.r, a: av, visit: av, f: 'Mike', s: passed ? 'Passed to Adam' : hc.s,
         freq: '', first: cf, last: cl, daysSince: daysBetween(cl, now), svc: 'Garden maintenance', hist: true };
       allCustomers.push(row);
-      byNorm[norm(hc.n)] = row;
+      byNorm[normName(hc.n)] = row;
     };
     MIKE_HIST_CUSTOMERS.forEach(hc => addOrMerge(hc, false));
     MIKE_PASSED_EXTRA.forEach(hc => addOrMerge(hc, true));
@@ -1525,42 +1544,42 @@ function processData() {
   // Churned-list corrections (Mike + All views): transfers to Adam, a rename, and a duplicate merge.
   // Match by name regardless of territory, because a customer Adam now serves is tagged to him by their latest job.
   if (franchiseeView !== 'Adam') {
-    const fixNorm = {}; Object.keys(MIKE_CUST_FIX).forEach(k => fixNorm[norm(k)] = MIKE_CUST_FIX[k]);
-    const byNorm = {}; allCustomers.forEach(c => { if (!byNorm[norm(c.n)]) byNorm[norm(c.n)] = c; });
+    const fixNorm = {}; Object.keys(MIKE_CUST_FIX).forEach(k => fixNorm[normName(k)] = MIKE_CUST_FIX[k]);
+    const byNorm = {}; allCustomers.forEach(c => { if (!byNorm[normName(c.n)]) byNorm[normName(c.n)] = c; });
     const drop = new Set();
     allCustomers.forEach(c => {
-      const fix = fixNorm[norm(c.n)];
+      const fix = fixNorm[normName(c.n)];
       if (!fix) return;
       if (fix === 'adam') { if (franchiseeView === 'Mike' || c.hist) c.s = 'Passed to Adam'; } // live handovers keep their live status in the overall view; only Mike's view and historical-only customers read as "passed"
       else if (fix === 'repeat') c.s = 'Repeat';
       else if (fix.startsWith('merge:')) {
-        const tgt = byNorm[norm(fix.slice(6))];
-        if (tgt && tgt !== c) { tgt.r = Math.round((tgt.r + c.r) * 100) / 100; tgt.j += c.j; tgt.a = tgt.j ? Math.round(tgt.r/tgt.j) : tgt.a; ltvRev[norm(tgt.n)] = (ltvRev[norm(tgt.n)]||0) + (ltvRev[norm(c.n)]||0); }
+        const tgt = byNorm[normName(fix.slice(6))];
+        if (tgt && tgt !== c) { tgt.r = Math.round((tgt.r + c.r) * 100) / 100; tgt.j += c.j; tgt.a = tgt.j ? Math.round(tgt.r/tgt.j) : tgt.a; ltvRev[normName(tgt.n)] = (ltvRev[normName(tgt.n)]||0) + (ltvRev[normName(c.n)]||0); }
         drop.add(c);
       }
     });
     if (drop.size) allCustomers = allCustomers.filter(c => !drop.has(c));
   }
   // True all-time lifetime value, never below the period figure (so a short period can't make it look smaller than it is).
-  allCustomers.forEach(c => { c.ltv = Math.round(Math.max(ltvRev[norm(c.n)] || 0, c.r) * 100) / 100; });
-  allCustomers.forEach(c => { c.inherited = TRANSFERRED_TO_ADAM.has(norm(c.n)); }); // Adam's inherited book, for the tag
-  allCustomers.forEach(c => { const cn = customerNotes[norm(c.n)]; c.disp = cn ? cn.disposition : ''; c.note = cn ? cn.note : ''; }); // saved churn reason + note
+  allCustomers.forEach(c => { c.ltv = Math.round(Math.max(ltvRev[normName(c.n)] || 0, c.r) * 100) / 100; });
+  allCustomers.forEach(c => { c.inherited = TRANSFERRED_TO_ADAM.has(normName(c.n)); }); // Adam's inherited book, for the tag
+  allCustomers.forEach(c => { const cn = customerNotes[normName(c.n)]; c.disp = cn ? cn.disposition : ''; c.note = cn ? cn.note : ''; }); // saved churn reason + note
   // A churned customer marked "Transferred to another franchisee" was kept within MTG, not lost,
   // so move them out of the churn list into the Passed to Adam bucket (skip any wholesale-reassigned).
-  allCustomers.forEach(c => { if (c.s === 'Churned' && c.disp === 'Transferred to another franchisee' && !OWNER_REASSIGN[norm(c.n)]) c.s = 'Passed to Adam'; });
-  allCustomers.forEach(c => { c.score = scorecards[norm(c.n)] || null; c.plan = plan[norm(c.n)] || null; }); // saved scorecard / saved season plan or null
+  allCustomers.forEach(c => { if (c.s === 'Churned' && c.disp === 'Transferred to another franchisee' && !OWNER_REASSIGN[normName(c.n)]) c.s = 'Passed to Adam'; });
+  allCustomers.forEach(c => { c.score = scorecards[normName(c.n)] || null; c.plan = plan[normName(c.n)] || null; }); // saved scorecard / saved season plan or null
   // Each customer's postcode for the map: prefer their active recurring booking, else their most recent job.
   const pcByCust = {};
-  rawRecurring.forEach(r => { if (r._postcode && r._cust) { const k = norm(r._cust); if (!pcByCust[k]) pcByCust[k] = r._postcode; } });
+  rawRecurring.forEach(r => { if (r._postcode && r._cust) { const k = normName(r._cust); if (!pcByCust[k]) pcByCust[k] = r._postcode; } });
   const jobPc = {};
-  histJobs.forEach(j => { const nm = NAME_ALIAS[j['Customer Name']] || j['Customer Name']; if (!nm || !j._postcode) return; const k = norm(nm); const d = j._date ? j._date.getTime() : 0; if (!jobPc[k] || d >= jobPc[k].d) jobPc[k] = { pc: j._postcode, d }; });
-  allCustomers.forEach(c => { const k = norm(c.n); c.postcode = pcByCust[k] || (jobPc[k] ? jobPc[k].pc : '') || ''; });
+  histJobs.forEach(j => { const nm = NAME_ALIAS[j['Customer Name']] || j['Customer Name']; if (!nm || !j._postcode) return; const k = normName(nm); const d = j._date ? j._date.getTime() : 0; if (!jobPc[k] || d >= jobPc[k].d) jobPc[k] = { pc: j._postcode, d }; });
+  allCustomers.forEach(c => { const k = normName(c.n); c.postcode = pcByCust[k] || (jobPc[k] ? jobPc[k].pc : '') || ''; });
   // Each customer's full service address, same precedence, used for accurate door-to-door routes.
   const addrByCust = {};
-  rawRecurring.forEach(r => { const a = String(r.address || '').trim(); if (a && r._cust) { const k = norm(r._cust); if (!addrByCust[k]) addrByCust[k] = a; } });
+  rawRecurring.forEach(r => { const a = String(r.address || '').trim(); if (a && r._cust) { const k = normName(r._cust); if (!addrByCust[k]) addrByCust[k] = a; } });
   const jobAddr = {};
-  histJobs.forEach(j => { const a = String(j.address || '').trim(); const nm = NAME_ALIAS[j['Customer Name']] || j['Customer Name']; if (!nm || !a) return; const k = norm(nm); const d = j._date ? j._date.getTime() : 0; if (!jobAddr[k] || d >= jobAddr[k].d) jobAddr[k] = { a:a, d:d }; });
-  allCustomers.forEach(c => { const k = norm(c.n); c.address = addrByCust[k] || (jobAddr[k] ? jobAddr[k].a : '') || ''; });
+  histJobs.forEach(j => { const a = String(j.address || '').trim(); const nm = NAME_ALIAS[j['Customer Name']] || j['Customer Name']; if (!nm || !a) return; const k = normName(nm); const d = j._date ? j._date.getTime() : 0; if (!jobAddr[k] || d >= jobAddr[k].d) jobAddr[k] = { a:a, d:d }; });
+  allCustomers.forEach(c => { const k = normName(c.n); c.address = addrByCust[k] || (jobAddr[k] ? jobAddr[k].a : '') || ''; });
   // Best-estimate annual value: realised regular-maintenance revenue over the trailing 12 months
   // (extras such as pressure washing or lawn care are excluded by counting only the maintenance
   // service), annualised for customers with under a year of history. Falls back to the cadence x
@@ -1571,12 +1590,12 @@ function processData() {
   histJobs.forEach(j => {
     if (j._service !== 'Regular Garden Maintenance' || !j._date || !(j._amount > 0)) return;
     const nm = NAME_ALIAS[j['Customer Name']] || j['Customer Name']; if (!nm) return;
-    const k = norm(nm), t = j._date.getTime();
+    const k = normName(nm), t = j._date.getTime();
     if (recFirst[k] === undefined || t < recFirst[k]) recFirst[k] = t;
     if (t >= winStart && t <= REF.getTime()) recSum[k] = (recSum[k] || 0) + j._amount;
   });
   allCustomers.forEach(c => {
-    const k = norm(c.n), sum = recSum[k] || 0, first = recFirst[k];
+    const k = normName(c.n), sum = recSum[k] || 0, first = recFirst[k];
     let best;
     if (sum > 0 && first !== undefined) {
       const activeDays = (REF.getTime() - Math.max(first, winStart)) / 864e5;
@@ -1590,11 +1609,11 @@ function processData() {
   // Number -> customer map for the Calls tab. Phone lives on the source rows (leads/recurring/jobs)
   // under one of PHONE_HEADERS. Empty until a phone column is added to the feed; lights up automatically when it is.
   numToCust = {};
-  const _custByName = {}; allCustomers.forEach(c => { if (!_custByName[norm(c.n)]) _custByName[norm(c.n)] = c; });
+  const _custByName = {}; allCustomers.forEach(c => { if (!_custByName[normName(c.n)]) _custByName[normName(c.n)] = c; });
   const _linkPhone = (nm, ph) => {
     const p = normNum(ph); if (!p || !nm) return;
     if (numToCust[p]) return;
-    const cu = _custByName[norm(nm)] || null;
+    const cu = _custByName[normName(nm)] || null;
     numToCust[p] = { name: nm, status: cu ? cu.s : '', fr: cu ? cu.f : '', inherited: cu ? !!cu.inherited : false };
   };
   rawRecurring.forEach(r => _linkPhone(r._cust, col(r, PHONE_HEADERS)));
@@ -1606,7 +1625,7 @@ function processData() {
   custContact = {};
   const _linkContact = (nm, ph, addr, pc) => {
     if (!nm) return;
-    const k = norm(nm);
+    const k = normName(nm);
     if (!custContact[k]) custContact[k] = { phone:'', addr:'', pc:'' };
     const cc = custContact[k];
     if (!cc.phone) { const p = normNum(ph); if (p) cc.phone = p; }
@@ -1620,7 +1639,7 @@ function processData() {
   try {
     Object.keys(manualNames || {}).forEach(num => {
       const nm = manualNames[num]; if (!nm) return;
-      const k = norm(String(nm));
+      const k = normName(String(nm));
       if (!custContact[k]) custContact[k] = { phone:'', addr:'', pc:'' };
       if (!custContact[k].phone) custContact[k].phone = normNum(num) || String(num);
     });
@@ -1629,7 +1648,7 @@ function processData() {
   const monthMap = {};
   jobs.forEach(j => {
     if (!j._date) return;
-    const key = j._date.getFullYear() + '-' + String(j._date.getMonth()+1).padStart(2,'0');
+    const key = monthKey(j._date);
     if (!monthMap[key]) monthMap[key] = { m: key, j: 0, r: 0, custs: new Set() };
     monthMap[key].j++; monthMap[key].r += j._amount;
     if (j['Customer Name']) monthMap[key].custs.add(j['Customer Name']);
@@ -1810,16 +1829,7 @@ function processCalls(b) {
 }
 function apiCall(extra, onOk, onErr) {
   if (!auth) { onErr && onErr(); return; }
-  const cb = 'mtg_w_' + Date.now() + Math.floor(Math.random()*1000);
-  const s = document.createElement('script');
-  let done = false;
-  const cleanup = () => { try { delete window[cb]; } catch(_) { window[cb] = undefined; } if (s.parentNode) s.parentNode.removeChild(s); };
-  window[cb] = function(d) { done = true; cleanup(); onOk && onOk(d); };
-  s.onerror = function() { if (!done) { cleanup(); onErr && onErr(); } };
-  setTimeout(() => { if (!done) { cleanup(); onErr && onErr(); } }, 15000);
-  let url = API_URL + (API_URL.indexOf('?')===-1?'?':'&') + 'user=' + encodeURIComponent(auth.user) + '&pass=' + encodeURIComponent(auth.pass) + '&callback=' + cb;
-  for (const k in extra) url += '&' + k + '=' + encodeURIComponent(extra[k]);
-  s.src = url; document.head.appendChild(s);
+  jsonp(Object.assign({ user: auth.user, pass: auth.pass }, extra), onOk, onErr, 15000);
 }
 // ---------- lightweight activity events ----------
 // Fire-and-forget log to the backend's Activity Log (and it counts as presence, so an
@@ -1835,7 +1845,6 @@ document.addEventListener('click', function(ev){
   if(a) logEvent('resource: ' + ((a.getAttribute('data-res')||a.textContent||'').trim().slice(0,80)));
 });
 // ---------- customer notes + churn reasons ----------
-function normName(s){ return String(s==null?'':s).trim().toLowerCase(); }
 function escAttr(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 // Churn reasons, grouped so the reason type is obvious. Values must match the backend list exactly.
 const DISP_GROUPS = [
@@ -1902,23 +1911,25 @@ function churnReasonBreakdownHTML(list){
 }
 function _custNoteOk(d){ if(!d || d.error) alert('Could not save that. Hit Refresh and check it saved.'); }
 function _custNoteErr(){ alert('Could not reach the app to save. Hit Refresh and try again.'); }
-// Set or clear a customer's churn reason. Keeps any existing note. Re-renders so the row updates.
-function setCustomerDisp(name, disp){
+// Write a customer's reason + note to the local stores and the backend. An empty pair
+// drops the entry entirely rather than saving a blank row.
+function saveCustomerNote(name, disp, note){
   const who = (auth && auth.name) ? auth.name : 'Unknown';
-  const k = normName(name), cur = customerNotes[k] || {}, note = cur.note || '';
+  const k = normName(name);
   if(!disp && !note) delete customerNotes[k]; else customerNotes[k] = { disposition:disp, note:note, by:who };
   allCustomers.forEach(c => { if(normName(c.n)===k){ c.disp = disp; c.note = note; } });
-  renderContent();
   apiCall({ action:'saveCustomerNote', name:name, disposition:disp, note:note, by:who }, _custNoteOk, _custNoteErr);
+}
+// Set or clear a customer's churn reason. Keeps any existing note. Re-renders so the row updates.
+function setCustomerDisp(name, disp){
+  const cur = customerNotes[normName(name)] || {};
+  saveCustomerNote(name, disp, cur.note || '');
+  renderContent();
 }
 // Save a customer's free note (on blur). Keeps any existing reason. No re-render, so the caret stays put.
 function saveCustomerNoteText(name, note){
-  const who = (auth && auth.name) ? auth.name : 'Unknown';
-  const k = normName(name), cur = customerNotes[k] || {}, disp = cur.disposition || '';
-  note = String(note||'');
-  if(!disp && !note) delete customerNotes[k]; else customerNotes[k] = { disposition:disp, note:note, by:who };
-  allCustomers.forEach(c => { if(normName(c.n)===k){ c.disp = disp; c.note = note; } });
-  apiCall({ action:'saveCustomerNote', name:name, disposition:disp, note:note, by:who }, _custNoteOk, _custNoteErr);
+  const cur = customerNotes[normName(name)] || {};
+  saveCustomerNote(name, cur.disposition || '', String(note||''));
 }
 // ---------- regular-job scorecard ----------
 // Fixed question set. id matches the original scorecard numbering (15 was never used).
@@ -2154,8 +2165,8 @@ function segColor(c){
   if(c.s==='One-Off') return '#7C3AED';
   return c.f==='Adam' ? '#1565C0' : '#E07B1A';
 }
-try { geoCache = JSON.parse(localStorage.getItem('mtg_geo')||'{}') || {}; } catch(e){ geoCache={}; }
-try { placeGeo = JSON.parse(localStorage.getItem('mtg_geo_places')||'{}') || {}; } catch(e){ placeGeo={}; }
+geoCache = lsGetJSON('mtg_geo', {});
+placeGeo = lsGetJSON('mtg_geo_places', {});
 // Fixed reference points on the map: where each operator starts, the tips we use, and trade suppliers.
 // Add more by extending this list (kind start|tip|supplier; q is a free-text address or place name).
 // Reference points come from the editable Map Places sheet; this is only the fallback used
@@ -2195,7 +2206,7 @@ async function geocodePlaces(list){
     }catch(e){ /* try again next visit */ }
     await sleepMs(700);
   }
-  try{ localStorage.setItem('mtg_geo_places', JSON.stringify(placeGeo)); }catch(e){}
+  lsSetJSON('mtg_geo_places', placeGeo);
 }
 function renderPlaceMarkers(map){
   if(!map || !window.L) return;
@@ -2302,7 +2313,7 @@ async function geocodePostcodes(pcs){
       (j.result||[]).forEach(item=>{ const q=(item.query||'').toUpperCase(); geoCache[q]= item.result ? {lat:item.result.latitude,lng:item.result.longitude} : null; });
     }catch(e){ /* leave uncached, try again next time */ }
   }
-  try{ localStorage.setItem('mtg_geo', JSON.stringify(geoCache)); }catch(e){}
+  lsSetJSON('mtg_geo', geoCache);
 }
 // Which customer segments are currently shown on the map.
 function mapShownSegs(){
@@ -2427,8 +2438,7 @@ function renderMapTab(){
 const PLAN_SEASON_WEEKS = 40, PLAN_OFF_WEEKS = 12, PLAN_TARGET = 1440;
 // Capacity is one gardener (PLAN_TARGET hours) by default; raise the head count to model more.
 // Saved per operator (view) so it sticks.
-let planFTEMap = {};
-try { planFTEMap = JSON.parse(localStorage.getItem('mtg_plan_fte')||'{}') || {}; } catch(e){ planFTEMap = {}; }
+let planFTEMap = lsGetJSON('mtg_plan_fte', {});
 function planFTEval(){ const v = planFTEMap[franchiseeView]; return (v != null) ? v : (franchiseeView==='All' ? 2 : 1); }
 // The capacity target now comes from each franchisee's business plan (Operations:
 // billable hours a year) when they have set a working pattern, so the planner measures
@@ -2470,7 +2480,7 @@ function planSetFTE(v){
   const n = parseFloat(v);
   if (v==='' || isNaN(n)) delete planFTEMap[franchiseeView];
   else planFTEMap[franchiseeView] = Math.max(0, n);
-  try { localStorage.setItem('mtg_plan_fte', JSON.stringify(planFTEMap)); } catch(e){}
+  lsSetJSON('mtg_plan_fte', planFTEMap);
   recalcPlanner();
   const ts=planTargetSrc();
   const note=document.getElementById('plFteNote');
@@ -2760,12 +2770,11 @@ function custName(c) {
    with contact details, quick actions, the shared note, and a follow-up reminder that
    lands in the To-do list as a dated task. */
 let custModalFor = null;
-function custNorm(n){ return String(n||'').trim().toLowerCase(); }
-function custByName(name){ const k=custNorm(name); return allCustomers.find(c=>custNorm(c.n)===k) || (churnedList||[]).find(c=>custNorm(c.n)===k) || null; }
-function custContactOf(name){ return custContact[custNorm(name)] || { phone:'', addr:'', pc:'' }; }
+function custByName(name){ const k=normName(name); return allCustomers.find(c=>normName(c.n)===k) || (churnedList||[]).find(c=>normName(c.n)===k) || null; }
+function custContactOf(name){ return custContact[normName(name)] || { phone:'', addr:'', pc:'' }; }
 function waNumber(p){ let d=String(p||'').replace(/\D/g,''); if(!d) return ''; if(d.indexOf('00')===0) d=d.slice(2); if(d.charAt(0)==='0') d='44'+d.slice(1); else if(d.indexOf('44')!==0 && d.length===10) d='44'+d; return d; }
 function fmtPhone(p){ if(!p) return ''; let d=String(p).replace(/\D/g,''); if(d.indexOf('44')===0) d='0'+d.slice(2); else if(d.length===10 && d.charAt(0)!=='0') d='0'+d; return d.length===11 ? d.slice(0,5)+' '+d.slice(5) : d; }
-function custRemId(name){ return 'cust-rem-'+custNorm(name).replace(/[^a-z0-9]+/g,'-'); }
+function custRemId(name){ return 'cust-rem-'+normName(name).replace(/[^a-z0-9]+/g,'-'); }
 function custReminder(name){ if(typeof todoState==='undefined'||!Array.isArray(todoState.tasks)) return null; const id=custRemId(name); const t=todoState.tasks.find(x=>x.id===id); if(!t) return null; if(todoState.doneMap && todoState.doneMap[t.id+':'+t.due]) return null; return t; }
 function openCustomerFromRow(ev, name){ if(ev && ev.target && ev.target.closest && ev.target.closest('input,select,button,a,textarea,.sc-pill')) return; if(name) openCustomer(name); }
 const cmIcons = {
@@ -2814,8 +2823,8 @@ function openCustomer(name){
   if(!c) return;
   custModalFor = c.n;
   const cc = custContactOf(c.n);
-  const tel = cc.phone ? 'tel:0'+cc.phone.replace(/^0+/,'') : '';
-  const wa  = cc.phone ? 'https://wa.me/'+waNumber(cc.phone) : '';
+  const tel = telHref(cc.phone);
+  const wa  = waHref(cc.phone);
   const dirQ = cc.addr || cc.pc || '';
   const dir = dirQ ? 'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(dirQ) : '';
   const life = fmt(c.ltv!=null?c.ltv:c.r);
@@ -2892,8 +2901,8 @@ function openLead(key){
   // the same way the Calls tab does, then rebuild a clean UK number for display and links.
   const phoneClean = l._phone ? normNum(l._phone) : '';
   const phoneUk = phoneClean ? '0'+phoneClean : '';
-  const wa = phoneClean ? 'https://wa.me/44'+phoneClean : '';
-  const tel = phoneUk ? 'tel:'+phoneUk : '';
+  const wa = waHref(phoneClean);
+  const tel = telHref(phoneClean);
   const svc = l._svc || 'your enquiry';
   const waMsg = encodeURIComponent('Hi'+(l._name?' '+String(l._name).split(' ')[0]:'')+', thanks for your enquiry about '+svc+' with My Tidy Garden. When would suit you for a quick chat or to arrange a visit?');
   const mailto = 'mailto:?subject='+encodeURIComponent('My Tidy Garden \u2014 '+svc)+'&body='+waMsg;
@@ -3038,7 +3047,7 @@ function mlRender(){
   const it=mlQueue[mlIdx], l=it.l, sk=String(l._serverKey).replace(/'/g,"\\'");
   const pc=l._phone?normNum(l._phone):''; const uk=pc?('0'+pc):'';
   const waMsg=encodeURIComponent('Hi'+(l._name&&l._name.indexOf('@')===-1?' '+String(l._name).split(' ')[0]:'')+', thanks for your enquiry about '+(l._svc||'your garden')+' with My Tidy Garden. When would suit you for a quick chat or to arrange a visit?');
-  const comms=(pc?'<a class="call-act" href="tel:'+uk+'" onclick="leadContactAttempt(\''+sk+'\')">Call</a><a class="call-act call-wa" href="https://wa.me/44'+pc+'?text='+waMsg+'" target="_blank" rel="noopener" onclick="leadContactAttempt(\''+sk+'\')">WhatsApp</a>':'');
+  const comms=(pc?'<a class="call-act" href="'+telHref(pc)+'" onclick="leadContactAttempt(\''+sk+'\')">Call</a><a class="call-act call-wa" href="'+waHref(pc)+'?text='+waMsg+'" target="_blank" rel="noopener" onclick="leadContactAttempt(\''+sk+'\')">WhatsApp</a>':'');
   const titles={offer:'New lead offer', contact:'Accepted \u00b7 awaiting first contact', stale:'No movement for 2+ days', pool:'HQ pool \u00b7 needs a decision'};
   const clock=leadClock(l); const clockLine=clock?'<div style="font-size:12.5px;max-width:320px;line-height:1.35;color:'+(clock.urgent?'#C62828':'#9A5410')+';margin:2px 0 10px">'+(clock.over?'\u26a0':'\u23f1')+' '+clock.label+'</div>':'';
   const note=l._leadNotes?('<div style="font-size:12px;color:var(--muted);white-space:pre-wrap;background:#F5F6F2;border-radius:8px;padding:8px 10px;margin-top:10px;max-height:110px;overflow:auto">'+escAttr(l._leadNotes).slice(0,400)+'</div>'):'';
@@ -3138,7 +3147,7 @@ function leadRejectOpener(l){
   return {
     send:function(){
       const msg=leadRejectMsg(l);
-      if(pc){ const url='https://wa.me/44'+pc+'?text='+encodeURIComponent(msg);
+      if(pc){ const url=waHref(pc, msg);
         if(w&&!w.closed) w.location.href=url; else window.open(url,'_blank'); }
       else window.location.href='mailto:?subject='+encodeURIComponent('Your enquiry to My Tidy Garden')+'&body='+encodeURIComponent(msg);
     },
@@ -3204,7 +3213,18 @@ function statusBadge(s) {
   return '<span class="badge b-na">'+s+'</span>';
 }
 function fmt(n) { return '\u00a3'+Math.round(n).toLocaleString(); }
-function fmtDate(d) { if (!d) return ''; return d.getDate()+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear(); }
+// One headline number in a card: label, value, caption. opts.top tints the top rule,
+// opts.color the value, opts.extra appends a second caption line under the first.
+function kpiCard(label, value, sub, opts) {
+  const o = opts || {};
+  return '<div class="card accent-top"'+(o.top?' style="border-top-color:'+o.top+'"':'')+'>'
+    + '<div class="kpi-l">'+label+'</div>'
+    + '<div class="kpi-v"'+(o.color?' style="color:'+o.color+'"':'')+'>'+value+'</div>'
+    + '<div class="kpi-s">'+sub+'</div>'
+    + (o.extra || '')
+    + '</div>';
+}
+function fmtDate(d) { if (!d) return ''; return d.getDate()+'/'+pad2(d.getMonth()+1)+'/'+d.getFullYear(); }
 function fmtDateLong(d) { if (!d) return '—'; return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); }
 function shortMonth(ym) { const [y,m] = ym.split('-'); const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return mn[parseInt(m)-1]+' '+y.slice(2); }
 function _sortState(which){ return which==='Customers'?custSort:which==='Recurring'?recSort:which==='Churned'?churnSort:missSort; }
@@ -3511,7 +3531,7 @@ function dfRender() {
   // last-seen store, updated by any authenticated request including heartbeats).
   if (auth && auth.role === 'All' && lastSeenMap && Object.keys(lastSeenMap).length) {
     const fmtSeen = iso => { if(!iso) return 'never'; const d=new Date(iso); if(isNaN(d)) return 'never';
-      const hm=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+      const hm=pad2(d.getHours())+':'+pad2(d.getMinutes());
       if(d.toDateString()===new Date().toDateString()) return 'today '+hm;
       return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]+' '+d.getDate()+'/'+(d.getMonth()+1)+' '+hm; };
     const bits = Object.keys(lastSeenMap).sort().map(u => (u.charAt(0).toUpperCase()+u.slice(1))+' seen '+fmtSeen(lastSeenMap[u]));
@@ -3604,11 +3624,11 @@ function renderRecurringHub(){
     }) : segHeader({ title:'Recurring customers, your foundation', framing:'No recurring customers in this view yet.' });
   return header + customerRegPointer() + `
     <div class="grid grid-4">
-      <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Active Recurring</div><div class="kpi-v">${recCusts.length}</div><div class="kpi-s">customers on a schedule</div></div>
-      <div class="card accent-top"><div class="kpi-l">Avg per Visit</div><div class="kpi-v">${fmt(recVisitAvg)}</div><div class="kpi-s">${fmt(recRound)} for one round of all</div></div>
-      <div class="card accent-top"><div class="kpi-l">Avg Customer LTV</div><div class="kpi-v">${fmt(recAvgLtv)}</div><div class="kpi-s">lifetime revenue per regular, all time</div>${recIsAllTime?'':'<div class="kpi-s" style="margin-top:3px;color:var(--green6);font-weight:600">'+fmt(recAvgPeriod)+' avg in '+recPeriodName+'</div>'}</div>
-      <div class="card accent-top"><div class="kpi-l">Regulars Gained</div><div class="kpi-v">${w.gained}</div><div class="kpi-s">first visit in period</div></div>
-      <div class="card accent-top" style="border-top-color:var(--red)"><div class="kpi-l">Regulars Lost</div><div class="kpi-v" style="color:var(--red)">${w.lost}</div><div class="kpi-s">churned in period</div></div>
+      ${kpiCard('Active Recurring', recCusts.length, 'customers on a schedule', {top:'var(--green4)'})}
+      ${kpiCard('Avg per Visit', fmt(recVisitAvg), fmt(recRound)+' for one round of all')}
+      ${kpiCard('Avg Customer LTV', fmt(recAvgLtv), 'lifetime revenue per regular, all time', {extra: recIsAllTime?'':'<div class="kpi-s" style="margin-top:3px;color:var(--green6);font-weight:600">'+fmt(recAvgPeriod)+' avg in '+recPeriodName+'</div>'})}
+      ${kpiCard('Regulars Gained', w.gained, 'first visit in period')}
+      ${kpiCard('Regulars Lost', w.lost, 'churned in period', {top:'var(--red)', color:'var(--red)'})}
     </div>
     <div class="card" style="margin-bottom:24px"><div class="h">Net movement</div>
       <div class="serif" style="font-size:40px;font-weight:600;color:${netColor};line-height:1">${netSign}${w.net}</div>
@@ -4386,10 +4406,11 @@ function todoCacheKey(){ return 'mtg_todo_' + ((typeof auth!=='undefined' && aut
 function todoMigrate(){ todoState.tasks.forEach(t=>{ if(!t.kind) t.kind='routine'; if(t.urgent===undefined) t.urgent=false; if(t.due===undefined) t.due=null; }); }
 function todoSeed(){ todoState.tasks = TODO_SEED.map(t=>Object.assign({}, t)); }
 function todoLoadCache(){
-  try { const raw=localStorage.getItem(todoCacheKey()); if(raw){ const j=JSON.parse(raw); todoState.tasks=Array.isArray(j.tasks)?j.tasks:[]; todoState.doneMap=(j.doneMap&&typeof j.doneMap==='object')?j.doneMap:{}; return true; } } catch(e){}
+  const j = lsGetJSON(todoCacheKey(), null);
+  if(j){ todoState.tasks=Array.isArray(j.tasks)?j.tasks:[]; todoState.doneMap=(j.doneMap&&typeof j.doneMap==='object')?j.doneMap:{}; return true; }
   return false;
 }
-function todoWriteCache(){ try { localStorage.setItem(todoCacheKey(), JSON.stringify({ tasks:todoState.tasks, doneMap:todoState.doneMap })); } catch(e){} }
+function todoWriteCache(){ lsSetJSON(todoCacheKey(), { tasks:todoState.tasks, doneMap:todoState.doneMap }); }
 function todoLoad(){ const had=todoLoadCache(); if(!had && !todoState.tasks.length) todoSeed(); todoMigrate(); }
 function todoSaveServerNow(){ try { if(typeof auth!=='undefined' && auth) apiCall({ action:'saveDoc', doc:'todo', data: JSON.stringify({ tasks:todoState.tasks, doneMap:todoState.doneMap }) }); } catch(e){} }
 function todoSave(){ todoWriteCache(); clearTimeout(todoSaveTimer); todoSaveTimer=setTimeout(todoSaveServerNow, 800); try{ renderTabs(); }catch(_){} }
@@ -4431,7 +4452,7 @@ function todoPeriodKey(recur, ts){
 // A task counts as done only within its current period, so a daily task reopens tomorrow,
 // a weekly one next week, and a four-weekly one next cycle. Contingency stays until unticked.
 function todoIsDone(t){ const ts=todoState.doneMap[t.id]; if(!ts) return false; if(t.recur==='contingency'||t.recur==='once') return true; return todoPeriodKey(t.recur,ts)===todoPeriodKey(t.recur,Date.now()); }
-function todoYmd(offset){ const d=new Date(); d.setDate(d.getDate()+(offset||0)); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function todoYmd(offset){ const d=new Date(); d.setDate(d.getDate()+(offset||0)); return ymd(d); }
 function todoTodayInfo(){ const d=new Date(); const dow=d.getDay(); const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']; const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return { d:d, ymd:todoYmd(0), isWeekend:(dow===0||dow===6), label:days[dow]+' '+d.getDate()+' '+months[d.getMonth()] }; }
 function todoDueLabel(due){ const today=todoYmd(0), tom=todoYmd(1); if(due<today) return 'Overdue'; if(due===today) return 'Today'; if(due===tom) return 'Tomorrow'; const d=new Date(due+'T00:00:00'); const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat']; const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return days[d.getDay()]+' '+d.getDate()+' '+months[d.getMonth()]; }
 function todoDatedOpen(){ return todoState.tasks.filter(t=>t.kind==='dated' && !todoIsDone(t)); }
@@ -4605,8 +4626,8 @@ function bpNormalizeAll(raw){
   bpEnsurePlan(all.mike); bpEnsurePlan(all.adam);
   return all;
 }
-function bpLoadCacheRaw(){ try{ var raw=localStorage.getItem(bpCacheKey()); if(raw) return JSON.parse(raw); }catch(e){} return null; }
-function bpWriteCache(){ try{ if(bpAll) localStorage.setItem(bpCacheKey(), JSON.stringify(bpAll)); }catch(e){} }
+function bpLoadCacheRaw(){ return lsGetJSON(bpCacheKey(), null); }
+function bpWriteCache(){ if(bpAll) lsSetJSON(bpCacheKey(), bpAll); }
 function bpActivate(fr){ if(!bpAll) return; if(!bpAll[fr]) bpAll[fr]=bpSeedFor(fr); bpState=bpAll[fr]; bpEnsure(); }
 function bpLoad(){ bpAll=bpNormalizeAll(bpLoadCacheRaw()); bpActivate(bpFranchisee()); bpWriteCache(); }
 function bpSaveServerNow(){ try{ if(typeof auth!=='undefined'&&auth&&bpAll) apiCall({ action:'saveDoc', doc:'bizplan', data: JSON.stringify(bpAll) }); }catch(e){} }
@@ -4661,7 +4682,6 @@ function bpDone(i){
 }
 function bpProgress(){ let n=0; for(let i=0;i<BP_SECTIONS.length;i++) if(bpDone(i)) n++; return {done:n, total:BP_SECTIONS.length}; }
 function bpNextReview(){ const base=bpState.updatedAt||Date.now(); const d=new Date(base); const add=bpState.reviewEvery==='month'?1:(bpState.reviewEvery==='half'?6:3); d.setMonth(d.getMonth()+add); return d; }
-function bpYmd(d){ const z=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate()); }
 function bpFmtDate(d){ if(!d) return '\u2014'; const m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return d.getDate()+' '+m[d.getMonth()]+' '+d.getFullYear(); }
 function bpEsc(s){ return escAttr(s==null?'':s); }
 // setters
@@ -4672,7 +4692,7 @@ function bpSetOpsNum(sub, field, val){ bpState.ops[sub][field]=val; bpSave(); bp
 function bpIncomeOnInput(field, val){ bpState.income[field]=val; bpSave(); const p=document.getElementById('bpProfitV'), m=document.getElementById('bpMarginV'); if(p)p.textContent=fmt(bpProfit()); if(m)m.textContent=bpMargin()+'%'; }
 function bpToggleOpt(sec, field, optsKey, idx){ const o=BP_OPTS[optsKey][idx]; const arr=bpState[sec][field]||[]; const j=arr.indexOf(o); if(j===-1) arr.push(o); else arr.splice(j,1); bpState[sec][field]=arr; bpSave(); bpRerender(); }
 function bpAddReviewReminder(){
-  const d=bpNextReview(); const due=bpYmd(d);
+  const d=bpNextReview(); const due=ymd(d);
   const id='bp-review';
   const patch={ id:id, custom:true, kind:'dated', tab:null, due:due, block:null, recur:'once', urgent:false, title:'Review your business plan', desc:'Revisit your plan, update your numbers and set your next 90 day focus.' };
   if(typeof todoState!=='undefined' && todoState && Array.isArray(todoState.tasks)){
@@ -4744,7 +4764,7 @@ function bpReviewFields(){
     + '</div>';
   const review=bpNextReview();
   const set=s.reviewReminder&&s.reviewReminder.due;
-  const matches=set&&review&&s.reviewReminder.due===bpYmd(review);
+  const matches=set&&review&&s.reviewReminder.due===ymd(review);
   const opts=['month|Month','quarter|Quarter','half|Six months'].map(function(o){ const p=o.split('|'); return '<option value="'+p[0]+'"'+(s.reviewEvery===p[0]?' selected':'')+'>'+p[1]+'</option>'; }).join('');
   const reviewCard='<div class="bp-q">Keep your plan alive</div><div class="bp-hint">A plan only works if you revisit it. Set how often to review, and drop a reminder into your to-do list.</div>'
     + '<div class="card"><div class="bp-row"><div><span class="bp-deri-l">Review every</span><select class="bp-sel" onchange="bpSetReview(this.value)">'+opts+'</select></div>'
@@ -4787,19 +4807,18 @@ function bpSectionFields(i){
   if(k==='review') return bpReviewFields();
   return '';
 }
-function bpKpi(l,v,s,color){ return '<div class="card accent-top"><div class="kpi-l">'+l+'</div><div class="kpi-v"'+(color?' style="color:'+color+'"':'')+'>'+v+'</div><div class="kpi-s">'+s+'</div></div>'; }
 function bpOverviewHTML(){
   const pr=bpProgress(), pct=Math.round(pr.done/pr.total*100), inc=bpState.income;
   const head='<div class="bp-head"><div><div class="h" style="margin-bottom:4px">Business plan</div><div style="font-size:13px;color:var(--muted)">Plan your business, then revisit it as you learn and grow.</div></div>'
     + bpModeBtns('overview')+'</div>';
   const kpis='<div class="grid grid-4">'
-    + bpKpi('Required rate', inc.rate?'\u00a3'+bpNum(inc.rate)+'/hr':'\u2014','what you aim to charge')
-    + bpKpi('Break-even rate', inc.breakeven?'\u00a3'+bpNum(inc.breakeven)+'/hr':'\u2014','covers your costs')
-    + bpKpi('Target monthly income', inc.monthly?fmt(bpNum(inc.monthly)):'\u2014','take-home goal')
-    + bpKpi('Annual turnover', inc.turnover?fmt(bpNum(inc.turnover)):'\u2014','target')
-    + bpKpi('Annual costs', inc.costs?fmt(bpNum(inc.costs)):'\u2014','running costs')
-    + bpKpi('Annual profit', (inc.turnover||inc.costs)?fmt(bpProfit()):'\u2014','turnover minus costs', bpProfit()>=0?'var(--green6)':'var(--red)')
-    + bpKpi('Profit margin', inc.turnover?bpMargin()+'%':'\u2014','of turnover')
+    + kpiCard('Required rate', inc.rate?'\u00a3'+bpNum(inc.rate)+'/hr':'\u2014','what you aim to charge')
+    + kpiCard('Break-even rate', inc.breakeven?'\u00a3'+bpNum(inc.breakeven)+'/hr':'\u2014','covers your costs')
+    + kpiCard('Target monthly income', inc.monthly?fmt(bpNum(inc.monthly)):'\u2014','take-home goal')
+    + kpiCard('Annual turnover', inc.turnover?fmt(bpNum(inc.turnover)):'\u2014','target')
+    + kpiCard('Annual costs', inc.costs?fmt(bpNum(inc.costs)):'\u2014','running costs')
+    + kpiCard('Annual profit', (inc.turnover||inc.costs)?fmt(bpProfit()):'\u2014','turnover minus costs', {color: bpProfit()>=0?'var(--green6)':'var(--red)'})
+    + kpiCard('Profit margin', inc.turnover?bpMargin()+'%':'\u2014','of turnover')
     + '</div>';
   const review=bpNextReview();
   const meta='<div class="card" style="margin-bottom:20px"><div style="display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;align-items:center">'
@@ -4970,8 +4989,8 @@ let perfSaveTimer=null;
 
 function perfEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function perfCacheKey(){ return 'mtg_perf_reviews'; }
-function perfWriteCache(){ try{ localStorage.setItem(perfCacheKey(), JSON.stringify(perfReviews)); }catch(e){} }
-function perfLoadCache(){ try{ const r=localStorage.getItem(perfCacheKey()); if(r){ const a=JSON.parse(r); if(Array.isArray(a)) return a; } }catch(e){} return null; }
+function perfWriteCache(){ lsSetJSON(perfCacheKey(), perfReviews); }
+function perfLoadCache(){ const a = lsGetJSON(perfCacheKey(), null); return Array.isArray(a) ? a : null; }
 function perfSaveServerNow(){ try{ if(typeof auth!=='undefined'&&auth) apiCall({ action:'saveDoc', doc:'performance', data: JSON.stringify(perfReviews) }); }catch(e){} }
 function perfSave(){ perfWriteCache(); clearTimeout(perfSaveTimer); perfSaveTimer=setTimeout(perfSaveServerNow,800); }
 function perfMergeSeed(list){ const out=Array.isArray(list)?list.slice():[]; PERF_SEED.forEach(seed=>{ if(!out.some(r=>r.id===seed.id)) out.push(JSON.parse(JSON.stringify(seed))); }); return out; }
@@ -5293,15 +5312,14 @@ function renderContent() {
     const mpZenRev = Math.round(mp.reduce((s,j)=>s+j._amount,0)), apZenRev = Math.round(ap.reduce((s,j)=>s+j._amount,0));
     const mpRev = revTotalFor(dfBounds(),'Mike'), apRev = revTotalFor(dfBounds(),'Adam'); // Mike override-aware; Adam = Zenbooker
     // Customer counts mirror the Customer mix exactly: alias the spellings, collapse merged duplicates, add Mike's historical/passed names.
-    // norm() and NAME_ALIAS live in processData's scope, so this block keeps its own local copies.
-    const _norm = n => String(n || '').trim().toLowerCase();
+    // NAME_ALIAS lives in processData's scope, so this block keeps its own local copy.
     const _ALIAS = { 'Lyn':'Lynn', 'Sam':'Sam Allen' };
-    const _aliasNorm = n => _norm(_ALIAS[n] || n);
-    const _mergeSrc = Object.keys(MIKE_CUST_FIX).filter(k => String(MIKE_CUST_FIX[k]).startsWith('merge:')).map(k => _norm(k));
+    const _aliasNorm = n => normName(_ALIAS[n] || n);
+    const _mergeSrc = Object.keys(MIKE_CUST_FIX).filter(k => String(MIKE_CUST_FIX[k]).startsWith('merge:')).map(k => normName(k));
     const _histB = dfBounds();
     const mikeSet = new Set(mp.map(j => _aliasNorm(j['Customer Name'])));
     _mergeSrc.forEach(s => mikeSet.delete(s));   // e.g. Kelly Aaron folds into Kelly & Jon, as in the mix
-    MIKE_HIST_CUSTOMERS.concat(MIKE_PASSED_EXTRA).forEach(hc => { const cf=new Date(hc.f), cl=new Date(hc.l); if ((!_histB.from||cl>=_histB.from)&&(!_histB.to||cf<=_histB.to)) mikeSet.add(_norm(hc.n)); });
+    MIKE_HIST_CUSTOMERS.concat(MIKE_PASSED_EXTRA).forEach(hc => { const cf=new Date(hc.f), cl=new Date(hc.l); if ((!_histB.from||cl>=_histB.from)&&(!_histB.to||cf<=_histB.to)) mikeSet.add(normName(hc.n)); });
     const mpCAll = mikeSet.size;
     const apC = new Set(ap.map(j => _aliasNorm(j['Customer Name']))).size;
     const mpHistJobs = Object.keys(MIKE_HIST_JOBS).filter(k=>monthOverlaps(k,dfBounds())).reduce((s,k)=>s+(MIKE_HIST_JOBS[k]||0),0); // Mike invoiced jobs pre-Oct-2024, in period
@@ -5321,10 +5339,10 @@ function renderContent() {
       ${attnCards.map(c=>{ const click = c.tab==='Calls' ? "callsFilter='open';setTab('Calls')" : (c.tab==='Missing Prices' ? "goResources('Missing')" : "setTab('"+c.tab+"')"); return '<div class="attn-card '+(c.warn?'':'ok')+'" onclick="'+click+'"><div class="attn-n" style="color:'+(c.warn?'var(--accent)':'var(--green4)')+'">'+c.n+'</div><div><div class="attn-t">'+c.t+'</div><div class="attn-d">'+c.d+'</div></div></div>'; }).join('')}
     </div>
     <div class="grid grid-4">
-      <div class="card accent-top"><div class="kpi-l">Revenue</div><div class="kpi-v">${fmt(totalRev)}${deltaChip(totalRev, prevTotals?prevTotals.rev:0, cmpLabel)}</div><div class="kpi-s">recorded</div></div>
-      <div class="card accent-top"><div class="kpi-l">Completed Jobs</div><div class="kpi-v">${totalJobs.toLocaleString()}${deltaChip(totalJobs, prevTotals?prevTotals.jobs:0, cmpLabel)}</div><div class="kpi-s">completed</div></div>
-      <div class="card accent-top"><div class="kpi-l">Active Customers</div><div class="kpi-v">${totalCusts}${deltaChip(totalCusts, prevTotals?prevTotals.custs:0, cmpLabel)}</div><div class="kpi-s">with a job in period</div></div>
-      <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Active Recurring</div><div class="kpi-v">${recCusts.length}</div><div class="kpi-s">customers on a schedule</div></div>
+      ${kpiCard('Revenue', fmt(totalRev)+deltaChip(totalRev, prevTotals?prevTotals.rev:0, cmpLabel), 'recorded')}
+      ${kpiCard('Completed Jobs', totalJobs.toLocaleString()+deltaChip(totalJobs, prevTotals?prevTotals.jobs:0, cmpLabel), 'completed')}
+      ${kpiCard('Active Customers', totalCusts+deltaChip(totalCusts, prevTotals?prevTotals.custs:0, cmpLabel), 'with a job in period')}
+      ${kpiCard('Active Recurring', recCusts.length, 'customers on a schedule', {top:'var(--green4)'})}
     </div>
     ${cmpLabel && prevTotals && prevTotals.has ? '<div style="font-size:12px;color:var(--muted);margin:-14px 0 22px;display:flex;align-items:center;gap:6px"><span class="chip chip-up" style="pointer-events:none">\u25b2</span><span class="chip chip-down" style="pointer-events:none">\u25bc</span> compared with the same period last year ('+cmpLabel.replace(/^vs /,'')+'). Active recurring is a live snapshot, so it has no comparison.</div>' : ''}
     ${monthlyData.some(m=>m.m < '2024-10') ? '<div style="font-size:11px;color:var(--muted);margin:-14px 0 22px;line-height:1.5">Revenue, completed jobs and customers cover the full history back to 2021. Recurring status comes from live job records, so customers who left before October 2024 show as repeat, one-off or churned.</div>' : ''}
@@ -5381,10 +5399,10 @@ function renderContent() {
       const maxSvc = Math.max(1, ...svcRows.map(x=>x[1].n));
       el.innerHTML = `
       <div class="grid grid-4">
-        <div class="card accent-top"><div class="kpi-l">Total Leads</div><div class="kpi-v">${s.total}</div><div class="kpi-s">in period${s.spamCount?' \u00b7 '+s.spamCount+' spam excluded':''}</div></div>
-        <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Conversion</div><div class="kpi-v">${s.conversion}%</div><div class="kpi-s">booked of non-spam</div></div>
-        <div class="card accent-top" style="border-top-color:var(--green4)"><div class="kpi-l">Booked</div><div class="kpi-v">${s.byStatus.BOOKED||0}</div><div class="kpi-s">won this period</div></div>
-        <div class="card accent-top" style="border-top-color:var(--accent)"><div class="kpi-l">Still New</div><div class="kpi-v" style="color:var(--amber)">${s.staleNew}</div><div class="kpi-s">need actioning</div></div>
+        ${kpiCard('Total Leads', s.total, 'in period'+(s.spamCount?' \u00b7 '+s.spamCount+' spam excluded':''))}
+        ${kpiCard('Conversion', s.conversion+'%', 'booked of non-spam', {top:'var(--green4)'})}
+        ${kpiCard('Booked', s.byStatus.BOOKED||0, 'won this period', {top:'var(--green4)'})}
+        ${kpiCard('Still New', s.staleNew, 'need actioning', {top:'var(--accent)', color:'var(--amber)'})}
       </div>
       <div class="grid grid-2">
         <div class="card"><div class="h">Lead funnel</div>
@@ -5508,19 +5526,18 @@ function renderContent() {
     const stLabel = v => { for (const x of ST) if (x[0]===v) return x[1]; return v || 'New'; };
     const stCls   = v => { for (const x of ST) if (x[0]===v) return x[2]; return 'amber'; };
     const menuVals = ['Booked','Resolved','Called back','Needs callback','Left message','Moved to WhatsApp','Moved to email','Not relevant','Ignored'];
-    const esc = x => String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const typeBadge = t => { const tl=(t||'').toLowerCase(); const cls = /missed/.test(tl)?'b-missed':(/voicemail/.test(tl)?'b-vm':'b-na'); return '<span class="badge '+cls+'">'+esc(t||'Call')+'</span>'; };
+    const typeBadge = t => { const tl=(t||'').toLowerCase(); const cls = /missed/.test(tl)?'b-missed':(/voicemail/.test(tl)?'b-vm':'b-na'); return '<span class="badge '+cls+'">'+escAttr(t||'Call')+'</span>'; };
     const card = (c, history) => {
       const key = String(c._key).replace(/'/g,"\\'");
-      const when = fmtDate(c._date) + (c._time ? ' \u00b7 '+esc(c._time) : '');
+      const when = fmtDate(c._date) + (c._time ? ' \u00b7 '+escAttr(c._time) : '');
       let vm;
       if (c._trans) {
-        const full = esc(c._trans);
+        const full = escAttr(c._trans);
         vm = c._trans.length > 90
-          ? '<details class="call-vm"><summary>'+esc(c._trans.slice(0,90))+'\u2026</summary><div class="call-vm-full">'+full+'</div></details>'
+          ? '<details class="call-vm"><summary>'+escAttr(c._trans.slice(0,90))+'\u2026</summary><div class="call-vm-full">'+full+'</div></details>'
           : '<div class="call-vm">'+full+'</div>';
       } else {
-        vm = '<div class="call-vm-none">'+(c._dur ? esc(c._dur)+', no transcript' : 'No voicemail')+'</div>';
+        vm = '<div class="call-vm-none">'+(c._dur ? escAttr(c._dur)+', no transcript' : 'No voicemail')+'</div>';
       }
       const grouped = !!(history && history.length > 1);
       const cnt = grouped ? history.length : 1;
@@ -5530,7 +5547,7 @@ function renderContent() {
         ? "updateCallsForNumber('"+c._callerNorm+"','"+v+"')"
         : "updateCallStatus('"+key+"','"+v+"')";
       let menuHtml = menuVals.map(v =>
-        '<button class="cmenu-item'+(stRaw===v?' on':'')+'" onclick="'+setExpr(v)+'">'+esc(stLabel(v))+'</button>'
+        '<button class="cmenu-item'+(stRaw===v?' on':'')+'" onclick="'+setExpr(v)+'">'+escAttr(stLabel(v))+'</button>'
       ).join('');
       if (!open) menuHtml += '<button class="cmenu-item" onclick="'+setExpr('New')+'">Reopen (mark New)</button>';
       const owner = c._fr || '';
@@ -5542,21 +5559,21 @@ function renderContent() {
       let statusCtl;
       if (open) {
         const lead = c._aged ? '<span class="call-pill pill-grey">No callback 31+ days</span>'
-          : (stRaw !== 'New') ? '<span class="call-pill pill-amber">'+esc(stLabel(stRaw))+'</span>' : '';
+          : (stRaw !== 'New') ? '<span class="call-pill pill-amber">'+escAttr(stLabel(stRaw))+'</span>' : '';
         statusCtl = lead +
           '<details class="call-menu"><summary class="call-set-btn">'+(grouped ? 'Set all '+cnt : 'Set outcome')+' \u25be</summary><div class="call-menu-list">'+menuHtml+'</div></details>';
       } else {
-        statusCtl = '<span class="call-pill pill-'+stCls(stRaw)+'">'+esc(stLabel(stRaw))+'</span>'+
+        statusCtl = '<span class="call-pill pill-'+stCls(stRaw)+'">'+escAttr(stLabel(stRaw))+'</span>'+
           '<details class="call-menu"><summary class="call-menu-btn change" title="Change the outcome">change</summary><div class="call-menu-list">'+menuHtml+'</div></details>';
       }
       const ownerPill = (franchiseeView==='All' && c._fr) ? '<span class="call-owner-pill">'+badge(c._fr)+'</span>' : '';
-      const xferNote = (c._detail && /^Transferred/i.test(c._detail)) ? '<div class="call-xfer-note">'+esc(c._detail)+'</div>' : '';
+      const xferNote = (c._detail && /^Transferred/i.test(c._detail)) ? '<div class="call-xfer-note">'+escAttr(c._detail)+'</div>' : '';
       const gmailDigits = String(c._caller||'').replace(/\D/g,'');
       const gmailQ = 'from:no-reply@airlandline.co.uk' + (gmailDigits ? ' ' + gmailDigits : '');
       const gmailHash = encodeURIComponent(gmailQ).replace(/%20/g,'+'); // Gmail wants + for spaces, not %20, or mobile ignores the search
       const gmailUrl = 'https://mail.google.com/mail/u/0/#search/' + gmailHash;
       const callerRaw = String(c._caller||'').trim();
-      const numAttr = esc(callerRaw);
+      const numAttr = escAttr(callerRaw);
       const isVoicemail = /voicemail/i.test(c._type||'');
       const gmailBtn = isVoicemail
         ? '<a class="call-act call-mail" href="'+gmailUrl+'" target="_blank" rel="noopener" data-num="'+numAttr+'" title="Opens Gmail and copies the number so you can paste it into search." onclick="copyNumQuiet(this)">\u25b6 Listen in Gmail</a>'
@@ -5580,26 +5597,26 @@ function renderContent() {
         if (legacy) noteVal = legacy;
       }
       const note = noteNum
-        ? '<div class="call-note"><textarea rows="2" placeholder="Add a note about this caller\u2026" onchange="updateNumberNote(\''+noteNum+'\',this.value)">'+esc(noteVal)+'</textarea></div>'
-        : '<div class="call-note"><textarea rows="2" placeholder="Add a note or transcript correction\u2026" onchange="updateCallNote(\''+key+'\',this.value)">'+esc(c._note||'')+'</textarea></div>';
-      const by = c._by ? '<div class="call-by">Last updated by '+esc(c._by)+'</div>' : '';
+        ? '<div class="call-note"><textarea rows="2" placeholder="Add a note about this caller\u2026" onchange="updateNumberNote(\''+noteNum+'\',this.value)">'+escAttr(noteVal)+'</textarea></div>'
+        : '<div class="call-note"><textarea rows="2" placeholder="Add a note or transcript correction\u2026" onchange="updateCallNote(\''+key+'\',this.value)">'+escAttr(c._note||'')+'</textarea></div>';
+      const by = c._by ? '<div class="call-by">Last updated by '+escAttr(c._by)+'</div>' : '';
       const nKey = c._callerNorm;
       const manual = nKey ? manualNames[nKey] : null;
       const autoMatch = nKey ? numToCust[nKey] : null;
       const known = manual ? { name: manual.name, status: autoMatch?autoMatch.status:'', inherited: autoMatch?autoMatch.inherited:false, manual:true } : autoMatch;
-      const knownLine = known ? ('<div class="call-cust">'+esc(known.name)+
-        (known.status ? '<span style="font-family:\'DM Sans\',sans-serif;font-size:12px;font-weight:500;color:var(--muted)">\u00b7 '+esc(known.status)+'</span>' : '')+
+      const knownLine = known ? ('<div class="call-cust">'+escAttr(known.name)+
+        (known.status ? '<span style="font-family:\'DM Sans\',sans-serif;font-size:12px;font-weight:500;color:var(--muted)">\u00b7 '+escAttr(known.status)+'</span>' : '')+
         (known.inherited ? '<span class="badge b-inherited">inherited</span>' : '')+
         (nKey ? '<button class="name-edit" onclick="editName(this)">edit name</button>' : '')+
         '</div>') : '';
       // Input shown only when no name is set yet; once named, it collapses behind the "edit name" link.
-      const nameBox = nKey ? ('<div class="call-name"><input type="text" placeholder="Name this caller \u2014 saved for this number" value="'+esc(known?known.name:'')+'" onchange="saveContact(\''+nKey+'\', this.value)"'+(known?' style="display:none"':'')+'></div>') : '';
+      const nameBox = nKey ? ('<div class="call-name"><input type="text" placeholder="Name this caller \u2014 saved for this number" value="'+escAttr(known?known.name:'')+'" onchange="saveContact(\''+nKey+'\', this.value)"'+(known?' style="display:none"':'')+'></div>') : '';
       const g = (c._callerNorm && callsStats && callsStats.byNum) ? callsStats.byNum[c._callerNorm] : null;
       let flag = '';
       if (g && g.count >= 2) {
         if (g.attention) {
           const hot = g.count >= 3 ? ' hot' : '';
-          flag = '<div class="call-flag warn'+hot+'">\u26a0 '+g.count+' calls, no callback yet'+(g.last?' \u00b7 last '+esc(fmtDate(g.last)):'')+'</div>';
+          flag = '<div class="call-flag warn'+hot+'">\u26a0 '+g.count+' calls, no callback yet'+(g.last?' \u00b7 last '+escAttr(fmtDate(g.last)):'')+'</div>';
         } else {
           flag = '<div class="call-flag neutral">'+g.count+' calls from this number</div>';
         }
@@ -5607,15 +5624,15 @@ function renderContent() {
       let histHtml = '';
       if (history && history.length > 1) {
         const rows = history.slice().sort((x,y) => (y._date?y._date.getTime():0) - (x._date?x._date.getTime():0)).map(h => {
-          const w = fmtDate(h._date) + (h._time ? ' '+esc(h._time) : '');
-          return '<div class="hist-row"><span class="hist-when">'+w+'</span><span class="hist-type">'+esc(h._type||'Call')+'</span><span class="hist-st">'+esc(stLabel(h._status||'New'))+'</span></div>';
+          const w = fmtDate(h._date) + (h._time ? ' '+escAttr(h._time) : '');
+          return '<div class="hist-row"><span class="hist-when">'+w+'</span><span class="hist-type">'+escAttr(h._type||'Call')+'</span><span class="hist-st">'+escAttr(stLabel(h._status||'New'))+'</span></div>';
         }).join('');
         histHtml = '<details class="call-history"><summary>View all '+history.length+' calls from this number</summary><div class="hist-list">'+rows+'</div></details>';
       }
       return '<div class="call-item">'+
         '<div class="call-top">'+typeBadge(c._type)+'<span class="call-when">'+when+'</span>'+ownerPill+'<div class="call-head-actions">'+statusCtl+'</div></div>'+
         knownLine +
-        '<div class="call-caller-row"><span class="call-caller">'+(esc(c._caller)||'\u2014')+'</span></div>'+
+        '<div class="call-caller-row"><span class="call-caller">'+(escAttr(c._caller)||'\u2014')+'</span></div>'+
         flag +
         xferNote +
         nameBox +
@@ -5673,15 +5690,15 @@ function renderContent() {
     const cardsHtml = units.map(u => card(u.rep, u.calls.length > 1 ? u.calls : null)).join('');
     el.innerHTML = `
     <div class="grid grid-4">
-      <div class="card accent-top"><div class="kpi-l">Total Calls</div><div class="kpi-v">${s.total}</div><div class="kpi-s">in period</div></div>
-      <div class="card accent-top"><div class="kpi-l">Missed Calls</div><div class="kpi-v">${s.missed}</div><div class="kpi-s">no voicemail</div></div>
-      <div class="card accent-top"><div class="kpi-l">Voicemails</div><div class="kpi-v">${s.vm}</div><div class="kpi-s">message left</div></div>
-      <div class="card accent-top" style="border-top-color:var(--accent)"><div class="kpi-l">Still Open</div><div class="kpi-v" style="color:var(--amber)">${s.open}</div><div class="kpi-s">need a callback</div></div>
+      ${kpiCard('Total Calls', s.total, 'in period')}
+      ${kpiCard('Missed Calls', s.missed, 'no voicemail')}
+      ${kpiCard('Voicemails', s.vm, 'message left')}
+      ${kpiCard('Still Open', s.open, 'need a callback', {top:'var(--accent)', color:'var(--amber)'})}
     </div>
     <div class="card">
       <div class="h" style="margin-bottom:4px">Call chase list</div>
       <div class="call-controls">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Updating as <b>${esc(callsWho||'\u2014')}</b>. Changes save for everyone. Tap a voicemail to read the full message. The Gmail link copies the email search, so on mobile just paste it into Gmail\u2019s search box.</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Updating as <b>${escAttr(callsWho||'\u2014')}</b>. Changes save for everyone. Tap a voicemail to read the full message. The Gmail link copies the email search, so on mobile just paste it into Gmail\u2019s search box.</div>
         ${s.attention>0 && callsFilter!=='attention' ? '<div class="call-flag warn" style="margin:0 0 12px;cursor:pointer" onclick="callsFilter=\'attention\';renderContent()">\u26a0 '+s.attention+(s.attention>1?' callers have':' caller has')+' tried more than once with no callback \u2014 tap to review</div>' : ''}
         <div class="filter-row">
           <button class="filter-btn ${callsFilter==='open'?'active':''}" onclick="callsFilter='open';renderContent()">Still open (${s.open})</button>
@@ -5689,7 +5706,7 @@ function renderContent() {
           <button class="filter-btn ${callsFilter==='ignored'?'active':''}" onclick="callsFilter='ignored';renderContent()">Ignored (${s.ignored})</button>
           <button class="filter-btn ${callsFilter==='all'?'active':''}" onclick="callsFilter='all';renderContent()">All (${s.total})</button>
         </div>
-        <input id="callSearchBox" class="search" placeholder="Search name, number, note or message..." value="${esc(callSearch)}" oninput="onCallSearch(this.value, this.selectionStart)" style="margin-bottom:12px">
+        <input id="callSearchBox" class="search" placeholder="Search name, number, note or message..." value="${escAttr(callSearch)}" oninput="onCallSearch(this.value, this.selectionStart)" style="margin-bottom:12px">
         <div class="filter-row" style="margin-bottom:0">
           <button class="filter-btn ${callType==='all'?'active':''}" onclick="callType='all';renderContent()">All types</button>
           <button class="filter-btn ${callType==='vm'?'active':''}" onclick="callType='vm';renderContent()">Voicemail</button>
@@ -5882,12 +5899,7 @@ function doLogin() {
   const er = document.getElementById('loginErr');
   if (!u || !p) { er.textContent = 'Enter your username and password.'; return; }
   er.textContent = 'Checking...';
-  const cb = 'mtg_login_' + Date.now();
-  const s = document.createElement('script');
-  let done = false;
-  const cleanup = () => { try { delete window[cb]; } catch(_) { window[cb] = undefined; } if (s.parentNode) s.parentNode.removeChild(s); };
-  window[cb] = function(d) {
-    done = true; cleanup();
+  jsonp({ action: 'login', user: u, pass: p }, function(d) {
     if (d && d.ok) {
       auth = { user: u.toLowerCase(), pass: p, role: d.role || 'All', name: d.name || u };
       try {
@@ -5901,16 +5913,13 @@ function doLogin() {
     } else {
       er.textContent = (d && d.error) ? d.error : 'Could not log in.';
     }
-  };
-  s.onerror = function() { if (!done) { cleanup(); er.textContent = 'Could not reach the app. Try again.'; } };
-  setTimeout(() => { if (!done) { cleanup(); er.textContent = 'No response from the app. Try again.'; } }, 20000);
-  s.src = API_URL + (API_URL.indexOf('?') === -1 ? '?' : '&') + 'action=login&user=' + encodeURIComponent(u) + '&pass=' + encodeURIComponent(p) + '&callback=' + cb;
-  document.head.appendChild(s);
+  }, function(){ er.textContent = 'Could not reach the app. Try again.'; }, 20000);
 }
 
 function doLogout() {
   auth = null;
-  try { localStorage.removeItem('mtg_auth'); sessionStorage.removeItem('mtg_auth'); } catch(_) {}
+  lsRemove('mtg_auth');
+  try { sessionStorage.removeItem('mtg_auth'); } catch(_) {}
   clearDataCache();
   showLogin('');
 }
@@ -5970,7 +5979,7 @@ renderTabs();
   const lu = document.getElementById('loginUser');
   if (lu) lu.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('loginPass').focus(); });
   let saved = null;
-  try { saved = localStorage.getItem('mtg_auth') || sessionStorage.getItem('mtg_auth'); } catch(_) {}
+  try { saved = lsGet('mtg_auth') || sessionStorage.getItem('mtg_auth'); } catch(_) {}
   if (saved) { try { auth = JSON.parse(saved); } catch(_) { auth = null; } }
   if (auth && auth.user && auth.pass) { hideLogin(); applyRole(); loadData(); }
   else { showLogin(''); }
