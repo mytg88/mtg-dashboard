@@ -1084,6 +1084,15 @@ function syncPill(txt, err) {
   p.classList.toggle('err', !!err);
   p.classList.add('show');
 }
+// Background auto-saves (to-do, business plan, performance reviews) run debounced and
+// fire-and-forget. When one fails we used to swallow it, so a lost edit was invisible.
+// Surface it quietly through the sync pill (and the console) so the user knows their
+// change is only held locally and can hit Refresh once they are back online.
+function noteSaveFailed(what) {
+  console.error('Could not save ' + what + ' to the server; kept locally only.');
+  syncPill(what + ' saved on this device only \u00b7 not synced', true);
+  setTimeout(function(){ syncPill(''); }, 6000);
+}
 function clearDataCache() {
   try {
     const kill = [];
@@ -1814,17 +1823,24 @@ function apiCall(extra, onOk, onErr) {
   const s = document.createElement('script');
   let done = false;
   const cleanup = () => { try { delete window[cb]; } catch(_) { window[cb] = undefined; } if (s.parentNode) s.parentNode.removeChild(s); };
+  const fail = () => { if (!done) { done = true; cleanup(); onErr && onErr(); } };
   window[cb] = function(d) { done = true; cleanup(); onOk && onOk(d); };
-  s.onerror = function() { if (!done) { cleanup(); onErr && onErr(); } };
-  setTimeout(() => { if (!done) { cleanup(); onErr && onErr(); } }, 15000);
-  let url = API_URL + (API_URL.indexOf('?')===-1?'?':'&') + 'user=' + encodeURIComponent(auth.user) + '&pass=' + encodeURIComponent(auth.pass) + '&callback=' + cb;
-  for (const k in extra) url += '&' + k + '=' + encodeURIComponent(extra[k]);
-  s.src = url; document.head.appendChild(s);
+  s.onerror = fail;
+  setTimeout(fail, 15000);
+  try {
+    let url = API_URL + (API_URL.indexOf('?')===-1?'?':'&') + 'user=' + encodeURIComponent(auth.user) + '&pass=' + encodeURIComponent(auth.pass) + '&callback=' + cb;
+    for (const k in extra) url += '&' + k + '=' + encodeURIComponent(extra[k]);
+    s.src = url; document.head.appendChild(s);
+  } catch (e) {
+    // Building or injecting the request failed outright; surface it instead of hanging.
+    console.error('apiCall failed to send request', e);
+    fail();
+  }
 }
 // ---------- lightweight activity events ----------
 // Fire-and-forget log to the backend's Activity Log (and it counts as presence, so an
 // already-open tab that regains focus registers as "seen today" without a data refresh).
-function logEvent(text){ try{ apiCall({ action:'logEvent', event:String(text||'').slice(0,120) }); }catch(e){} }
+function logEvent(text){ try{ apiCall({ action:'logEvent', event:String(text||'').slice(0,120) }); }catch(e){ console.warn('logEvent failed', e); } }
 let _lastHeartbeat = 0;
 function _heartbeat(){ if(!auth) return; const now=Date.now(); if(now - _lastHeartbeat < 30*60*1000) return; _lastHeartbeat = now; logEvent('heartbeat'); }
 document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible') _heartbeat(); });
@@ -2192,7 +2208,7 @@ async function geocodePlaces(list){
       const res=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&bounded=1&viewbox='+VB+'&q='+encodeURIComponent(q),{headers:{'Accept':'application/json'}});
       const j=await res.json();
       placeGeo[q] = (j && j.length) ? { lat:parseFloat(j[0].lat), lng:parseFloat(j[0].lon) } : null;
-    }catch(e){ /* try again next visit */ }
+    }catch(e){ console.warn('Geocoding place failed, will retry next visit:', q, e); }
     await sleepMs(700);
   }
   try{ localStorage.setItem('mtg_geo_places', JSON.stringify(placeGeo)); }catch(e){}
@@ -2300,7 +2316,7 @@ async function geocodePostcodes(pcs){
       const res=await fetch('https://api.postcodes.io/postcodes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({postcodes:chunk})});
       const j=await res.json();
       (j.result||[]).forEach(item=>{ const q=(item.query||'').toUpperCase(); geoCache[q]= item.result ? {lat:item.result.latitude,lng:item.result.longitude} : null; });
-    }catch(e){ /* leave uncached, try again next time */ }
+    }catch(e){ console.warn('Geocoding postcodes failed, will retry next time:', e); }
   }
   try{ localStorage.setItem('mtg_geo', JSON.stringify(geoCache)); }catch(e){}
 }
@@ -4391,7 +4407,7 @@ function todoLoadCache(){
 }
 function todoWriteCache(){ try { localStorage.setItem(todoCacheKey(), JSON.stringify({ tasks:todoState.tasks, doneMap:todoState.doneMap })); } catch(e){} }
 function todoLoad(){ const had=todoLoadCache(); if(!had && !todoState.tasks.length) todoSeed(); todoMigrate(); }
-function todoSaveServerNow(){ try { if(typeof auth!=='undefined' && auth) apiCall({ action:'saveDoc', doc:'todo', data: JSON.stringify({ tasks:todoState.tasks, doneMap:todoState.doneMap }) }); } catch(e){} }
+function todoSaveServerNow(){ try { if(typeof auth!=='undefined' && auth) apiCall({ action:'saveDoc', doc:'todo', data: JSON.stringify({ tasks:todoState.tasks, doneMap:todoState.doneMap }) }, function(d){ if(!d||d.error) noteSaveFailed('To-do list'); }, function(){ noteSaveFailed('To-do list'); }); } catch(e){ noteSaveFailed('To-do list'); } }
 function todoSave(){ todoWriteCache(); clearTimeout(todoSaveTimer); todoSaveTimer=setTimeout(todoSaveServerNow, 800); try{ renderTabs(); }catch(_){} }
 // Reconcile against the server copy once boot data arrives, now that we know the user.
 // A saved server document wins (cross-device truth); if none exists yet, seed it from what we have.
@@ -4609,7 +4625,7 @@ function bpLoadCacheRaw(){ try{ var raw=localStorage.getItem(bpCacheKey()); if(r
 function bpWriteCache(){ try{ if(bpAll) localStorage.setItem(bpCacheKey(), JSON.stringify(bpAll)); }catch(e){} }
 function bpActivate(fr){ if(!bpAll) return; if(!bpAll[fr]) bpAll[fr]=bpSeedFor(fr); bpState=bpAll[fr]; bpEnsure(); }
 function bpLoad(){ bpAll=bpNormalizeAll(bpLoadCacheRaw()); bpActivate(bpFranchisee()); bpWriteCache(); }
-function bpSaveServerNow(){ try{ if(typeof auth!=='undefined'&&auth&&bpAll) apiCall({ action:'saveDoc', doc:'bizplan', data: JSON.stringify(bpAll) }); }catch(e){} }
+function bpSaveServerNow(){ try{ if(typeof auth!=='undefined'&&auth&&bpAll) apiCall({ action:'saveDoc', doc:'bizplan', data: JSON.stringify(bpAll) }, function(d){ if(!d||d.error) noteSaveFailed('Business plan'); }, function(){ noteSaveFailed('Business plan'); }); }catch(e){ noteSaveFailed('Business plan'); } }
 function bpSave(){ if(bpState) bpState.updatedAt=Date.now(); bpWriteCache(); clearTimeout(bpSaveTimer); bpSaveTimer=setTimeout(bpSaveServerNow,800); }
 // Both franchisee plans live in one 'bizplan' doc keyed by franchisee, so edits to one never touch the other. Server copy adopted once per session.
 function bpBoot(data){
@@ -4972,7 +4988,7 @@ function perfEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/
 function perfCacheKey(){ return 'mtg_perf_reviews'; }
 function perfWriteCache(){ try{ localStorage.setItem(perfCacheKey(), JSON.stringify(perfReviews)); }catch(e){} }
 function perfLoadCache(){ try{ const r=localStorage.getItem(perfCacheKey()); if(r){ const a=JSON.parse(r); if(Array.isArray(a)) return a; } }catch(e){} return null; }
-function perfSaveServerNow(){ try{ if(typeof auth!=='undefined'&&auth) apiCall({ action:'saveDoc', doc:'performance', data: JSON.stringify(perfReviews) }); }catch(e){} }
+function perfSaveServerNow(){ try{ if(typeof auth!=='undefined'&&auth) apiCall({ action:'saveDoc', doc:'performance', data: JSON.stringify(perfReviews) }, function(d){ if(!d||d.error) noteSaveFailed('Performance reviews'); }, function(){ noteSaveFailed('Performance reviews'); }); }catch(e){ noteSaveFailed('Performance reviews'); } }
 function perfSave(){ perfWriteCache(); clearTimeout(perfSaveTimer); perfSaveTimer=setTimeout(perfSaveServerNow,800); }
 function perfMergeSeed(list){ const out=Array.isArray(list)?list.slice():[]; PERF_SEED.forEach(seed=>{ if(!out.some(r=>r.id===seed.id)) out.push(JSON.parse(JSON.stringify(seed))); }); return out; }
 function perfBoot(data){
