@@ -1312,14 +1312,15 @@ function handleData(data, fromCache) {
     // that is accepted or progressing with a live owner cannot still be "Expired" or
     // "Declined" (that history lives in its notes); and a New lead with a live owner is
     // by definition awaiting a response. Prevents double counting after re-offers.
-    const exM = String(l._leadNotes||'').match(/Expired from (Mike|Adam)/g);
-    l._expiredFrom = exM ? exM[exM.length-1].replace('Expired from ','') : '';
+    const exM = String(l._leadNotes||'').match(/Expired from (Mike|Adam)/gi);
+    const exWho = exM ? exM[exM.length-1].replace(/^Expired from /i,'') : '';
+    l._expiredFrom = exWho ? exWho.charAt(0).toUpperCase()+exWho.slice(1).toLowerCase() : '';
+    l._franchisee = (col(l,['Franchisee','Owner']) || '').trim();
     const live = l._franchisee==='Mike' || l._franchisee==='Adam';
     if (live && (l._offer==='EXPIRED' || l._offer==='DECLINED' || l._offer==='')) {
       if (stU==='ACCEPTED' || ['CONTACTED','QUOTED','BOOKED'].indexOf(stU)!==-1) l._offer='ACCEPTED';
       else if (stU==='NEW') l._offer='PENDING';
     }
-    l._franchisee = (col(l,['Franchisee','Owner']) || '').trim();
     l._source = (col(l,['Source']) || '').trim() || 'Unknown';
     l._name = col(l,['Customer Name','Customer','Name']);
     l._svc = col(l,['Service Requested','Service']);
@@ -1700,7 +1701,7 @@ function processLeads(b) {
   // from their story: this collects the CURRENTLY-expired leads this view lost, shown
   // greyed-out behind the Expired chip. Re-offered leads drop out (they are live again).
   const inB2 = l => !(b.from && b.to) || (l._date && l._date >= b.from && l._date <= b.to);
-  const expiredList = rawLeads.filter(l => l._offer==='EXPIRED' && inB2(l)
+  const expiredList = rawLeads.filter(l => l._offer==='EXPIRED' && l._status!=='SPAM' && inB2(l)
     && (franchiseeView==='All' ? true : l._expiredFrom===franchiseeView));
   const byStatus = {NEW:0,CONTACTED:0,QUOTED:0,BOOKED:0,LOST:0,SPAM:0,'NOT RELEVANT':0};
   const bySource = {}, byFr = {Mike:0,Adam:0,HQ:0,Other:0};
@@ -1827,7 +1828,7 @@ function processCalls(b) {
   };
 }
 function apiCall(extra, onOk, onErr) {
-  if (!auth) return;
+  if (!auth) { onErr && onErr(); return; }
   jsonp(Object.assign({ user: auth.user, pass: auth.pass }, extra), onOk, onErr, 15000);
 }
 // ---------- lightweight activity events ----------
@@ -3048,7 +3049,7 @@ function mlRender(){
   const waMsg=encodeURIComponent('Hi'+(l._name&&l._name.indexOf('@')===-1?' '+String(l._name).split(' ')[0]:'')+', thanks for your enquiry about '+(l._svc||'your garden')+' with My Tidy Garden. When would suit you for a quick chat or to arrange a visit?');
   const comms=(pc?'<a class="call-act" href="'+telHref(pc)+'" onclick="leadContactAttempt(\''+sk+'\')">Call</a><a class="call-act call-wa" href="'+waHref(pc)+'?text='+waMsg+'" target="_blank" rel="noopener" onclick="leadContactAttempt(\''+sk+'\')">WhatsApp</a>':'');
   const titles={offer:'New lead offer', contact:'Accepted \u00b7 awaiting first contact', stale:'No movement for 2+ days', pool:'HQ pool \u00b7 needs a decision'};
-  const clock=leadClock(l); const clockLine=clock?'<div style="font-size:12.5px;color:'+(clock.urgent?'#C62828':'#9A5410')+';margin:2px 0 10px">\u23f1 '+clock.label+'</div>':'';
+  const clock=leadClock(l); const clockLine=clock?'<div style="font-size:12.5px;max-width:320px;line-height:1.35;color:'+(clock.urgent?'#C62828':'#9A5410')+';margin:2px 0 10px">'+(clock.over?'\u26a0':'\u23f1')+' '+clock.label+'</div>':'';
   const note=l._leadNotes?('<div style="font-size:12px;color:var(--muted);white-space:pre-wrap;background:#F5F6F2;border-radius:8px;padding:8px 10px;margin-top:10px;max-height:110px;overflow:auto">'+escAttr(l._leadNotes).slice(0,400)+'</div>'):'';
   const B=(label,fn,primary)=>'<button class="'+(primary?'cm-rem-btn':'lead-st-btn')+'" style="padding:9px 14px" onclick="'+fn+'">'+label+'</button>';
   let actions='';
@@ -3074,9 +3075,9 @@ function mlAccept(key){ apiCall({action:'acceptLead',key:key}, _mlOk(key,l=>{ l[
 function mlDecline(key){ const r=prompt('Why are you declining? (e.g. at capacity, out of scope, too far)'); if(r===null) return; apiCall({action:'declineLead',key:key,reason:r}, _mlOk(key,l=>{ l['Lead Status']='Declined'; l._status='DECLINED'; l._stage='NEW'; l._offer='DECLINED'; l._franchisee='HQ'; l['Franchisee']='HQ'; }), _mlErr); }
 function mlStatus(key,status){ apiCall({action:'updateLeadStatus',key:key,status:status}, _mlOk(key,l=>{ l['Lead Status']=status; l._status=status.toUpperCase(); l._stage=(['CONTACTED','QUOTED','BOOKED','LOST','NOT RELEVANT','SPAM'].indexOf(l._status)!==-1)?l._status:'NEW'; if(['CONTACTED','QUOTED','BOOKED'].indexOf(l._status)!==-1 && l._offer!=='ACCEPTED'){ l._offer='ACCEPTED'; l._offerAt=new Date(); } l._updatedAtD=new Date(); }), _mlErr); }
 function mlStill(key){ const l=leadByKey(key); if(!l) return; mlStatus(key, leadStLabel(l._status)); }
-function mlQuote(key){ const q=prompt('Quote amount (\u00a3)?'); if(q===null||q==='') return; apiCall({action:'updateLeadQuote',key:key,quote:q}, function(d){ if(d&&d.ok){ const l=leadByKey(key); if(l){ l['Quoted Price']=q; l._quote=parseAmount(q); } mlStatus(key,'Quoted'); } else alert((d&&d.error)||'Could not save quote'); }, _mlErr); }
+function mlQuote(key){ const q=prompt('Quote amount (\u00a3)?'); if(q===null||q==='') return; if(!(parseAmount(q)>0)){ alert('Enter the quote as a number, for example 250.'); return; } apiCall({action:'updateLeadQuote',key:key,quote:q}, function(d){ if(d&&d.ok){ const l=leadByKey(key); if(l){ l['Quoted Price']=q; l._quote=parseAmount(q); } mlStatus(key,'Quoted'); } else alert((d&&d.error)||'Could not save quote'); }, _mlErr); }
 function mlTransfer(key,to){ apiCall({action:'transferLead',key:key,to:to}, _mlOk(key,l=>{ l['Franchisee']=to; l._franchisee=to; l['Lead Status']='New'; l._status='NEW'; l._stage='NEW'; l._offer='PENDING'; l._offerAt=null; l._updatedAtD=new Date(); }), _mlErr); }
-function mlReject(key){ const l=leadByKey(key); if(!l) return; apiCall({action:'updateLeadStatus',key:key,status:'Lost'}, _mlOk(key,ll=>{ ll['Lead Status']='Lost'; ll._status='LOST'; ll._stage='LOST'; const msg='Hi'+(l._name&&l._name.indexOf('@')===-1?' '+String(l._name).split(' ')[0]:'')+', thanks for contacting My Tidy Garden. Sorry, we are unable to help with your request at this time. We hope we can help on a future occasion.'; const pc=l._phone?normNum(l._phone):''; if(pc) window.open('https://wa.me/44'+pc+'?text='+encodeURIComponent(msg),'_blank'); else window.open('mailto:?subject='+encodeURIComponent('Your enquiry to My Tidy Garden')+'&body='+encodeURIComponent(msg)); }), _mlErr); }
+function mlReject(key){ const l=leadByKey(key); if(!l) return; const opener=leadRejectOpener(l); apiCall({action:'updateLeadStatus',key:key,status:'Lost'}, function(d){ if(!(d&&d.ok)){ opener.cancel(); alert((d&&d.error)||'Could not update'); return; } const ll=leadByKey(key); if(ll){ ll['Lead Status']='Lost'; ll._status='LOST'; ll._stage='LOST'; } opener.send(); mlNext(); }, function(){ opener.cancel(); _mlErr(); }); }
 
 // Deadline clocks made visible: how long before the sweep acts on this lead.
 function leadClock(l){
@@ -3096,7 +3097,7 @@ function leadClock(l){
   return null;
 }
 function leadHrs(ms){ const h=Math.floor(ms/3600000); if(h>=1) return h+'h'; return Math.max(1,Math.round(ms/60000))+'m'; }
-function leadClockChip(l){ const c=leadClock(l); if(!c) return ''; return '<div style="font-size:11px;margin-top:3px;max-width:220px;white-space:normal;line-height:1.35;color:'+(c.urgent?'#C62828':'var(--muted)')+'">⏱ '+c.label+'</div>'; }
+function leadClockChip(l){ const c=leadClock(l); if(!c) return ''; return '<div style="font-size:11px;margin-top:3px;max-width:220px;white-space:normal;line-height:1.35;color:'+(c.urgent?'#C62828':'var(--muted)')+'">'+(c.over?'⚠':'⏱')+' '+c.label+'</div>'; }
 // After tapping Call/WhatsApp, ask on return whether contact was made: one tap to Contacted.
 let _leadPing=null;
 function leadContactAttempt(key){ _leadPing={key:key, at:Date.now()}; }
@@ -3136,19 +3137,34 @@ function leadBulk(kind, value){
 function leadRowAccept(k, ev){ if(ev&&ev.stopPropagation) ev.stopPropagation(); leadSetStatus(k,'Accepted'); }
 function leadRowDecline(k, ev){ if(ev&&ev.stopPropagation) ev.stopPropagation(); leadDecline(k); }
 // HQ reject with a standard customer message: marks Lost and opens a prefilled message.
+function leadRejectMsg(l){ return 'Hi'+(l._name&&l._name.indexOf('@')===-1?' '+String(l._name).split(' ')[0]:'')+', thanks for contacting My Tidy Garden. Sorry, we are unable to help with your request at this time. We hope we can help on a future occasion.'; }
+// The status update is a round trip, so a window opened from its callback is no longer
+// tied to the tap and gets blocked (Safari especially). Claim the tab on the tap itself
+// and point it at WhatsApp once the write lands; close it again if the write fails.
+function leadRejectOpener(l){
+  const pc=l._phone?normNum(l._phone):'';
+  const w=pc?window.open('','_blank'):null;
+  return {
+    send:function(){
+      const msg=leadRejectMsg(l);
+      if(pc){ const url=waHref(pc, msg);
+        if(w&&!w.closed) w.location.href=url; else window.open(url,'_blank'); }
+      else window.location.href='mailto:?subject='+encodeURIComponent('Your enquiry to My Tidy Garden')+'&body='+encodeURIComponent(msg);
+    },
+    cancel:function(){ if(w&&!w.closed){ try{ w.close(); }catch(_){} } }
+  };
+}
 function leadRejectNotify(key){
   const l=leadByKey(key); if(!l) return;
   if(!confirm('Mark this lead as Lost and open a message to the customer?')) return;
+  const opener=leadRejectOpener(l);
   apiCall({ action:'updateLeadStatus', key:key, status:'Lost' }, function(d){
-    if(!(d&&d.ok)){ alert((d&&d.error)||'Could not update'); return; }
+    if(!(d&&d.ok)){ opener.cancel(); alert((d&&d.error)||'Could not update'); return; }
     const ll=leadByKey(key); if(ll){ ll['Lead Status']='Lost'; ll._status='LOST'; }
-    const msg='Hi'+(l._name&&l._name.indexOf('@')===-1?' '+String(l._name).split(' ')[0]:'')+', thanks for contacting My Tidy Garden. Sorry, we are unable to help with your request at this time. We hope we can help on a future occasion.';
-    const pc=l._phone?normNum(l._phone):'';
-    if(pc) window.open(waHref(pc, msg),'_blank');
-    else window.open('mailto:?subject='+encodeURIComponent('Your enquiry to My Tidy Garden')+'&body='+encodeURIComponent(msg));
+    opener.send();
     if(leadModalFor===key) openLead(key);
     processLeads(dfBounds()); renderContent();
-  }, function(){ alert('Could not reach the app'); });
+  }, function(){ opener.cancel(); alert('Could not reach the app'); });
 }
 function leadTransfer(key, to){
   apiCall({ action:'transferLead', key:key, to:to }, function(d){
@@ -3481,8 +3497,8 @@ function renderTabs() {
   document.getElementById('tabs').innerHTML = tabList.map(t => '<button class="tab '+(t===activeTab?'active':'')+'" onclick="setTab(\''+t+'\')">'+tabLabel(t)+badgeHtml(counts[t],'tab-badge')+'</button>').join('');
   renderBottomNav();
 }
-function setTab(t) { activeTab=t; custSegFilter="All"; custSearch=""; callSearch=""; callType="all"; scoreEditFor=null; closeBnSheet(); renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
-function setView(v) { franchiseeView=v; if(bpAll) bpActivate(bpFranchisee()); applyFilters(); renderContent(); dfRender(); const am=document.getElementById('acctMenu'); if(am) am.removeAttribute('open'); }
+function setTab(t) { activeTab=t; custSegFilter="All"; custSearch=""; callSearch=""; callType="all"; scoreEditFor=null; leadGateFilter=''; leadSel={}; closeBnSheet(); renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
+function setView(v) { franchiseeView=v; leadGateFilter=''; leadSel={}; if(bpAll) bpActivate(bpFranchisee()); applyFilters(); renderContent(); dfRender(); const am=document.getElementById('acctMenu'); if(am) am.removeAttribute('open'); }
 function goSeg(seg) { activeTab='Customers'; custSegFilter=seg; custSearch=''; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 function setRegSub(s){ regSub=s; renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
 function goReg(sub){ activeTab='Regulars'; if(sub) regSub=sub; renderTabs(); renderContent(); window.scrollTo({top:0,behavior:'smooth'}); }
@@ -3524,10 +3540,12 @@ function dfRender() {
 }
 function onPeriodChange(v) {
   dfRange = v;
+  leadGateFilter = '';
   if (dfRange === 'custom' && !dfFrom) { const ty = ukTaxYearBounds(); document.getElementById('dfFrom').valueAsDate = ty.from; document.getElementById('dfTo').valueAsDate = new Date(); }
   applyFilters(); renderContent(); dfRender();
 }
 document.getElementById('dfApply').addEventListener('click', () => {
+  leadGateFilter = '';
   const f = document.getElementById('dfFrom'), t = document.getElementById('dfTo');
   if (f.value) dfFrom = new Date(f.value);
   if (t.value) dfTo = new Date(t.value + 'T23:59:59');
@@ -5416,11 +5434,12 @@ function renderContent() {
       <div class="card">
         ${(()=>{
           if (leadGateFilter==='expired') {
+            _leadVisibleKeys = [];
             const ex = s.expiredList.slice().sort((a,b)=>(b._date||0)-(a._date||0));
             const who = franchiseeView==='All' ? 'the network' : franchiseeView;
             const head='<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap"><b style="font-size:14px">Expired leads \u00b7 '+ex.length+'</b><span style="font-size:12.5px;color:var(--muted)">Offers '+(franchiseeView==='All'?'across '+who:who+' let lapse')+', now with HQ. They cannot be opened here'+(franchiseeView==='All'?' \u2014 re-offer them from the HQ pool filter or Manage leads.':'; speak to Michael if one should come back to you.')+'</span><button class="lead-st-btn" style="margin-left:auto" onclick="leadGateToggle(\'expired\')">\u2190 Back to leads</button></div>';
             if(!ex.length) return head+'<div style="font-size:13px;color:var(--muted)">Nothing expired in this period. Keep it that way.</div>';
-            const rows=ex.map(l=>'<tr style="opacity:.5;pointer-events:none"><td style="color:var(--muted);font-size:12px;white-space:nowrap">'+fmtDate(l._date)+'</td><td style="font-weight:500">'+(l._name||'\u2014')+'</td><td style="font-size:12px">'+(l._svc||'\u2014')+'</td><td class="r">'+(l._quote>0?fmt(l._quote):'\u2014')+'</td><td class="c">'+badge('HQ')+'</td><td class="c">'+leadPill('Expired')+'</td><td style="font-size:12px;color:var(--muted)">'+(l._expiredFrom?'was '+l._expiredFrom+'\u2019s':'')+'</td></tr>').join('');
+            const rows=ex.map(l=>'<tr style="opacity:.5"><td style="color:var(--muted);font-size:12px;white-space:nowrap">'+fmtDate(l._date)+'</td><td style="font-weight:500">'+escAttr(l._name||'\u2014')+'</td><td style="font-size:12px">'+escAttr(l._svc||'\u2014')+'</td><td class="r">'+(l._quote>0?fmt(l._quote):'\u2014')+'</td><td class="c">'+badge('HQ')+'</td><td class="c">'+leadPill('Expired')+'</td><td style="font-size:12px;color:var(--muted)">'+(l._expiredFrom?'was '+l._expiredFrom+'\u2019s':'')+'</td></tr>').join('');
             return head+'<div class="table-wrap"><table><thead><tr><th>Received</th><th>Customer</th><th>Service</th><th class="r">Quote</th><th class="c">Owner</th><th class="c">Status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
           }
           // ---- filter, sort, and selection over the period's leads ----
