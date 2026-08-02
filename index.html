@@ -3814,7 +3814,12 @@ function rbRoundsArr(){ const r=rbR(); return Object.keys(r).map(id=>r[id]); }
 // The rounds a customer belongs to (pruned to ones that still exist).
 function rbCustRounds(c){ return (rbAssign(c.n).rounds||[]).filter(rid=>rbRound(rid)); }
 // Everyone who is ever a member of this round, regardless of which weeks it runs.
-function rbRoundMembers(rid){ return rbCustomers().filter(c => (rbAssign(c.n).rounds||[]).indexOf(rid)!==-1); }
+function rbRoundMembers(rid){
+  const ms = rbCustomers().filter(c => (rbAssign(c.n).rounds||[]).indexOf(rid)!==-1);
+  ms.sort((x,y)=>{ const ax=rbA()[normName(x.n)], ay=rbA()[normName(y.n)];
+    const ox=(ax&&ax.ord!=null)?ax.ord:1e9, oy=(ay&&ay.ord!=null)?ay.ord:1e9; return ox-oy; });
+  return ms;
+}
 // How often a round runs, in weeks. A round inherits the cadence of its least frequent member,
 // so a round built around fortnightly jobs runs fortnightly and a weekly customer in it only
 // rides on those weeks. Stored on the round when grouped, derived for older rounds.
@@ -3967,7 +3972,14 @@ function rbGroupSelected(){
   const color = RB_COLORS.find(c=>used.indexOf(c)===-1) || RB_COLORS[rbRoundsArr().length % RB_COLORS.length];
   const name = rbSuggestRoundName(custs) || ('Round '+(rbRoundsArr().length+1));
   rbR()[rid] = { id:rid, name:name, color:color, day:day, anchor:anchor, every:every, pinned:false };
-  custs.forEach(c=>{ const a=rbAssign(c.n); if(!Array.isArray(a.rounds)) a.rounds=[]; if(a.rounds.indexOf(rid)===-1) a.rounds.push(rid); a.day=day; if(rbCadence(c)>1) a.anchor=anchor; delete a.ord; });
+  // Group in the order the cards were sitting on the day, so a hand-sorted run
+  // survives grouping instead of being scrambled. Tray groupings keep selection order.
+  let ordered = custs.slice();
+  if (day) {
+    const unitOrder = rbDayAllUnits(day).filter(u=>u.kind==='card').map(u=>normName(u.id));
+    ordered.sort((x,y)=>{ const ix=unitOrder.indexOf(normName(x.n)), iy=unitOrder.indexOf(normName(y.n)); return (ix===-1?999:ix)-(iy===-1?999:iy); });
+  }
+  ordered.forEach((c,i)=>{ const a=rbAssign(c.n); if(!Array.isArray(a.rounds)) a.rounds=[]; if(a.rounds.indexOf(rid)===-1) a.rounds.push(rid); a.day=day; if(rbCadence(c)>1) a.anchor=anchor; a.ord=i; });
   rbSel={}; rbApply();
 }
 
@@ -4106,6 +4118,29 @@ function rbCardDrop(ev){
   if(!rbDragData) return;
   ev.preventDefault(); ev.stopPropagation();
   const el=ev.currentTarget; el.classList.remove('rb-ins-top','rb-ins-bot');
+  // Dropping a card onto a card INSIDE a round reorders within that round (or joins it
+  // at exactly that position when dragged in from outside). Works in day columns and
+  // the tray alike, and never falls through to the day-level unit reorder.
+  const body = el.closest('.rb-round-body');
+  if (body && rbDragData.kind==='card') {
+    const rid = body.getAttribute('data-rid');
+    const d = rbDragData; rbDragData=null;
+    const rd = rbRound(rid); if(!rd) return;
+    const a = rbAssign(d.name);
+    if (!Array.isArray(a.rounds)) a.rounds=[];
+    if (a.rounds.indexOf(rid)===-1) {
+      a.rounds.push(rid); a.day=rd.day;
+      const c=rbCustByName(d.name); if(c && rbCadence(c)>1) a.anchor=rd.anchor||1;
+    }
+    const r2=el.getBoundingClientRect(), before2=(ev.clientY < r2.top+r2.height/2);
+    const dragged = normName(d.name);
+    const members = rbRoundMembers(rid).map(c=>normName(c.n)).filter(n=>n!==dragged);
+    let ti = members.indexOf(normName(el.getAttribute('data-name')||''));
+    if (ti===-1) ti=members.length; else if(!before2) ti++;
+    members.splice(ti,0,dragged);
+    members.forEach((n,i)=>{ rbAssign(n).ord=i; });
+    rbApply(); return;
+  }
   const col=el.closest('.rb-col'); if(!col){ rbDragData=null; return; }
   const day=col.getAttribute('data-day'), week=parseInt(col.getAttribute('data-week'),10)||1;
   const r=el.getBoundingClientRect(), before=(ev.clientY < r.top+r.height/2);
@@ -4143,7 +4178,9 @@ function rbCardHTML(c, inRound, rid, week){
   const owner = (rbView()==='All' && c.f) ? '<span class="rb-freq" style="background:'+(c.f==='Adam'?'#E3ECFA':'#FBE7D2')+';color:'+(c.f==='Adam'?'#1565C0':'#9A5410')+'">'+escAttr(c.f)+'</span>' : '';
   const phTag = c._ph ? '<span class="rb-freq" style="background:#FFE7CC;color:#9A5410">new</span>' : '';
   if(inRound){
-    return '<div class="rb-card" data-name="'+nm+'"><div class="rb-card-top">'
+    // Members are draggable so a round's running order can be sorted like any other
+    // list: drop onto another member to reorder within the round.
+    return '<div class="rb-card" draggable="true" data-name="'+nm+'" data-rid="'+escAttr(rid||'')+'" ondragstart="rbDragCardStart(event)" ondragend="rbDragEnd(event)" ondragover="rbCardOver(event)" ondragleave="rbCardLeave(event)" ondrop="rbCardDrop(event)"><div class="rb-card-top">'
       + '<span class="rb-card-name"'+nmeta+'>'+nm+'</span>'
       + '<button class="rb-mini" title="Remove from this round (the visit stays on the day)" data-name="'+nm+'" data-rid="'+escAttr(rid||'')+'" onclick="rbEject(this.getAttribute(\'data-name\'), this.getAttribute(\'data-rid\'))">\u2934</button>'
       + '</div><div class="rb-card-sub">'+hvHtml+crewHtml+tagHtml+phTag+owner+'</div></div>';
